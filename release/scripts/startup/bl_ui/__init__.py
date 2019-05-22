@@ -161,6 +161,12 @@ def register():
         default={'OFFICIAL', 'COMMUNITY'},
         options={'ENUM_FLAG'},
     )
+
+    WindowManager.theme_search = StringProperty(
+        name="Search",
+        description="Search within the selected filter",
+        options={'TEXTEDIT_UPDATE'},
+    )
     # done...
 
 

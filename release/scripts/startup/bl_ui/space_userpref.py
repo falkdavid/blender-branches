@@ -527,7 +527,7 @@ class USERPREF_PT_theme(Panel):
     }
 
     @staticmethod
-    def _theme_generic(split, themedata, theme_area):
+    def _theme_generic(split, themedata, theme_area, search):
 
         col = split.column()
 
@@ -560,6 +560,7 @@ class USERPREF_PT_theme(Panel):
                     for i, prop in enumerate(props_ls):
                         theme_generic_recurse(getattr(data, prop.identifier))
                 else:
+                    print(getattr(data, prop.identifier))
                     if th_delimiters is None:
                         # simple, no delimiters
                         for i, prop in enumerate(props_ls):
@@ -654,6 +655,11 @@ class USERPREF_PT_theme(Panel):
         subrow.menu("USERPREF_MT_interface_theme_presets", text=USERPREF_MT_interface_theme_presets.bl_label)
         subrow.operator("wm.interface_theme_preset_add", text="", icon='ADD')
         subrow.operator("wm.interface_theme_preset_add", text="", icon='REMOVE').remove_active = True
+        sub.separator()
+
+        sub.prop(context.window_manager, "theme_search", text="", icon='VIEWZOOM')
+        search = context.window_manager.theme_search.lower()
+
         sub.separator()
 
         sub.prop(theme, "theme_area", expand=True)
@@ -873,7 +879,7 @@ class USERPREF_PT_theme(Panel):
             col.label(text="Widget Label:")
             self._ui_font_style(col, style.widget_label)
         else:
-            self._theme_generic(split, getattr(theme, theme.theme_area.lower()), theme.theme_area)
+            self._theme_generic(split, getattr(theme, theme.theme_area.lower()), theme.theme_area, search)
 
 
 class USERPREF_PT_file(Panel):
