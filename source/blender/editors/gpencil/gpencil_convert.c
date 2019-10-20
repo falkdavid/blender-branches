@@ -1752,3 +1752,40 @@ void GPENCIL_OT_convert(wmOperatorType *ot)
 }
 
 /* ************************************************ */
+
+static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
+{
+  printf("Enter gp_stroke_to_perimeter_exec\n");
+  return OPERATOR_FINISHED;
+}
+
+static bool gp_stroke_to_perimeter_poll(bContext *C)
+{
+  printf("Enter gp_stroke_to_perimeter_poll\n");
+
+  Object *ob = CTX_data_active_object(C);
+  Scene *scene = CTX_data_scene(C);
+
+  if ((ob == NULL) || (ob->type != OB_GPENCIL)) {
+    return false;
+  }
+
+  return true;
+}
+
+void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
+{
+  //PropertyRNA *prop;
+
+  /* identifiers */
+  ot->name = "Stroke to perimeter";
+  ot->idname = "GPENCIL_OT_stroke_to_perimeter";
+  ot->description = "Convert stroke to stroke perimeter";
+
+  /* callbacks */
+  ot->exec = gp_stroke_to_perimeter_exec;
+  ot->poll = gp_stroke_to_perimeter_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
