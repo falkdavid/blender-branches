@@ -1756,6 +1756,14 @@ void GPENCIL_OT_convert(wmOperatorType *ot)
 static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
   printf("Enter gp_stroke_to_perimeter_exec\n");
+  bGPdata *gpd = ED_gpencil_data_get_active(C);
+
+  /* Go through each editable + selected stroke */
+  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+      printf("Number of verts: %d\n", gps->totpoints);
+  }
+  GP_EDITABLE_STROKES_END(gpstroke_iter);
+
   return OPERATOR_FINISHED;
 }
 
