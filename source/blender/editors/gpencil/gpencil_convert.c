@@ -1776,7 +1776,17 @@ static bool gp_stroke_to_perimeter_poll(bContext *C)
     return false;
   }
 
-  return true;
+  bGPdata *gpd = (bGPdata *)ob->data;
+  bGPDlayer *gpl = NULL;
+  bGPDframe *gpf = NULL;
+  ScrArea *sa = CTX_wm_area(C);
+
+  /* only if the current view is 3D View, if there's valid data (i.e. at least one stroke!),
+   * and if we are in edit mode!
+   */
+  return ((sa && sa->spacetype == SPACE_VIEW3D) && (gpl = BKE_gpencil_layer_getactive(gpd)) &&
+          (gpf = BKE_gpencil_layer_getframe(gpl, CFRA, GP_GETFRAME_USE_PREV)) &&
+          (gpf->strokes.first) && (GPENCIL_ANY_EDIT_MODE(gpd)));
 }
 
 void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
