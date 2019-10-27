@@ -3012,3 +3012,23 @@ void BKE_gpencil_convert_curve(Main *bmain,
   /* Tag for recalculation */
   DEG_id_tag_update(&gpd->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
 }
+
+/* Calculate the perimeter of a stroke as a list of bGPDspoints
+ * \param resolution: 
+ */
+void BKE_gpencil_stroke_perimeter(const bGPDstroke *gps, int resolution, bGPDspoint* r_perimeter)
+{
+  if (gps->totpoints < 1) {
+    return;
+  }
+  
+  if (gps->totpoints == 1) {
+
+  }
+
+  if (gps->totpoints == 2) {
+    
+  }
+
+  
+}
