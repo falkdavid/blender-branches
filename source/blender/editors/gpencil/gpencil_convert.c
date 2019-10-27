@@ -1755,12 +1755,19 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
   printf("Enter gp_stroke_to_perimeter_exec\n");
   bGPdata *gpd = ED_gpencil_data_get_active(C);
+  const int resolution = RNA_int_get(op->ptr, "resolution");
 
   /* Go through each editable + selected stroke */
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+    if (gps->flag & GP_STROKE_SELECT) {
       printf("Number of verts: %d\n", gps->totpoints);
+      printf("Resolution: %d\n", resolution);
+    }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
+
+  DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
 
   return OPERATOR_FINISHED;
 }
@@ -1791,7 +1798,7 @@ static bool gp_stroke_to_perimeter_poll(bContext *C)
 
 void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 {
-  //PropertyRNA *prop;
+  PropertyRNA *prop;
 
   /* identifiers */
   ot->name = "Stroke to perimeter";
@@ -1804,4 +1811,7 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  prop = RNA_def_int(ot->srna, "resolution", 3, 1, 50, "Resolution", "", 1, 5);
 }
