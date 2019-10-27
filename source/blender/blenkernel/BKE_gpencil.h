@@ -269,6 +269,8 @@ void BKE_gpencil_convert_curve(struct Main *bmain,
                                const bool use_collections,
                                const bool only_stroke);
 
+void BKE_gpencil_stroke_perimeter(const bGPDstroke *gps, int resolution, bGPDspoint* r_perimeter);
+
 extern void (*BKE_gpencil_batch_cache_dirty_tag_cb)(struct bGPdata *gpd);
 extern void (*BKE_gpencil_batch_cache_free_cb)(struct bGPdata *gpd);
 
