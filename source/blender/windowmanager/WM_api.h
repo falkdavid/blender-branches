@@ -110,7 +110,8 @@ int WM_window_pixels_x(const struct wmWindow *win);
 int WM_window_pixels_y(const struct wmWindow *win);
 void WM_window_rect_calc(const struct wmWindow *win, struct rcti *r_rect);
 void WM_window_screen_rect_calc(const struct wmWindow *win, struct rcti *r_rect);
-bool WM_window_is_fullscreen(struct wmWindow *win);
+bool WM_window_is_fullscreen(const struct wmWindow *win);
+bool WM_window_is_maximized(const struct wmWindow *win);
 
 void WM_windows_scene_data_sync(const ListBase *win_lb, struct Scene *scene) ATTR_NONNULL();
 struct Scene *WM_windows_scene_get_from_screen(const struct wmWindowManager *wm,
@@ -164,7 +165,7 @@ struct wmWindow *WM_window_open_temp(struct bContext *C,
                                      int sizey,
                                      int space_type,
                                      bool dialog);
-void WM_window_set_dpi(wmWindow *win);
+void WM_window_set_dpi(const wmWindow *win);
 
 bool WM_stereo3d_enabled(struct wmWindow *win, bool only_fullscreen_test);
 
@@ -242,6 +243,10 @@ void WM_event_set_keymap_handler_post_callback(struct wmEventHandler_Keymap *han
                                                void *user_data);
 wmKeyMap *WM_event_get_keymap_from_handler(wmWindowManager *wm,
                                            struct wmEventHandler_Keymap *handler);
+
+wmKeyMapItem *WM_event_match_keymap_item(struct bContext *C,
+                                         wmKeyMap *keymap,
+                                         const struct wmEvent *event);
 
 typedef int (*wmUIHandlerFunc)(struct bContext *C, const struct wmEvent *event, void *userdata);
 typedef void (*wmUIHandlerRemoveFunc)(struct bContext *C, void *userdata);
