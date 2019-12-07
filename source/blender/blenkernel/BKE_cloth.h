@@ -87,7 +87,8 @@ typedef struct Cloth {
   struct MVertTri *tri;
   struct Implicit_Data *implicit; /* our implicit solver connects to this pointer */
   struct EdgeSet *edgeset;        /* used for selfcollisions */
-  int last_frame, pad4;
+  int last_frame;
+  float initial_mesh_volume; /* Initial volume of the mesh. Used for pressure */
 } Cloth;
 
 /**
@@ -112,8 +113,9 @@ typedef struct ClothVertex {
   float struct_stiff;
   float bend_stiff;
   float shear_stiff;
-  int spring_count;    /* how many springs attached? */
-  float shrink_factor; /* how much to shrink this cloth */
+  int spring_count;      /* how many springs attached? */
+  float shrink_factor;   /* how much to shrink this cloth */
+  float pressure_factor; /* how much pressure should affect this vertex */
 } ClothVertex;
 
 /**
@@ -192,6 +194,10 @@ typedef enum {
   CLOTH_SIMSETTINGS_FLAG_GOAL = (1 << 3),
   /** True if tearing is enabled. */
   CLOTH_SIMSETTINGS_FLAG_TEARING = (1 << 4),
+  /** True if pressure sim is enabled. */
+  CLOTH_SIMSETTINGS_FLAG_PRESSURE = (1 << 5),
+  /** Use the user defined target volume. */
+  CLOTH_SIMSETTINGS_FLAG_PRESSURE_VOL = (1 << 6),
   /** DEPRECATED, for versioning only. */
   CLOTH_SIMSETTINGS_FLAG_SCALING = (1 << 8),
   /** Edit cache in edit-mode. */

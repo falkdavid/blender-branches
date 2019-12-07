@@ -133,14 +133,7 @@ add_definitions(-D_ALLOW_KEYWORD_MACROS)
 
 # We want to support Vista level ABI
 add_definitions(-D_WIN32_WINNT=0x600)
-
-# Make cmake find the msvc redistributables
-set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP FALSE)
-set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
-set(CMAKE_INSTALL_OPENMP_LIBRARIES ${WITH_OPENMP})
-set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
-include(InstallRequiredSystemLibraries)
-
+include(build_files/cmake/platform/platform_win32_bundle_crt.cmake)
 remove_cc_flag("/MDd" "/MD")
 
 if(MSVC_CLANG) # Clangs version of cl doesn't support all flags
@@ -517,17 +510,6 @@ if(WITH_ALEMBIC)
   set(ALEMBIC_FOUND 1)
 endif()
 
-if(WITH_MOD_CLOTH_ELTOPO)
-  set(LAPACK ${LIBDIR}/lapack)
-  # set(LAPACK_INCLUDE_DIR ${LAPACK}/include)
-  set(LAPACK_LIBPATH ${LAPACK}/lib)
-  set(LAPACK_LIBRARIES
-    ${LIBDIR}/lapack/lib/libf2c.lib
-    ${LIBDIR}/lapack/lib/clapack_nowrap.lib
-    ${LIBDIR}/lapack/lib/BLAS_nowrap.lib
-  )
-endif()
-
 if(WITH_IMAGE_OPENJPEG)
   set(OPENJPEG ${LIBDIR}/openjpeg)
   set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.3)
@@ -590,17 +572,6 @@ endif()
 # used in many places so include globally, like OpenGL
 blender_include_dirs_sys("${PTHREADS_INCLUDE_DIRS}")
 
-# Find signtool.
-set(ProgramFilesX86_NAME "ProgramFiles(x86)") #env dislikes the ( )
-find_program(SIGNTOOL_EXE signtool
-  HINTS
-    "$ENV{${ProgramFilesX86_NAME}}/Windows Kits/10/bin/x86/"
-    "$ENV{ProgramFiles}/Windows Kits/10/bin/x86/"
-    "$ENV{${ProgramFilesX86_NAME}}/Windows Kits/8.1/bin/x86/"
-    "$ENV{ProgramFiles}/Windows Kits/8.1/bin/x86/"
-    "$ENV{${ProgramFilesX86_NAME}}/Windows Kits/8.0/bin/x86/"
-    "$ENV{ProgramFiles}/Windows Kits/8.0/bin/x86/"
-)
 set(WINTAB_INC ${LIBDIR}/wintab/include)
 
 if(WITH_OPENAL)
@@ -621,10 +592,6 @@ if(WITH_CODEC_SNDFILE)
   set(LIBSNDFILE_INCLUDE_DIRS ${LIBSNDFILE}/include)
   set(LIBSNDFILE_LIBPATH ${LIBSNDFILE}/lib) # TODO, deprecate
   set(LIBSNDFILE_LIBRARIES ${LIBSNDFILE_LIBPATH}/libsndfile-1.lib)
-endif()
-
-if(WITH_RAYOPTIMIZATION AND SUPPORT_SSE_BUILD)
-  add_definitions(-D__SSE__ -D__MMX__)
 endif()
 
 if(WITH_CYCLES_OSL)

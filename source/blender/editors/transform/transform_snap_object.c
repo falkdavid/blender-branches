@@ -65,7 +65,7 @@
 #include "transform.h"
 
 /* -------------------------------------------------------------------- */
-/** Internal Data Types
+/** \name Internal Data Types
  * \{ */
 
 #define MAX_CLIPPLANE_LEN 3
@@ -147,7 +147,7 @@ struct SnapObjectContext {
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** Common Utilities
+/** \name Common Utilities
  * \{ */
 
 /**
@@ -1003,7 +1003,7 @@ static bool raycastObjects(SnapObjectContext *sctx,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** Snap Nearest utilities
+/** \name Snap Nearest utilities
  * \{ */
 
 /* Test BoundBox */
@@ -1161,7 +1161,7 @@ static bool test_projected_edge_dist(const struct DistProjectedAABBPrecalc *prec
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** Walk DFS
+/** \name Walk DFS
  * \{ */
 
 typedef void (*Nearest2DGetVertCoCallback)(const int index, const float **co, void *data);
@@ -1424,7 +1424,7 @@ static short snap_mesh_polygon(SnapObjectContext *sctx,
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     if (snapdata->snap_to_flag & SCE_SNAP_MODE_EDGE) {
       elem = SCE_SNAP_MODE_EDGE;
-      BM_mesh_elem_index_ensure(em->bm, BM_EDGE);
+      BM_mesh_elem_index_ensure(em->bm, BM_VERT | BM_EDGE);
       BM_mesh_elem_table_ensure(em->bm, BM_VERT | BM_EDGE);
       do {
         cb_snap_edge(&nearest2d,

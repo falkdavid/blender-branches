@@ -415,7 +415,8 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
   }
 }
 
-/** Check if collection is already isolated.
+/**
+ * Check if collection is already isolated.
  *
  * A collection is isolated if all its parents and children are "visible".
  * All the other collections must be "invisible".
@@ -817,6 +818,7 @@ static void namebutton_cb(bContext *C, void *tsep, char *oldname)
           BLI_uniquename(
               &gpd->layers, gpl, "GP Layer", '.', offsetof(bGPDlayer, info), sizeof(gpl->info));
 
+          DEG_id_tag_update(&gpd->id, ID_RECALC_GEOMETRY);
           WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_SELECTED, gpd);
           break;
         }

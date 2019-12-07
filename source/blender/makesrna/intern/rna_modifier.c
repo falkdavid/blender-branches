@@ -37,6 +37,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_animsys.h"
+#include "BKE_curveprofile.h"
 #include "BKE_data_transfer.h"
 #include "BKE_dynamicpaint.h"
 #include "BKE_effect.h"
@@ -57,91 +58,230 @@
 
 const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     {0, "", 0, N_("Modify"), ""},
-    {eModifierType_DataTransfer, "DATA_TRANSFER", ICON_MOD_DATA_TRANSFER, "Data Transfer", ""},
-    {eModifierType_MeshCache, "MESH_CACHE", ICON_MOD_MESHDEFORM, "Mesh Cache", ""},
+    {eModifierType_DataTransfer,
+     "DATA_TRANSFER",
+     ICON_MOD_DATA_TRANSFER,
+     "Data Transfer",
+     "Transfer several types of data (vertex groups, UV maps, vertex colors, custom normals) from "
+     "one mesh to another"},
+    {eModifierType_MeshCache,
+     "MESH_CACHE",
+     ICON_MOD_MESHDEFORM,
+     "Mesh Cache",
+     "Deform the mesh using an external frame-by-frame vertex transform cache"},
     {eModifierType_MeshSequenceCache,
      "MESH_SEQUENCE_CACHE",
      ICON_MOD_MESHDEFORM,
      "Mesh Sequence Cache",
-     ""},
-    {eModifierType_NormalEdit, "NORMAL_EDIT", ICON_MOD_NORMALEDIT, "Normal Edit", ""},
-    {eModifierType_WeightedNormal, "WEIGHTED_NORMAL", ICON_MOD_NORMALEDIT, "Weighted Normal", ""},
-    {eModifierType_UVProject, "UV_PROJECT", ICON_MOD_UVPROJECT, "UV Project", ""},
-    {eModifierType_UVWarp, "UV_WARP", ICON_MOD_UVPROJECT, "UV Warp", ""},
+     "Deform the mesh or curve using an external mesh cache in Alembic format"},
+    {eModifierType_NormalEdit,
+     "NORMAL_EDIT",
+     ICON_MOD_NORMALEDIT,
+     "Normal Edit",
+     "Modify the direction of the surface normals"},
+    {eModifierType_WeightedNormal,
+     "WEIGHTED_NORMAL",
+     ICON_MOD_NORMALEDIT,
+     "Weighted Normal",
+     "Modify the direction of the surface normals using a weighting method"},
+    {eModifierType_UVProject,
+     "UV_PROJECT",
+     ICON_MOD_UVPROJECT,
+     "UV Project",
+     "Project the UV map coordinates from the negative Z axis of another object"},
+    {eModifierType_UVWarp,
+     "UV_WARP",
+     ICON_MOD_UVPROJECT,
+     "UV Warp",
+     "Transform the UV map using the the difference between two objects"},
     {eModifierType_WeightVGEdit,
      "VERTEX_WEIGHT_EDIT",
      ICON_MOD_VERTEX_WEIGHT,
      "Vertex Weight Edit",
-     ""},
+     "Modify of the weights of a vertex group"},
     {eModifierType_WeightVGMix,
      "VERTEX_WEIGHT_MIX",
      ICON_MOD_VERTEX_WEIGHT,
      "Vertex Weight Mix",
-     ""},
+     "Mix the weights of two vertex groups"},
     {eModifierType_WeightVGProximity,
      "VERTEX_WEIGHT_PROXIMITY",
      ICON_MOD_VERTEX_WEIGHT,
      "Vertex Weight Proximity",
-     ""},
+     "Set the vertex group weights based on the distance to another target object"},
     {0, "", 0, N_("Generate"), ""},
-    {eModifierType_Array, "ARRAY", ICON_MOD_ARRAY, "Array", ""},
-    {eModifierType_Bevel, "BEVEL", ICON_MOD_BEVEL, "Bevel", ""},
-    {eModifierType_Boolean, "BOOLEAN", ICON_MOD_BOOLEAN, "Boolean", ""},
-    {eModifierType_Build, "BUILD", ICON_MOD_BUILD, "Build", ""},
-    {eModifierType_Decimate, "DECIMATE", ICON_MOD_DECIM, "Decimate", ""},
-    {eModifierType_EdgeSplit, "EDGE_SPLIT", ICON_MOD_EDGESPLIT, "Edge Split", ""},
-    {eModifierType_Mask, "MASK", ICON_MOD_MASK, "Mask", ""},
-    {eModifierType_Mirror, "MIRROR", ICON_MOD_MIRROR, "Mirror", ""},
-    {eModifierType_Multires, "MULTIRES", ICON_MOD_MULTIRES, "Multiresolution", ""},
-    {eModifierType_Remesh, "REMESH", ICON_MOD_REMESH, "Remesh", ""},
-    {eModifierType_Screw, "SCREW", ICON_MOD_SCREW, "Screw", ""},
-    {eModifierType_Skin, "SKIN", ICON_MOD_SKIN, "Skin", ""},
-    {eModifierType_Solidify, "SOLIDIFY", ICON_MOD_SOLIDIFY, "Solidify", ""},
-    {eModifierType_Subsurf, "SUBSURF", ICON_MOD_SUBSURF, "Subdivision Surface", ""},
-    {eModifierType_Triangulate, "TRIANGULATE", ICON_MOD_TRIANGULATE, "Triangulate", ""},
+    {eModifierType_Array,
+     "ARRAY",
+     ICON_MOD_ARRAY,
+     "Array",
+     "Create copies of the shape with offsets"},
+    {eModifierType_Bevel,
+     "BEVEL",
+     ICON_MOD_BEVEL,
+     "Bevel",
+     "Generate sloped corners by adding geometry to the mesh's edges or vertices"},
+    {eModifierType_Boolean,
+     "BOOLEAN",
+     ICON_MOD_BOOLEAN,
+     "Boolean",
+     "Use another shape to cut, combine or perform a difference operation"},
+    {eModifierType_Build,
+     "BUILD",
+     ICON_MOD_BUILD,
+     "Build",
+     "Cause the faces of the mesh object to appear or disappear one after the other over time"},
+    {eModifierType_Decimate,
+     "DECIMATE",
+     ICON_MOD_DECIM,
+     "Decimate",
+     "Reduce the geometry density"},
+    {eModifierType_EdgeSplit,
+     "EDGE_SPLIT",
+     ICON_MOD_EDGESPLIT,
+     "Edge Split",
+     "Split away joined faces at the edges"},
+    {eModifierType_Mask,
+     "MASK",
+     ICON_MOD_MASK,
+     "Mask",
+     "Dynamically hide vertices based on a vertex group or armature"},
+    {eModifierType_Mirror,
+     "MIRROR",
+     ICON_MOD_MIRROR,
+     "Mirror",
+     "Mirror along the local X, Y and/or Z axes, over the object origin"},
+    {eModifierType_Multires,
+     "MULTIRES",
+     ICON_MOD_MULTIRES,
+     "Multiresolution",
+     "Subdivide the mesh in a way that allows editing the higher subdivision levels"},
+    {eModifierType_Remesh,
+     "REMESH",
+     ICON_MOD_REMESH,
+     "Remesh",
+     "Generate new mesh topology based on the current shape"},
+    {eModifierType_Screw,
+     "SCREW",
+     ICON_MOD_SCREW,
+     "Screw",
+     "Lathe around an axis, treating the inout mesh as a profile"},
+    {eModifierType_Skin,
+     "SKIN",
+     ICON_MOD_SKIN,
+     "Skin",
+     "Create a solid shape from vertices and edges, using the vertex radius to define the "
+     "thickness"},
+    {eModifierType_Solidify, "SOLIDIFY", ICON_MOD_SOLIDIFY, "Solidify", " Make the surface thick"},
+    {eModifierType_Subsurf,
+     "SUBSURF",
+     ICON_MOD_SUBSURF,
+     "Subdivision Surface",
+     "Split the faces into smaller parts, giving it a smoother appearance"},
+    {eModifierType_Triangulate,
+     "TRIANGULATE",
+     ICON_MOD_TRIANGULATE,
+     "Triangulate",
+     "Convert all polygons to triangles"},
     {eModifierType_Wireframe,
      "WIREFRAME",
      ICON_MOD_WIREFRAME,
      "Wireframe",
-     "Generate a wireframe on the edges of a mesh"},
+     "Convert faces into thickened edges"},
     {0, "", 0, N_("Deform"), ""},
-    {eModifierType_Armature, "ARMATURE", ICON_MOD_ARMATURE, "Armature", ""},
-    {eModifierType_Cast, "CAST", ICON_MOD_CAST, "Cast", ""},
-    {eModifierType_Curve, "CURVE", ICON_MOD_CURVE, "Curve", ""},
-    {eModifierType_Displace, "DISPLACE", ICON_MOD_DISPLACE, "Displace", ""},
-    {eModifierType_Hook, "HOOK", ICON_HOOK, "Hook", ""},
+    {eModifierType_Armature,
+     "ARMATURE",
+     ICON_MOD_ARMATURE,
+     "Armature",
+     "Deform the shape using an armature object"},
+    {eModifierType_Cast,
+     "CAST",
+     ICON_MOD_CAST,
+     "Cast",
+     "Shift the shape towards a predefined primitive"},
+    {eModifierType_Curve, "CURVE", ICON_MOD_CURVE, "Curve", "Bend the mesh using a curve object"},
+    {eModifierType_Displace,
+     "DISPLACE",
+     ICON_MOD_DISPLACE,
+     "Displace",
+     "Offset vertices based on a texture"},
+    {eModifierType_Hook, "HOOK", ICON_HOOK, "Hook", "Deform specific points using another object"},
     {eModifierType_LaplacianDeform,
      "LAPLACIANDEFORM",
      ICON_MOD_MESHDEFORM,
      "Laplacian Deform",
-     ""},
-    {eModifierType_Lattice, "LATTICE", ICON_MOD_LATTICE, "Lattice", ""},
-    {eModifierType_MeshDeform, "MESH_DEFORM", ICON_MOD_MESHDEFORM, "Mesh Deform", ""},
-    {eModifierType_Shrinkwrap, "SHRINKWRAP", ICON_MOD_SHRINKWRAP, "Shrinkwrap", ""},
-    {eModifierType_SimpleDeform, "SIMPLE_DEFORM", ICON_MOD_SIMPLEDEFORM, "Simple Deform", ""},
-    {eModifierType_Smooth, "SMOOTH", ICON_MOD_SMOOTH, "Smooth", ""},
+     "Deform based a series of anchor points"},
+    {eModifierType_Lattice,
+     "LATTICE",
+     ICON_MOD_LATTICE,
+     "Lattice",
+     "Deform using the shape of a lattice object"},
+    {eModifierType_MeshDeform,
+     "MESH_DEFORM",
+     ICON_MOD_MESHDEFORM,
+     "Mesh Deform",
+     "Deform using a different mesh, which acts as a deformation cage"},
+    {eModifierType_Shrinkwrap,
+     "SHRINKWRAP",
+     ICON_MOD_SHRINKWRAP,
+     "Shrinkwrap",
+     "Project the shape onto another object"},
+    {eModifierType_SimpleDeform,
+     "SIMPLE_DEFORM",
+     ICON_MOD_SIMPLEDEFORM,
+     "Simple Deform",
+     "Deform the shape by twisting, bending, tapering or stretching"},
+    {eModifierType_Smooth,
+     "SMOOTH",
+     ICON_MOD_SMOOTH,
+     "Smooth",
+     "Smooth the mesh by flattening the angles between adjacent faces"},
     {eModifierType_CorrectiveSmooth,
      "CORRECTIVE_SMOOTH",
      ICON_MOD_SMOOTH,
      "Smooth Corrective",
-     ""},
-    {eModifierType_LaplacianSmooth, "LAPLACIANSMOOTH", ICON_MOD_SMOOTH, "Smooth Laplacian", ""},
-    {eModifierType_SurfaceDeform, "SURFACE_DEFORM", ICON_MOD_MESHDEFORM, "Surface Deform", ""},
-    {eModifierType_Warp, "WARP", ICON_MOD_WARP, "Warp", ""},
-    {eModifierType_Wave, "WAVE", ICON_MOD_WAVE, "Wave", ""},
+     "Smooth the mesh while still preserving the volume"},
+    {eModifierType_LaplacianSmooth,
+     "LAPLACIANSMOOTH",
+     ICON_MOD_SMOOTH,
+     "Smooth Laplacian",
+     "Reduce the noise on a mesh surface with minimal changes to its shape"},
+    {eModifierType_SurfaceDeform,
+     "SURFACE_DEFORM",
+     ICON_MOD_MESHDEFORM,
+     "Surface Deform",
+     "Transfer motion from another mesh"},
+    {eModifierType_Warp,
+     "WARP",
+     ICON_MOD_WARP,
+     "Warp",
+     "Warp parts of a mesh to a new location in a very flexible way thanks to 2 specified "
+     "objects"},
+    {eModifierType_Wave,
+     "WAVE",
+     ICON_MOD_WAVE,
+     "Wave",
+     "Adds a ripple-like motion to an object’s geometry"},
     {0, "", 0, N_("Simulate"), ""},
     {eModifierType_Cloth, "CLOTH", ICON_MOD_CLOTH, "Cloth", ""},
     {eModifierType_Collision, "COLLISION", ICON_MOD_PHYSICS, "Collision", ""},
     {eModifierType_DynamicPaint, "DYNAMIC_PAINT", ICON_MOD_DYNAMICPAINT, "Dynamic Paint", ""},
-    {eModifierType_Explode, "EXPLODE", ICON_MOD_EXPLODE, "Explode", ""},
+    {eModifierType_Explode,
+     "EXPLODE",
+     ICON_MOD_EXPLODE,
+     "Explode",
+     "Break apart the mesh faces and let them follow particles"},
     {eModifierType_Fluidsim, "FLUID_SIMULATION", ICON_MOD_FLUIDSIM, "Fluid Simulation", ""},
-    {eModifierType_Ocean, "OCEAN", ICON_MOD_OCEAN, "Ocean", ""},
+    {eModifierType_Ocean, "OCEAN", ICON_MOD_OCEAN, "Ocean", "Generate a moving ocean surface"},
     {eModifierType_ParticleInstance,
      "PARTICLE_INSTANCE",
      ICON_MOD_PARTICLE_INSTANCE,
      "Particle Instance",
      ""},
-    {eModifierType_ParticleSystem, "PARTICLE_SYSTEM", ICON_MOD_PARTICLES, "Particle System", ""},
+    {eModifierType_ParticleSystem,
+     "PARTICLE_SYSTEM",
+     ICON_MOD_PARTICLES,
+     "Particle System",
+     "Spawn particles from the shape"},
     {eModifierType_Smoke, "SMOKE", ICON_MOD_SMOKE, "Smoke", ""},
     {eModifierType_Softbody, "SOFT_BODY", ICON_MOD_SOFT, "Soft Body", ""},
     {eModifierType_Surface, "SURFACE", ICON_MODIFIER, "Surface", ""},
@@ -433,7 +573,6 @@ const EnumPropertyItem rna_enum_axis_flag_xyz_items[] = {
 };
 
 #ifdef RNA_RUNTIME
-
 #  include "DNA_particle_types.h"
 #  include "DNA_curve_types.h"
 #  include "DNA_smoke_types.h"
@@ -996,6 +1135,18 @@ static PointerRNA rna_CollisionModifier_settings_get(PointerRNA *ptr)
 {
   Object *ob = (Object *)ptr->owner_id;
   return rna_pointer_inherit_refine(ptr, &RNA_CollisionSettings, ob->pd);
+}
+
+/* Special update function for setting the number of segments of the modifier that also resamples
+ * the segments in the custom profile. */
+static void rna_BevelModifier_update_segments(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  BevelModifierData *bmd = (BevelModifierData *)ptr->data;
+  if (RNA_boolean_get(ptr, "use_custom_profile")) {
+    short segments = (short)RNA_int_get(ptr, "segments");
+    BKE_curveprofile_initialize(bmd->custom_profile, segments);
+  }
+  rna_Modifier_update(bmain, scene, ptr);
 }
 
 static void rna_UVProjectModifier_num_projectors_set(PointerRNA *ptr, int value)
@@ -3583,10 +3734,26 @@ static void rna_def_modifier_bevel(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
-  static EnumPropertyItem prop_miter_items[] = {
-      {MOD_BEVEL_MITER_SHARP, "MITER_SHARP", 0, "Sharp", "Default sharp miter"},
-      {MOD_BEVEL_MITER_PATCH, "MITER_PATCH", 0, "Patch", "Miter with extra corner"},
-      {MOD_BEVEL_MITER_ARC, "MITER_ARC", 0, "Arc", "Miter with curved arc"},
+  static const EnumPropertyItem prop_miter_outer_items[] = {
+      {MOD_BEVEL_MITER_SHARP, "MITER_SHARP", 0, "Sharp", "Outside of miter is sharp"},
+      {MOD_BEVEL_MITER_PATCH, "MITER_PATCH", 0, "Patch", "Outside of miter is squared-off patch"},
+      {MOD_BEVEL_MITER_ARC, "MITER_ARC", 0, "Arc", "Outside of miter is arc"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem prop_miter_inner_items[] = {
+      {MOD_BEVEL_MITER_SHARP, "MITER_SHARP", 0, "Sharp", "Inside of miter is sharp"},
+      {MOD_BEVEL_MITER_ARC, "MITER_ARC", 0, "Arc", "Inside of miter is arc"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static EnumPropertyItem prop_vmesh_method_items[] = {
+      {MOD_BEVEL_VMESH_ADJ, "ADJ", 0, "Grid Fill", "Default patterned fill"},
+      {MOD_BEVEL_VMESH_CUTOFF,
+       "CUTOFF",
+       0,
+       "Cutoff",
+       "A cut-off at the end of each profile before the intersection"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -3614,7 +3781,7 @@ static void rna_def_modifier_bevel(BlenderRNA *brna)
   RNA_def_property_int_sdna(prop, NULL, "res");
   RNA_def_property_range(prop, 1, 100);
   RNA_def_property_ui_text(prop, "Segments", "Number of segments for round edges/verts");
-  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+  RNA_def_property_update(prop, 0, "rna_BevelModifier_update_segments");
 
   prop = RNA_def_property(srna, "use_only_vertices", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_BEVEL_VERT);
@@ -3648,7 +3815,7 @@ static void rna_def_modifier_bevel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "offset_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "val_flags");
   RNA_def_property_enum_items(prop, prop_val_type_items);
-  RNA_def_property_ui_text(prop, "Amount Type", "What distance Width measures");
+  RNA_def_property_ui_text(prop, "Width Type", "What distance Width measures");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "profile", PROP_FLOAT, PROP_FACTOR);
@@ -3693,13 +3860,13 @@ static void rna_def_modifier_bevel(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "miter_outer", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "miter_outer");
-  RNA_def_property_enum_items(prop, prop_miter_items);
+  RNA_def_property_enum_items(prop, prop_miter_outer_items);
   RNA_def_property_ui_text(prop, "Outer Miter", "Pattern to use for outside of miters");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "miter_inner", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "miter_inner");
-  RNA_def_property_enum_items(prop, prop_miter_items);
+  RNA_def_property_enum_items(prop, prop_miter_inner_items);
   RNA_def_property_ui_text(prop, "Inner Miter", "Pattern to use for inside of miters");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
@@ -3708,6 +3875,25 @@ static void rna_def_modifier_bevel(BlenderRNA *brna)
   RNA_def_property_range(prop, 0, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1, 4);
   RNA_def_property_ui_text(prop, "Spread", "Spread distance for inner miter arcs");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "use_custom_profile", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", MOD_BEVEL_CUSTOM_PROFILE);
+  RNA_def_property_ui_text(
+      prop, "Custom Profile", "Whether to use a user inputed curve for the bevel's profile");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "custom_profile", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CurveProfile");
+  RNA_def_property_pointer_sdna(prop, NULL, "custom_profile");
+  RNA_def_property_ui_text(prop, "Custom Profile Path", "The path for the custom profile");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "vmesh_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "vmesh_method");
+  RNA_def_property_enum_items(prop, prop_vmesh_method_items);
+  RNA_def_property_ui_text(
+      prop, "Vertex Mesh Method", "The method to use to create the mesh at intersections");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 }
 

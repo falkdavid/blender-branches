@@ -575,6 +575,15 @@ static void rna_userdef_autosave_update(Main *bmain, Scene *scene, PointerRNA *p
   rna_userdef_update(bmain, scene, ptr);
 }
 
+#  define RNA_USERDEF_EXPERIMENTAL_BOOLEAN_GET(member) \
+    static bool rna_userdef_experimental_##member##_get(PointerRNA *ptr) \
+    { \
+      UserDef *userdef = POINTER_OFFSET(ptr->data, -offsetof(UserDef, experimental)); \
+      return USER_EXPEREMENTAL_TEST(userdef, member); \
+    }
+
+RNA_USERDEF_EXPERIMENTAL_BOOLEAN_GET(use_tool_fallback)
+
 static bAddon *rna_userdef_addon_new(void)
 {
   ListBase *addons_list = &U.addons;
@@ -1487,6 +1496,13 @@ static void rna_def_userdef_theme_ui(BlenderRNA *brna)
       prop, "Editor Outline", "Color of the outline of the editors and their round corners");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
+  prop = RNA_def_property(srna, "widget_text_cursor", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_float_sdna(prop, NULL, "widget_text_cursor");
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(
+      prop, "Text Cursor", "Color of the interface widgets text insertion cursor (caret)");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
   /* axis */
   prop = RNA_def_property(srna, "axis_x", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, NULL, "xaxis");
@@ -1883,6 +1899,16 @@ static void rna_def_userdef_theme_spaces_face(StructRNA *srna)
   prop = RNA_def_property(srna, "freestyle_face_mark", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Freestyle Face Mark", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "face_back", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Face Orientation Back", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "face_front", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Face Orientation Front", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 }
 
@@ -2559,6 +2585,12 @@ static void rna_def_userdef_theme_space_text(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Theme Text Editor", "Theme settings for the Text Editor");
 
   rna_def_userdef_theme_spaces_main(srna);
+
+  prop = RNA_def_property(srna, "line_numbers", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_float_sdna(prop, NULL, "line_numbers");
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(prop, "Line Numbers", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   prop = RNA_def_property(srna, "line_numbers_background", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, NULL, "grid");
@@ -5049,12 +5081,11 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 
   /* OpenGL */
 
-  /* Full scene anti-aliasing */
-  prop = RNA_def_property(srna, "multi_sample", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_bitflag_sdna(prop, NULL, "ogl_multisamples");
-  RNA_def_property_enum_items(prop, multi_sample_levels);
+  /* Viewport anti-aliasing */
+  prop = RNA_def_property(srna, "use_overlay_smooth_wire", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "gpu_flag", USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE);
   RNA_def_property_ui_text(
-      prop, "MultiSample", "Enable OpenGL multi-sampling, only for systems that support it");
+      prop, "Overlay Smooth Wires", "Enable overlay smooth wires, reducing aliasing");
   RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");
 
   prop = RNA_def_property(srna, "use_edit_mode_smooth_wire", PROP_BOOLEAN, PROP_NONE);
@@ -5832,6 +5863,12 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "All Experimental Features",
                            "Expose all the experimental features in the user interface");
+  RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+  prop = RNA_def_property(srna, "use_tool_fallback", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "use_tool_fallback", 1);
+  RNA_def_property_boolean_funcs(prop, "rna_userdef_experimental_use_tool_fallback_get", NULL);
+  RNA_def_property_ui_text(prop, "Fallback Tool Support", "Allow selection with an active tool");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 }
 

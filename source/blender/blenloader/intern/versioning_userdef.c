@@ -161,6 +161,10 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
    */
   {
     FROM_DEFAULT_V4_UCHAR(space_sequencer.anim_preview_range);
+    FROM_DEFAULT_V4_UCHAR(space_text.line_numbers);
+    FROM_DEFAULT_V4_UCHAR(tui.widget_text_cursor);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.face_back);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.face_front);
   }
 
 #undef FROM_DEFAULT_V4_UCHAR
@@ -663,6 +667,19 @@ void BLO_version_defaults_userpref_blend(Main *bmain, UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(282, 1)) {
     userdef->file_space_data.filter_id = U_default.file_space_data.filter_id;
+  }
+
+  if (!USER_VERSION_ATLEAST(282, 4)) {
+    if (userdef->view_rotate_sensitivity_turntable == 0.0f) {
+      userdef->view_rotate_sensitivity_turntable = DEG2RADF(0.4f);
+      userdef->view_rotate_sensitivity_trackball = 1.0f;
+    }
+    if (userdef->scrollback == 0) {
+      userdef->scrollback = U_default.scrollback;
+    }
+
+    /* Enable Overlay Engine Smooth Wire by default */
+    userdef->gpu_flag |= USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE;
   }
 
   /**

@@ -22,8 +22,6 @@
 
 #include "workbench_private.h"
 
-#include "BIF_gl.h"
-
 #include "BLI_alloca.h"
 #include "BLI_dynstr.h"
 #include "BLI_string_utils.h"
@@ -337,8 +335,6 @@ void workbench_forward_engine_init(WORKBENCH_Data *vedata)
   }
   WORKBENCH_PrivateData *wpd = stl->g_data;
   workbench_private_data_init(wpd);
-  float light_direction[3];
-  workbench_private_data_get_light_direction(wpd, light_direction);
 
   if (!e_data.checker_depth_sh) {
     e_data.checker_depth_sh = DRW_shader_create_fullscreen(
@@ -391,17 +387,19 @@ void workbench_forward_engine_init(WORKBENCH_Data *vedata)
                                 });
 
   workbench_volume_cache_init(vedata);
-  const bool do_cull = CULL_BACKFACE_ENABLED(wpd);
-  const int cull_state = (do_cull) ? DRW_STATE_CULL_BACK : 0;
+
+  DRWState clip_state = WORLD_CLIPPING_ENABLED(wpd) ? DRW_STATE_CLIP_PLANES : 0;
+  DRWState cull_state = CULL_BACKFACE_ENABLED(wpd) ? DRW_STATE_CULL_BACK : 0;
 
   /* Transparency Accum */
   {
-    int state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_OIT | cull_state;
+    int state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_OIT | cull_state | clip_state;
     psl->transparent_accum_pass = DRW_pass_create("Transparent Accum", state);
   }
   /* Depth */
   {
-    int state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | cull_state;
+    int state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | cull_state |
+                clip_state;
     psl->object_outline_pass = DRW_pass_create("Object Outline Pass", state);
   }
   /* Composite */

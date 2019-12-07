@@ -257,6 +257,8 @@ void wm_window_free(bContext *C, wmWindowManager *wm, wmWindow *win)
     MEM_freeN(win->cursor_keymap_status);
   }
 
+  WM_gestures_free_all(win);
+
   wm_event_free_all(win);
 
   wm_ghostwindow_destroy(wm, win);
@@ -1638,6 +1640,7 @@ void wm_ghost_init(bContext *C)
     }
 
     g_system = GHOST_CreateSystem();
+    GHOST_SystemInitDebug(g_system, G.debug & G_DEBUG_GHOST);
 
     if (C != NULL) {
       GHOST_AddEventConsumer(g_system, consumer);

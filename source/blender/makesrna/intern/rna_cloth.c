@@ -291,6 +291,24 @@ static void rna_ClothSettings_bend_vgroup_set(PointerRNA *ptr, const char *value
   rna_object_vgroup_name_index_set(ptr, value, &sim->vgroup_bend);
 }
 
+static void rna_ClothSettings_pressure_vgroup_get(PointerRNA *ptr, char *value)
+{
+  ClothSimSettings *sim = (ClothSimSettings *)ptr->data;
+  rna_object_vgroup_name_index_get(ptr, value, sim->vgroup_pressure);
+}
+
+static int rna_ClothSettings_pressure_vgroup_length(PointerRNA *ptr)
+{
+  ClothSimSettings *sim = (ClothSimSettings *)ptr->data;
+  return rna_object_vgroup_name_index_length(ptr, sim->vgroup_pressure);
+}
+
+static void rna_ClothSettings_pressure_vgroup_set(PointerRNA *ptr, const char *value)
+{
+  ClothSimSettings *sim = (ClothSimSettings *)ptr->data;
+  rna_object_vgroup_name_index_set(ptr, value, &sim->vgroup_pressure);
+}
+
 static void rna_CollSettings_selfcol_vgroup_get(PointerRNA *ptr, char *value)
 {
   ClothCollSettings *coll = (ClothCollSettings *)ptr->data;
@@ -533,8 +551,8 @@ static void rna_def_cloth_sim_settings(BlenderRNA *brna)
   /* mass */
 
   prop = RNA_def_property(srna, "mass", PROP_FLOAT, PROP_UNIT_MASS);
-  RNA_def_property_range(prop, 0.0f, 10.0f);
-  RNA_def_property_ui_text(prop, "Mass", "Mass of cloth material");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_text(prop, "Vertex Mass", "The mass of each vertex on the cloth material");
   RNA_def_property_update(prop, 0, "rna_cloth_update");
 
   prop = RNA_def_property(srna, "vertex_group_mass", PROP_STRING, PROP_NONE);
@@ -595,14 +613,16 @@ static void rna_def_cloth_sim_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "shrink_min", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "shrink_min");
-  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_range(prop, -FLT_MAX, 1.0f);
+  RNA_def_property_ui_range(prop, -1.0f, 1.0f, 0.05f, 3);
   RNA_def_property_float_funcs(prop, NULL, "rna_ClothSettings_shrink_min_set", NULL);
   RNA_def_property_ui_text(prop, "Shrink Factor", "Factor by which to shrink cloth");
   RNA_def_property_update(prop, 0, "rna_cloth_update");
 
   prop = RNA_def_property(srna, "shrink_max", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "shrink_max");
-  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_range(prop, -FLT_MAX, 1.0f);
+  RNA_def_property_ui_range(prop, -1.0f, 1.0f, 0.05f, 3);
   RNA_def_property_float_funcs(prop, NULL, "rna_ClothSettings_shrink_max_set", NULL);
   RNA_def_property_ui_text(prop, "Shrink Factor Max", "Max amount to shrink cloth by");
   RNA_def_property_update(prop, 0, "rna_cloth_update");
@@ -773,6 +793,61 @@ static void rna_def_cloth_sim_settings(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Bending Model", "Physical model for simulating bending forces");
   RNA_def_property_update(prop, 0, "rna_cloth_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  /* Pressure */
+
+  prop = RNA_def_property(srna, "use_pressure", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", CLOTH_SIMSETTINGS_FLAG_PRESSURE);
+  RNA_def_property_ui_text(prop, "Use Pressure", "Simulate pressure inside a closed cloth mesh");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, 0, "rna_cloth_update");
+
+  prop = RNA_def_property(srna, "use_pressure_volume", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", CLOTH_SIMSETTINGS_FLAG_PRESSURE_VOL);
+  RNA_def_property_ui_text(
+      prop, "Use Custom Volume", "Use the Volume parameter as the initial volume");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, 0, "rna_cloth_update");
+
+  prop = RNA_def_property(srna, "uniform_pressure_force", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "uniform_pressure_force");
+  RNA_def_property_range(prop, -10000.0f, 10000.0f);
+  RNA_def_property_float_default(prop, 0.0f);
+  RNA_def_property_ui_text(
+      prop,
+      "Pressure",
+      "The uniform pressure that is constanty applied to the mesh. Can be negative");
+  RNA_def_property_update(prop, 0, "rna_cloth_update");
+
+  prop = RNA_def_property(srna, "target_volume", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "target_volume");
+  RNA_def_property_range(prop, 0.0f, 10000.0f);
+  RNA_def_property_float_default(prop, 0.0f);
+  RNA_def_property_ui_text(prop,
+                           "Target Volume",
+                           "The mesh volume where the inner/outer pressure will be the same. If "
+                           "set to zero the volume will not contribute to the total pressure");
+  RNA_def_property_update(prop, 0, "rna_cloth_update");
+
+  prop = RNA_def_property(srna, "pressure_factor", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "pressure_factor");
+  RNA_def_property_range(prop, 0.0f, 10000.0f);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_ui_text(prop, "Pressure Scale", "Air pressure scaling factor");
+  RNA_def_property_update(prop, 0, "rna_cloth_update");
+
+  prop = RNA_def_property(srna, "vertex_group_pressure", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_ClothSettings_pressure_vgroup_get",
+                                "rna_ClothSettings_pressure_vgroup_length",
+                                "rna_ClothSettings_pressure_vgroup_set");
+  RNA_def_property_ui_text(
+      prop,
+      "Pressure Vertex Group",
+      "Vertex Group for where to apply pressure. Zero weight means no "
+      "pressure while a weight of one means full pressure. Faces with a vertex "
+      "that has zero weight will be excluded from the volume calculation");
+  RNA_def_property_update(prop, 0, "rna_cloth_update");
 
   /* unused */
 

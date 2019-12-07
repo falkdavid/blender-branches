@@ -40,6 +40,7 @@ struct Main;
 struct ReportList;
 struct Scene;
 struct bContext;
+struct IDProperty;
 
 /* Types */
 extern BlenderRNA BLENDER_RNA;
@@ -209,6 +210,8 @@ extern StructRNA RNA_CurveMapPoint;
 extern StructRNA RNA_CurveMapping;
 extern StructRNA RNA_CurveModifier;
 extern StructRNA RNA_CurvePoint;
+extern StructRNA RNA_CurveProfile;
+extern StructRNA RNA_CurveProfilePoint;
 extern StructRNA RNA_DampedTrackConstraint;
 extern StructRNA RNA_DataTransferModifier;
 extern StructRNA RNA_DecimateModifier;
@@ -1153,6 +1156,8 @@ struct PropertyElemRNA {
   int index;
 };
 bool RNA_path_resolve_elements(PointerRNA *ptr, const char *path, struct ListBase *r_elements);
+
+char *RNA_path_from_struct_to_idproperty(PointerRNA *ptr, struct IDProperty *needle);
 
 struct ID *RNA_find_real_ID_and_path(struct Main *bmain, struct ID *id, const char **r_path);
 

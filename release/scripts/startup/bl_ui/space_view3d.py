@@ -830,7 +830,9 @@ class VIEW3D_MT_transform_base(Menu):
 
         if context.mode != 'OBJECT':
             layout.operator("transform.vertex_warp", text="Warp")
+            layout.operator_context = 'EXEC_DEFAULT'
             layout.operator("transform.vertex_random", text="Randomize")
+            layout.operator_context = 'INVOKE_REGION_WIN'
 
 
 # Generic transform menu - geometry types
@@ -2902,6 +2904,15 @@ class VIEW3D_MT_mask(Menu):
 
         layout.separator()
 
+        props = layout.operator("mesh.paint_mask_slice", text="Mask Slice")
+        props.fill_holes = False
+        props.new_object = False
+        props = layout.operator("mesh.paint_mask_slice", text="Mask Slice and Fill Holes")
+        props.new_object = False
+        props = layout.operator("mesh.paint_mask_slice", text="Mask Slice to New Object")
+
+        layout.separator()
+
         props = layout.operator("sculpt.dirty_mask", text='Dirty Mask')
 
 
@@ -3425,8 +3436,10 @@ class VIEW3D_MT_edit_mesh_context_menu(Menu):
             col.operator("transform.shrink_fatten", text="Shrink/Fatten")
             col.operator("transform.shear", text="Shear")
             col.operator("transform.vert_slide", text="Slide Vertices")
+            col.operator_context = 'EXEC_DEFAULT'
             col.operator("transform.vertex_random", text="Randomize Vertices")
             col.operator("mesh.vertices_smooth", text="Smooth Vertices")
+            col.operator_context = 'INVOKE_REGION_WIN'
             col.operator("mesh.vertices_smooth_laplacian", text="Smooth Laplacian")
 
             col.separator()
@@ -3640,7 +3653,9 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
         layout.separator()
 
         layout.operator("transform.vert_slide", text="Slide Vertices")
+        layout.operator_context = 'EXEC_DEFAULT'
         layout.operator("mesh.vertices_smooth", text="Smooth Vertices")
+        layout.operator_context = 'INVOKE_REGION_WIN'
 
         layout.separator()
 
@@ -5451,6 +5466,26 @@ class VIEW3D_PT_shading_options_ssao(Panel):
         col.prop(scene.display, "matcap_ssao_attenuation")
 
 
+class VIEW3D_PT_shading_render_pass(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Render Pass"
+    bl_parent_id = 'VIEW3D_PT_shading'
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.space_data.shading.type == 'MATERIAL'
+            or (context.engine in cls.COMPAT_ENGINES
+                and context.space_data.shading.type == 'RENDERED'))
+
+    def draw(self, context):
+        shading = context.space_data.shading
+
+        layout = self.layout
+        layout.prop(shading, "render_pass", text="")
+
+
 class VIEW3D_PT_gizmo_display(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
@@ -5532,7 +5567,7 @@ class VIEW3D_PT_overlay_guides(Panel):
         row = sub.row()
         row_el = row.column()
         row_el.prop(overlay, "show_ortho_grid", text="Grid")
-        grid_active = (
+        grid_active = bool(
             view.region_quadviews or
             (view.region_3d.is_orthographic_side_view and not view.region_3d.is_perspective)
         )
@@ -6894,6 +6929,7 @@ classes = (
     VIEW3D_PT_shading_options,
     VIEW3D_PT_shading_options_shadow,
     VIEW3D_PT_shading_options_ssao,
+    VIEW3D_PT_shading_render_pass,
     VIEW3D_PT_gizmo_display,
     VIEW3D_PT_overlay,
     VIEW3D_PT_overlay_guides,
