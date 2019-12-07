@@ -3411,7 +3411,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
 /* Calculate the perimeter of a stroke as a list of bGPDspoints
  * \param resolution: 
  */
-void BKE_gpencil_stroke_perimeter(const bGPDstroke *gps, int resolution, bGPDspoint* r_perimeter)
+void BKE_gpencil_stroke_perimeter(struct bGPDstroke *gps, int resolution, struct bGPDspoint* r_perimeter)
 {
   if (gps->totpoints < 1) {
     return;
