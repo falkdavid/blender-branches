@@ -455,7 +455,6 @@ void GPENCIL_OT_frame_clean_fill(struct wmOperatorType *ot);
 void GPENCIL_OT_frame_clean_loose(struct wmOperatorType *ot);
 
 void GPENCIL_OT_convert(struct wmOperatorType *ot);
-void GPENCIL_OT_stroke_to_perimeter(struct wmOperatorType *ot);
 
 enum {
   GP_STROKE_JOIN = -1,
@@ -495,6 +494,7 @@ void GPENCIL_OT_stroke_merge(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_cutter(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_trim(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_merge_by_distance(struct wmOperatorType *ot);
+void GPENCIL_OT_stroke_to_perimeter(struct wmOperatorType *ot);
 
 void GPENCIL_OT_brush_presets_create(struct wmOperatorType *ot);
 
