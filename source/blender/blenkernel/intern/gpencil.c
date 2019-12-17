@@ -3408,10 +3408,11 @@ void BKE_gpencil_convert_curve(Main *bmain,
   DEG_id_tag_update(&gpd->id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
 }
 
-/* Calculate the perimeter of a stroke as a list of bGPDspoints
- * \param resolution: 
+/* Calculate the perimeter of a stroke as a list of x,y,z points.
+ * Assumes that stroke has been projected on a 2d plane.
+ * \param subdivisions: Number of subdivions along the perimeter (resolution)
  */
-void BKE_gpencil_stroke_perimeter(struct bGPDstroke *gps, int resolution, struct bGPDspoint* r_perimeter)
+void BKE_gpencil_stroke_perimeter(struct bGPDstroke *gps, int subdivisions, float* r_perimeter)
 {
   if (gps->totpoints < 1) {
     return;
