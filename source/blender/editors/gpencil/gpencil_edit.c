@@ -4728,3 +4728,57 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
       ot->srna, "use_unselected", 0, "Unselected", "Use whole stroke, not only selected points");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
+
+/* ********** Stroke to perimeter ********** */
+
+static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
+{
+  printf("Enter gp_stroke_to_perimeter_exec\n");
+  bGPdata *gpd = ED_gpencil_data_get_active(C);
+  const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
+
+  /* Go through each editable + selected stroke */
+  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+    if (gps->flag & GP_STROKE_SELECT) {
+      printf("Number of verts: %d\n", gps->totpoints);
+      printf("Resolution: %d\n", subdivisions);
+      printf("Thickness: %d\n", gps->thickness);
+
+      ED_gpencil_project_stroke_to_view(C, gpl, gps);
+
+      float perimeter[3];
+      BKE_gpencil_stroke_perimeter(gps, subdivisions, &perimeter);
+
+      if (gps->totpoints > 0) {
+        bGPDspoint point = gps->points[0];
+        printf("pressure: %.2f\n", point.pressure);
+      }
+    }
+  }
+  GP_EDITABLE_STROKES_END(gpstroke_iter);
+
+  DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+
+  return OPERATOR_FINISHED;
+}
+
+void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  /* identifiers */
+  ot->name = "Stroke to perimeter";
+  ot->idname = "GPENCIL_OT_stroke_to_perimeter";
+  ot->description = "Convert stroke to stroke perimeter";
+
+  /* callbacks */
+  ot->exec = gp_stroke_to_perimeter_exec;
+  ot->poll = gp_stroke_edit_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  prop = RNA_def_int(ot->srna, "subdivisions", 2, 0, 10, "Subdivisions", "Number of subdivisions", 0, 5);
+}
