@@ -4709,6 +4709,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
   printf("Enter gp_stroke_to_perimeter_exec\n");
   bGPdata *gpd = ED_gpencil_data_get_active(C);
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
   const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
 
   /* Go through each editable + selected stroke */
@@ -4718,15 +4720,41 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
       printf("Resolution: %d\n", subdivisions);
       printf("Thickness: %d\n", gps->thickness);
 
-      ED_gpencil_project_stroke_to_view(C, gpl, gps);
-
-      float perimeter[3];
-      BKE_gpencil_stroke_perimeter(gps, subdivisions, &perimeter);
-
-      if (gps->totpoints > 0) {
-        bGPDspoint point = gps->points[0];
-        printf("pressure: %.2f\n", point.pressure);
+      int num_perimeter_points = 0;
+      float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d, subdivisions, &num_perimeter_points);
+      printf("num_perimeter_points: %d\n", num_perimeter_points);
+      printf("%p\n", perimeter_points);
+      if (num_perimeter_points == 0) {
+        return OPERATOR_CANCELLED;
       }
+
+      gps->points = MEM_recallocN(&gps->points, sizeof(bGPDspoint) * num_perimeter_points);
+      gps->thickness /= 3;
+      printf("Thickness: %d\n", gps->thickness);
+
+      for (int i = 0; i < num_perimeter_points; i++) {
+        print_v3("point", &perimeter_points[i*3]);
+      }
+      
+      float coord[3];
+      for (int i = 0; i < num_perimeter_points; i++) {
+        bGPDspoint *pt = &gps->points[i];
+        copy_v3_v3(&coord, &perimeter_points[i * 3]);
+
+        pt->x = coord[0];
+        pt->y = coord[1];
+        pt->z = coord[2];
+
+        pt->pressure = 1.0f;
+        pt->strength = 1.0f;
+      }
+
+      /* free temp data */
+      MEM_SAFE_FREE(perimeter_points);
+
+      /* triangles cache needs to be recalculated */
+      gps->flag |= GP_STROKE_RECALC_GEOMETRY;
+      gps->tot_triangles = 0;
     }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
@@ -4754,5 +4782,5 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_int(ot->srna, "subdivisions", 2, 0, 10, "Subdivisions", "Number of subdivisions", 0, 5);
+  prop = RNA_def_int(ot->srna, "subdivisions", 2, 0, 10, "Subdivisions", "Number of subdivisions", 0, 6);
 }
