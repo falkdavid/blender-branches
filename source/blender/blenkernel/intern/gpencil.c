@@ -3409,22 +3409,73 @@ void BKE_gpencil_convert_curve(Main *bmain,
 }
 
 /* Calculate the perimeter of a stroke as a list of x,y,z points.
- * Assumes that stroke has been projected on a 2d plane.
  * \param subdivisions: Number of subdivions along the perimeter (resolution)
  */
-void BKE_gpencil_stroke_perimeter(struct bGPDstroke *gps, int subdivisions, float* r_perimeter)
+float* BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
+                                  const bGPDstroke *gps, 
+                                  const RegionView3D *rv3d, 
+                                  int subdivisions,
+                                  int* r_num_perimeter_points)
 {
-  if (gps->totpoints < 1) {
-    return;
-  }
+  /* sanity check */
+  BLI_assert(gps->totpoints > 0);
+
+  float defaultpixsize = 1000.0f / gpd->pixfactor;
+  printf("defaultpixsize: %f\n", defaultpixsize);
+  float stroke_radius = (gps->thickness / defaultpixsize) / 2.0f;
+  printf("stroke_radius: %f\n", stroke_radius);
   
+  /* edgecase if only single point*/
   if (gps->totpoints == 1) {
+    bGPDspoint *pt = &gps->points[0];
+    float point_radius = stroke_radius * pt->pressure;
+    printf("point_radius: %f\n", point_radius);
 
+    /* copy of the point in view (camera) space */
+    float pt_cp[4];
+    copy_v3_v3(pt_cp, &pt->x);
+    pt_cp[3] = 1.0;
+    mul_m4_v4(rv3d->viewmat, pt_cp);    
+
+    /* full circle has 2^(n+2) points */
+    int num_points = 1 << (subdivisions + 2);
+    printf("num_points: %d\n", num_points);
+    float *perimeter_points = (float *)MEM_callocN(sizeof(float[3]) * num_points, __func__);
+
+    float angle_incr = 2.0f * M_PI / (float)num_points;
+    float up_vec[2] = {0.0f, 1.0f};
+    float vec_perimeter[4];
+
+    for (int i = 0; i < num_points; i++) {
+      float *p_pt = &perimeter_points[i*3];
+      float angle = i * angle_incr;
+      zero_v4(vec_perimeter);
+
+      print_v4("vec", vec_perimeter);
+      /* rotate vector around point to get perimeter points */
+      rotate_v2_v2fl(vec_perimeter, up_vec, angle);
+      mul_v2_fl(vec_perimeter, point_radius);
+      print_v4("vec", vec_perimeter);
+      add_v4_v4(vec_perimeter, pt_cp);
+
+      print_v4("vec", vec_perimeter);
+      mul_m4_v4(rv3d->viewinv, vec_perimeter);
+      print_v4("vec", vec_perimeter);
+      copy_v3_v3(p_pt, vec_perimeter);
+    }
+
+    *r_num_perimeter_points = num_points;
+    return perimeter_points;
   }
+  else {
+    /* Number of points on half a circle is 2^(n+1) + 1 */
+    int num_points_cap = (1 << (subdivisions + 1)) + 1;
 
-  if (gps->totpoints == 2) {
-    
+    /* starting cap */
+    bGPDspoint *first = &gps->points[0];
+
+    /* ending cap */
+    bGPDspoint *last = &gps->points[gps->totpoints - 1];
   }
-
-  
+  return NULL;
 }
