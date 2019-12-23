@@ -4754,25 +4754,18 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         return OPERATOR_CANCELLED;
       }
 
+      gps->totpoints = num_perimeter_points;
       gps->points = MEM_recallocN(&gps->points, sizeof(bGPDspoint) * num_perimeter_points);
       gps->thickness /= 3;
-      printf("Thickness: %d\n", gps->thickness);
 
-      for (int i = 0; i < num_perimeter_points; i++) {
-        print_v3("point", &perimeter_points[i*3]);
-      }
-      
-      float coord[3];
       for (int i = 0; i < num_perimeter_points; i++) {
         bGPDspoint *pt = &gps->points[i];
-        copy_v3_v3(&coord, &perimeter_points[i * 3]);
+        const int x = GP_PRIM_DATABUF_SIZE * i;
 
-        pt->x = coord[0];
-        pt->y = coord[1];
-        pt->z = coord[2];
+        copy_v3_v3(&pt->x, &perimeter_points[x]);
 
-        pt->pressure = 1.0f;
-        pt->strength = 1.0f;
+        pt->pressure = perimeter_points[x + 3];
+        pt->strength = perimeter_points[x + 4];
       }
 
       /* free temp data */
