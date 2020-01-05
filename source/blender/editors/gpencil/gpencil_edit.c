@@ -4720,6 +4720,36 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
       printf("Resolution: %d\n", subdivisions);
       printf("Thickness: %d\n", gps->thickness);
 
+      /*
+      float defaultpixsize = 1000.0f / gpd->pixfactor;
+      printf("defaultpixsize: %f\n", defaultpixsize);
+      float stroke_radius = (gps->thickness / defaultpixsize) / 2.0f;
+      printf("stroke_radius: %f\n", stroke_radius);
+
+      bGPDspoint *pt = &gps->points[0];
+      float point_radius = stroke_radius * pt->pressure;
+      printf("point_radius: %f\n", point_radius);
+
+      float pt_cp[4];
+      copy_v3_v3(pt_cp, &pt->x);
+      pt_cp[3] = 1.0;
+      mul_m4_v4(rv3d->viewmat, pt_cp);
+
+      
+      float up_vec[2] = {1.0f, 0.0f};
+      mul_v2_fl(up_vec, point_radius);
+      print_v2("up_vec", up_vec);
+      float rot_vec[2];
+      rotate_v2_v2fl(rot_vec, up_vec, M_PI);
+      print_v2("rot_vec", rot_vec);
+      add_v2_v2(pt_cp, rot_vec);
+      
+
+      mul_m4_v4(rv3d->viewinv, pt_cp);
+      copy_v3_v3(&pt->x, pt_cp);
+
+      */
+
       int num_perimeter_points = 0;
       float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d, subdivisions, &num_perimeter_points);
       printf("num_perimeter_points: %d\n", num_perimeter_points);
@@ -4728,19 +4758,23 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         return OPERATOR_CANCELLED;
       }
 
+      /*
       gps->totpoints = num_perimeter_points;
       gps->points = MEM_recallocN(&gps->points, sizeof(bGPDspoint) * num_perimeter_points);
       gps->thickness /= 3;
+      */
 
-      for (int i = 0; i < num_perimeter_points; i++) {
-        bGPDspoint *pt = &gps->points[i];
-        const int x = GP_PRIM_DATABUF_SIZE * i;
+      //for (int i = 0; i < num_perimeter_points; i++) {
+      int i = 3;
+      bGPDspoint *pt = &gps->points[i];
+      const int x = GP_PRIM_DATABUF_SIZE * i;
 
-        copy_v3_v3(&pt->x, &perimeter_points[x]);
+      copy_v3_v3(&pt->x, (perimeter_points + x));
 
-        pt->pressure = perimeter_points[x + 3];
-        pt->strength = perimeter_points[x + 4];
-      }
+      pt->pressure = perimeter_points[x + 3];
+      pt->strength = perimeter_points[x + 4];
+      //}
+      
 
       /* free temp data */
       MEM_SAFE_FREE(perimeter_points);
