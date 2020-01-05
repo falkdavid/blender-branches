@@ -3437,34 +3437,34 @@ float* BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     pt_cp[3] = 1.0;
     mul_m4_v4(rv3d->viewmat, pt_cp);    
 
-    /* full circle has 2^(n+2) points */
+    /* full circle has 2^(n+2) points, with n = subdivisions */
     int num_points = 1 << (subdivisions + 2);
     printf("num_points: %d\n", num_points);
-    float *perimeter_points = (float *)MEM_callocN(sizeof(float) * num_points * GP_PRIM_DATABUF_SIZE, __func__);
+    float *perimeter_points = MEM_callocN(sizeof(float[3]) * num_points, __func__);
 
-    float angle_incr = 2.0f * M_PI / (float)num_points;
-    float up_vec[2] = {0.0f, 1.0f};
+    float angle_incr = (2.0f * M_PI) / (float)num_points;
+    float up_vec[2] = {1.0f, 0.0f};
     float vec_perimeter[4];
 
     for (int i = 0; i < num_points; i++) {
-      float *p_pt = &perimeter_points[i*3];
+      float *p_pt = &perimeter_points[i * 3];
       float angle = i * angle_incr;
       zero_v4(vec_perimeter);
+
       /* rotate vector around point to get perimeter points */
-      rotate_v2_v2fl(vec_perimeter, up_vec, angle);
+      copy_v2_v2(vec_perimeter, up_vec);
       mul_v2_fl(vec_perimeter, point_radius);
+      rotate_v2_v2fl(vec_perimeter, vec_perimeter, angle);
       //print_v4("vec", vec_perimeter);
-      add_v2_v2(vec_perimeter, pt_cp);
+      add_v3_v3(vec_perimeter, pt_cp);
 
       //print_v4("vec", vec_perimeter);
+      vec_perimeter[3] = 1.0;
       mul_m4_v4(rv3d->viewinv, vec_perimeter);
       //print_v4("vec", vec_perimeter);
       copy_v3_v3(p_pt, vec_perimeter);
 
-      p_pt[3] = 1.0f;
-      p_pt[4] = 1.0f;
-
-      printf("%s: %.8f %.8f %.8f %.8f\n", "point", p_pt[0], p_pt[1], p_pt[2], p_pt[3], p_pt[4]);
+      printf("%s: %.8f %.8f\n", "point", p_pt[0], p_pt[1], p_pt[2]);
     }
 
     *r_num_perimeter_points = num_points;
