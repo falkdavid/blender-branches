@@ -4720,51 +4720,20 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
       printf("Resolution: %d\n", subdivisions);
       printf("Thickness: %d\n", gps->thickness);
 
-      /*
-      float defaultpixsize = 1000.0f / gpd->pixfactor;
-      printf("defaultpixsize: %f\n", defaultpixsize);
-      float stroke_radius = (gps->thickness / defaultpixsize) / 2.0f;
-      printf("stroke_radius: %f\n", stroke_radius);
-
-      bGPDspoint *pt = &gps->points[0];
-      float point_radius = stroke_radius * pt->pressure;
-      printf("point_radius: %f\n", point_radius);
-
-      float pt_cp[4];
-      copy_v3_v3(pt_cp, &pt->x);
-      pt_cp[3] = 1.0;
-      mul_m4_v4(rv3d->viewmat, pt_cp);
-
-      
-      float up_vec[2] = {1.0f, 0.0f};
-      mul_v2_fl(up_vec, point_radius);
-
-      float rot_vec[2];
-      rotate_v2_v2fl(rot_vec, up_vec, M_PI);
-      add_v2_v2(pt_cp, rot_vec);
-      
-      mul_m4_v4(rv3d->viewinv, pt_cp);
-      copy_v3_v3(&pt->x, pt_cp);
-
-      */
-
       int num_perimeter_points = 0;
       float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d, subdivisions, &num_perimeter_points);
-      printf("num_perimeter_points: %d\n", num_perimeter_points);
-      printf("%p\n", perimeter_points);
       if (num_perimeter_points == 0) {
         return OPERATOR_CANCELLED;
       }
 
-      
       gps->totpoints = num_perimeter_points;
       gps->points = MEM_recallocN(&gps->points, sizeof(bGPDspoint) * num_perimeter_points);
-      gps->thickness /= 3;
+      gps->thickness = 1;
       
-
+      int x;
       for (int i = 0; i < num_perimeter_points; i++) {
         bGPDspoint *pt = &gps->points[i];
-        const int x = 5 * i;
+        x = GP_PRIM_DATABUF_SIZE * i;
 
         pt->x = perimeter_points[x];
         pt->y = perimeter_points[x + 1];
@@ -4778,7 +4747,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
       MEM_SAFE_FREE(perimeter_points);
 
       gps->flag |= GP_STROKE_CYCLIC;
-      gps->flag ^= GP_STROKE_NOFILL;
 
       /* triangles cache needs to be recalculated */
       gps->flag |= GP_STROKE_RECALC_GEOMETRY;
@@ -4810,5 +4778,5 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_int(ot->srna, "subdivisions", 2, 0, 10, "Subdivisions", "Number of subdivisions", 0, 6);
+  prop = RNA_def_int(ot->srna, "subdivisions", 3, 0, 10, "Subdivisions", "Number of subdivisions", 0, 6);
 }
