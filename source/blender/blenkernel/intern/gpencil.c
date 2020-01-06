@@ -3467,5 +3467,41 @@ float* BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     return perimeter_points;
   }
   
+  /*
+  bGPDspoint *first_pt = &gps->points[0];
+  bGPDspoint *last_pt = &gps->points[gps->totpoints - 1];
+
+  for (int i = 1; i < gps->totpoints - 1; i++) {
+    bGPDspoint *prev_pt = &gps->points[i - 1];
+    bGPDspoint *curr_pt = &gps->points[i];
+    bGPDspoint *next_pt = &gps->points[i + 1];
+
+    float prev_radius = stroke_radius * prev_pt->pressure;
+    float curr_radius = stroke_radius * curr_pt->pressure;
+    float next_radius = stroke_radius * next_pt->pressure;
+
+    float prev_pt_cp[4];
+    copy_v3_v3(prev_pt_cp, &prev_pt->x);
+    prev_pt_cp[3] = 1.0;
+    mul_m4_v4(rv3d->viewmat, prev_pt_cp);  
+
+    float curr_pt_cp[4];
+    copy_v3_v3(curr_pt_cp, &curr_pt->x);
+    curr_pt_cp[3] = 1.0;
+    mul_m4_v4(rv3d->viewmat, curr_pt_cp);  
+
+    float next_pt_cp[4];
+    copy_v3_v3(next_pt_cp, &next_pt->x);
+    next_pt_cp[3] = 1.0;
+    mul_m4_v4(rv3d->viewmat, next_pt_cp);
+  }
+
+  if (gps->caps[0] == GP_STROKE_CAP_ROUND) {
+    
+  } 
+  else {
+
+  }
+  */
   return NULL;
 }

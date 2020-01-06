@@ -4734,6 +4734,8 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
   printf("Enter gp_stroke_to_perimeter_exec\n");
+  Object *ob = CTX_data_active_object(C);
+  Main *bmain = CTX_data_main(C);
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   ARegion *ar = CTX_wm_region(C);
   RegionView3D *rv3d = ar->regiondata;
@@ -4741,7 +4743,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 
   /* Go through each editable + selected stroke */
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (gps->flag & GP_STROKE_SELECT) {
+    if (gps->flag & GP_STROKE_SELECT && ED_gpencil_stroke_can_use(C, gps)) {
       printf("Number of verts: %d\n", gps->totpoints);
       printf("Resolution: %d\n", subdivisions);
       printf("Thickness: %d\n", gps->thickness);
@@ -4752,14 +4754,19 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         return OPERATOR_CANCELLED;
       }
 
-      gps->totpoints = num_perimeter_points;
-      gps->points = MEM_recallocN(&gps->points, sizeof(bGPDspoint) * num_perimeter_points);
-      gps->thickness = 1;
-      
-      int x;
+      Material *mat = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
+      int mat_idx;
+      Material *new_mat = BKE_gpencil_object_material_new(bmain, ob, "copy", &mat_idx);
+      copy_v4_v4(&new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
+      new_mat->gp_style->flag |= GP_STYLE_FILL_SHOW;
+      new_mat->gp_style->flag &= ~GP_STYLE_STROKE_SHOW;
+
+      /* create new stroke with fill material and add points */
+      bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, mat_idx, num_perimeter_points, 1);
+      perimeter_stroke->flag |= GP_STROKE_CYCLIC;
       for (int i = 0; i < num_perimeter_points; i++) {
-        bGPDspoint *pt = &gps->points[i];
-        x = GP_PRIM_DATABUF_SIZE * i;
+        bGPDspoint *pt = &perimeter_stroke->points[i];
+        const int x = GP_PRIM_DATABUF_SIZE * i;
 
         pt->x = perimeter_points[x];
         pt->y = perimeter_points[x + 1];
@@ -4768,21 +4775,20 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         pt->pressure = perimeter_points[x + 3];
         pt->strength = perimeter_points[x + 4];
       }
-  
-      /* free temp data */
-      MEM_SAFE_FREE(perimeter_points);
-
-      gps->flag |= GP_STROKE_CYCLIC;
 
       /* triangles cache needs to be recalculated */
-      gps->flag |= GP_STROKE_RECALC_GEOMETRY;
-      gps->tot_triangles = 0;
+      perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
+      perimeter_stroke->tot_triangles = 0;
+
+      /* free temp data */
+      MEM_SAFE_FREE(perimeter_points);
     }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
 
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+  gpd->flag |= GP_DATA_CACHE_IS_DIRTY;
 
   return OPERATOR_FINISHED;
 }
