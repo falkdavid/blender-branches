@@ -4755,11 +4755,9 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         for (gps = gpf->strokes.first; gps; gps = gps_next) {
           gps_next = gps->next;
           /* skip strokes that are invalid for current view or cyclic */
-          if (ED_gpencil_stroke_can_use(C, gps) == false || gps->flag & GP_STROKE_CYCLIC) {
-            continue;
-          }
-
-          if (ED_gpencil_stroke_color_use(ob, gpl, gps) == false) {
+          if (ED_gpencil_stroke_can_use(C, gps) == false || 
+              ED_gpencil_stroke_color_use(ob, gpl, gps) == false ||
+              gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
             continue;
           }
 
@@ -4768,7 +4766,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           printf("Thickness: %d\n", gps->thickness);
 
           int num_perimeter_points = 0;
-          float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d, subdivisions, &num_perimeter_points);
+          float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d->viewmat, rv3d->viewinv, 
+                                                                 subdivisions, &num_perimeter_points);
 
           /* skip if no points were generated */
           if (num_perimeter_points == 0) {
@@ -4780,7 +4779,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           Material *new_mat = BKE_gpencil_object_material_new(bmain, ob, mat->id.name + 2, &mat_idx);
 
           /* copy the stroke color to fill and only show fill */
-          copy_v4_v4(&new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
+          copy_v4_v4(new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
           new_mat->gp_style->flag |= GP_STYLE_FILL_SHOW;
           new_mat->gp_style->flag &= ~GP_STYLE_STROKE_SHOW;
 
@@ -4797,6 +4796,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 
             pt->flag |= GP_SPOINT_SELECT;
           }
+
+          ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
 
           /* triangles cache needs to be recalculated */
           perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
@@ -4848,4 +4849,5 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
                     "subdivisions", 3, 0, 10, 
                     "Subdivisions", 
                     "Number of subdivisions", 0, 6);
+  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }

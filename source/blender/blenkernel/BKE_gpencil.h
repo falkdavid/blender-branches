@@ -271,7 +271,8 @@ void BKE_gpencil_convert_curve(struct Main *bmain,
 
 float* BKE_gpencil_stroke_perimeter(const struct bGPdata *gpd,
                                   const struct bGPDstroke *gps, 
-                                  const struct RegionView3D *rv3d, 
+                                  const float viewmat[4][4],
+                                  const float viewinv[4][4], 
                                   const int subdivisions,
                                   int* r_num_perimeter_points);
 
