@@ -4778,6 +4778,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           Material *mat = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
           int mat_idx;
           Material *new_mat = BKE_gpencil_object_material_new(bmain, ob, mat->id.name + 2, &mat_idx);
+
+          /* copy the stroke color to fill and only show fill */
           copy_v4_v4(&new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
           new_mat->gp_style->flag |= GP_STYLE_FILL_SHOW;
           new_mat->gp_style->flag &= ~GP_STYLE_STROKE_SHOW;
@@ -4792,6 +4794,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             copy_v3_v3(&pt->x, &perimeter_points[x]);
             pt->pressure = perimeter_points[x + 3];
             pt->strength = perimeter_points[x + 4];
+
+            pt->flag |= GP_SPOINT_SELECT;
           }
 
           /* triangles cache needs to be recalculated */
