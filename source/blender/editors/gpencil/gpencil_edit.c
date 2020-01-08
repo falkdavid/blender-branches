@@ -4715,56 +4715,86 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   RegionView3D *rv3d = ar->regiondata;
   const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
 
-  /* Go through each editable + selected stroke */
-  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (gps->flag & GP_STROKE_SELECT && ED_gpencil_stroke_can_use(C, gps)) {
-      printf("Number of verts: %d\n", gps->totpoints);
-      printf("Resolution: %d\n", subdivisions);
-      printf("Thickness: %d\n", gps->thickness);
+  const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+  bool changed = false;
 
-      int num_perimeter_points = 0;
-      float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d, subdivisions, &num_perimeter_points);
-      if (num_perimeter_points == 0) {
-        return OPERATOR_CANCELLED;
+  CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
+    bGPDframe *init_gpf = (is_multiedit_) ? gpl->frames.first : gpl->actframe;
+
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && is_multiedit_)) {
+        /* loop over strokes */
+        bGPDstroke *gps, *gps_next;
+
+        for (gps = gpf->strokes.first; gps; gps = gps_next) {
+          gps_next = gps->next;
+          /* skip strokes that are invalid for current view or cyclic */
+          if (ED_gpencil_stroke_can_use(C, gps) == false || gps->flag & GP_STROKE_CYCLIC) {
+            continue;
+          }
+
+          if (ED_gpencil_stroke_color_use(ob, gpl, gps) == false) {
+            continue;
+          }
+
+          printf("Number of verts: %d\n", gps->totpoints);
+          printf("Resolution: %d\n", subdivisions);
+          printf("Thickness: %d\n", gps->thickness);
+
+          int num_perimeter_points = 0;
+          float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d, subdivisions, &num_perimeter_points);
+
+          /* skip if no points were generated */
+          if (num_perimeter_points == 0) {
+            continue;
+          }
+
+          Material *mat = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
+          int mat_idx;
+          Material *new_mat = BKE_gpencil_object_material_new(bmain, ob, mat->id.name + 2, &mat_idx);
+          copy_v4_v4(&new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
+          new_mat->gp_style->flag |= GP_STYLE_FILL_SHOW;
+          new_mat->gp_style->flag &= ~GP_STYLE_STROKE_SHOW;
+
+          /* create new stroke with fill material and add points */
+          bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, mat_idx, num_perimeter_points, 1);
+          perimeter_stroke->flag |= GP_STROKE_CYCLIC;
+          for (int i = 0; i < num_perimeter_points; i++) {
+            bGPDspoint *pt = &perimeter_stroke->points[i];
+            const int x = GP_PRIM_DATABUF_SIZE * i;
+
+            copy_v3_v3(&pt->x, &perimeter_points[x]);
+            pt->pressure = perimeter_points[x + 3];
+            pt->strength = perimeter_points[x + 4];
+          }
+
+          /* triangles cache needs to be recalculated */
+          perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
+          perimeter_stroke->tot_triangles = 0;
+
+          perimeter_stroke->flag |= GP_STROKE_SELECT;
+
+          /* free temp data */
+          MEM_SAFE_FREE(perimeter_points);
+
+          /* Delete the old stroke */
+          BLI_remlink(&gpl->actframe->strokes, gps);
+          BKE_gpencil_free_stroke(gps);
+
+          changed = true;
+        }
       }
-
-      Material *mat = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
-      int mat_idx;
-      Material *new_mat = BKE_gpencil_object_material_new(bmain, ob, "copy", &mat_idx);
-      copy_v4_v4(&new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
-      new_mat->gp_style->flag |= GP_STYLE_FILL_SHOW;
-      new_mat->gp_style->flag &= ~GP_STYLE_STROKE_SHOW;
-
-      /* create new stroke with fill material and add points */
-      bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, mat_idx, num_perimeter_points, 1);
-      perimeter_stroke->flag |= GP_STROKE_CYCLIC;
-      for (int i = 0; i < num_perimeter_points; i++) {
-        bGPDspoint *pt = &perimeter_stroke->points[i];
-        const int x = GP_PRIM_DATABUF_SIZE * i;
-
-        pt->x = perimeter_points[x];
-        pt->y = perimeter_points[x + 1];
-        pt->z = perimeter_points[x + 2];
-
-        pt->pressure = perimeter_points[x + 3];
-        pt->strength = perimeter_points[x + 4];
-      }
-
-      /* triangles cache needs to be recalculated */
-      perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
-      perimeter_stroke->tot_triangles = 0;
-
-      /* free temp data */
-      MEM_SAFE_FREE(perimeter_points);
     }
   }
-  GP_EDITABLE_STROKES_END(gpstroke_iter);
+  CTX_DATA_END;
 
-  DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
-  gpd->flag |= GP_DATA_CACHE_IS_DIRTY;
-
-  return OPERATOR_FINISHED;
+  if (changed) {
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
+    WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
+    return OPERATOR_FINISHED;
+  }
+  return OPERATOR_CANCELLED;
 }
 
 void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
@@ -4784,5 +4814,8 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_int(ot->srna, "subdivisions", 3, 0, 10, "Subdivisions", "Number of subdivisions", 0, 6);
+  prop = RNA_def_int(ot->srna, 
+                    "subdivisions", 3, 0, 10, 
+                    "Subdivisions", 
+                    "Number of subdivisions", 0, 6);
 }
