@@ -128,6 +128,7 @@ typedef struct MeshRenderData {
 } MeshRenderData;
 
 static MeshRenderData *mesh_render_data_create(Mesh *me,
+                                               const bool is_editmode,
                                                const float obmat[4][4],
                                                const bool do_final,
                                                const bool do_uvedit,
@@ -4387,6 +4388,7 @@ static void extract_task_create(TaskPool *task_pool,
 void mesh_buffer_cache_create_requested(MeshBatchCache *cache,
                                         MeshBufferCache mbc,
                                         Mesh *me,
+                                        const bool is_editmode,
                                         const float obmat[4][4],
                                         const bool do_final,
                                         const bool do_uvedit,
@@ -4448,7 +4450,7 @@ void mesh_buffer_cache_create_requested(MeshBatchCache *cache,
 #endif
 
   MeshRenderData *mr = mesh_render_data_create(
-      me, obmat, do_final, do_uvedit, iter_flag, data_flag, cd_layer_used, ts);
+      me, is_editmode, obmat, do_final, do_uvedit, iter_flag, data_flag, cd_layer_used, ts);
   mr->cache = cache; /* HACK */
   mr->use_hide = use_hide;
   mr->use_subsurf_fdots = use_subsurf_fdots;
