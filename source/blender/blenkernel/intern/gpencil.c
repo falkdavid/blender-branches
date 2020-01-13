@@ -3422,7 +3422,7 @@ typedef struct tPerimeterPointList {
   tPerimeterPoint *first, *last;
 } tPerimeterPointList;
 
-static tPerimeterPointList *init_perimeter_point_list()
+static tPerimeterPointList *init_perimeter_point_list(void)
 {
   tPerimeterPointList *new_list = MEM_callocN(sizeof(tPerimeterPointList), __func__);
   new_list->first = NULL;
@@ -3831,27 +3831,21 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     float first_radius = stroke_radius * first_pt->pressure;
     float last_radius = stroke_radius * last_pt->pressure;
 
-    bGPDspoint *next_pt = &gps->points[1];
-    bGPDspoint *prev_pt = &gps->points[gps->totpoints - 2];
+    bGPDspoint *first_next_pt = &gps->points[1];
+    bGPDspoint *last_prev_pt = &gps->points[gps->totpoints - 2];
 
     float first_pt_vs[4];
     float last_pt_vs[4];
-    float next_pt_vs[4];
-    float prev_pt_vs[4];
+    float first_next_pt_vs[4];
+    float last_prev_pt_vs[4];
     gpencil_point_to_view_space(viewmat, &first_pt->x, first_pt_vs);
     gpencil_point_to_view_space(viewmat, &last_pt->x, last_pt_vs);
-    gpencil_point_to_view_space(viewmat, &next_pt->x, next_pt_vs);
-    gpencil_point_to_view_space(viewmat, &prev_pt->x, prev_pt_vs);
+    gpencil_point_to_view_space(viewmat, &first_next_pt->x, first_next_pt_vs);
+    gpencil_point_to_view_space(viewmat, &last_prev_pt->x, last_prev_pt_vs);
 
     float first_vec[2];
-    sub_v2_v2v2(first_vec, next_pt_vs, first_pt_vs);
+    sub_v2_v2v2(first_vec, first_next_pt_vs, first_pt_vs);
     normalize_v2(first_vec);
-    print_v2("first_vec", first_vec);
-
-    float last_vec[2];
-    sub_v2_v2v2(last_vec,  prev_pt_vs, last_pt_vs);
-    normalize_v2(last_vec);
-    print_v2("last_vec", last_vec);
 
     float first_nvec[2];
     if (is_zero_v2(first_vec)) {
@@ -3865,7 +3859,6 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     }
     float first_nvec_inv[2];
     negate_v2_v2(first_nvec_inv, first_nvec);
-    print_v2("first_nvec", first_nvec);
 
     float first_vec_perimeter[3];
     copy_v3_v3(first_vec_perimeter, first_pt_vs);
@@ -3881,6 +3874,89 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     add_point_to_end_perimeter_list(first_p_pt, perimeter_right_side);
     add_point_to_end_perimeter_list(first_p_pt_inv, perimeter_right_side);
 
+    bGPDspoint *curr;
+    int i;
+
+    float curr_pt[4];
+    float next_pt[4];
+    float prev_pt[4];
+
+    float vec_next[2];
+    float vec_prev[2];
+
+    float nvec_next[2];
+    float nvec_prev[2];
+
+    float vec_miter_left[2];
+    float vec_miter_right[2];
+
+    float miter_left_pt[3];
+    float miter_right_pt[3];
+
+    tPerimeterPoint *miter_right, *miter_left;
+
+    for (i = 1, curr = gps->points + 1; i < gps->totpoints - 1; i++, curr++) {
+      float radius = stroke_radius * curr->pressure;
+      bGPDspoint *prev = &gps->points[i - 1];
+      bGPDspoint *next = &gps->points[i + 1];
+      
+      gpencil_point_to_view_space(viewmat, &curr->x, curr_pt);
+      gpencil_point_to_view_space(viewmat, &next->x, next_pt);
+      gpencil_point_to_view_space(viewmat, &prev->x, prev_pt);
+      
+      sub_v2_v2v2(vec_prev, prev_pt, curr_pt);
+      sub_v2_v2v2(vec_next, next_pt, curr_pt);
+      normalize_v2(vec_prev);
+      normalize_v2(vec_next);
+
+      nvec_prev[0] = -vec_prev[1];
+      nvec_prev[1] = vec_prev[0];
+
+      nvec_next[0] = -vec_next[1];
+      nvec_next[1] = vec_next[0];
+      
+      add_v2_v2v2(vec_miter_right, vec_prev, vec_next);
+      normalize_v2(vec_miter_right);
+
+      float an1 = dot_v2v2(vec_miter_right, nvec_prev);
+      if (an1 == 0.0f) {
+        an1 = 1.0f;
+      }
+      float miter_length = radius / an1;
+      if (miter_length <= 0.0f) {
+        miter_length = 0.01f;
+      }
+
+      float angle = dot_v2v2(vec_next, nvec_prev);
+      /* left bend */
+      if (angle > 0) {
+        normalize_v2_length(vec_miter_right, miter_length);
+      }
+      else {
+        normalize_v2_length(vec_miter_right, -miter_length);
+      }
+      
+
+      copy_v2_v2(vec_miter_left, vec_miter_right);
+      negate_v2(vec_miter_left);
+
+      copy_v3_v3(miter_left_pt, curr_pt);
+      add_v2_v2(miter_left_pt, vec_miter_left);
+
+      copy_v3_v3(miter_right_pt, curr_pt);
+      add_v2_v2(miter_right_pt, vec_miter_right);
+
+      miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
+      add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
+
+      miter_left = new_perimeter_point(miter_left_pt, 1.0f, curr->strength);
+      add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+    }
+
+    float last_vec[2];
+    sub_v2_v2v2(last_vec,  last_prev_pt_vs, last_pt_vs);
+    normalize_v2(last_vec);
+
     float last_nvec[2];
     if (is_zero_v2(last_vec)) {
       last_nvec[0] = 0;
@@ -3893,7 +3969,6 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     }
     float last_nvec_inv[2];
     negate_v2_v2(last_nvec_inv, last_nvec);
-    print_v2("last_nvec", last_nvec);
 
     float last_vec_perimeter[3];
     copy_v3_v3(last_vec_perimeter, last_pt_vs);
@@ -3906,23 +3981,12 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     tPerimeterPoint *last_p_pt = new_perimeter_point(last_vec_perimeter, 1.0f, last_pt->strength);
     tPerimeterPoint *last_p_pt_inv = new_perimeter_point(last_vec_perimeter_inv, 1.0f, last_pt->strength);
 
-    add_point_to_start_perimeter_list(last_p_pt, perimeter_left_side);
-    add_point_to_start_perimeter_list(last_p_pt_inv, perimeter_left_side);
-
-    print_perimeter_list("right", perimeter_right_side);
-    print_perimeter_list("left", perimeter_left_side);
-
-    // bGPDspoint *pt;
-    // int i;
-    // for (i = 1, pt = gps->points; i < gps->totpoints - 1; i++, pt++) {
-    //   float radius = stroke_radius * pt->pressure;
-    // }
+    add_point_to_end_perimeter_list(last_p_pt_inv, perimeter_left_side);
+    add_point_to_end_perimeter_list(last_p_pt, perimeter_left_side);
 
     /* merge both sides to one list */
     reverse_perimeter_list(perimeter_left_side);
-    print_perimeter_list("left", perimeter_left_side);
     extend_perimeter_list(perimeter_right_side, perimeter_left_side);
-    print_perimeter_list("right", perimeter_right_side);
 
     /* transfrom back to 3d space and get flat array */
     transform_perimeter_list(perimeter_right_side, viewinv);
