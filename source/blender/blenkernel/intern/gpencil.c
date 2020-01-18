@@ -3874,27 +3874,17 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     add_point_to_end_perimeter_list(first_p_pt, perimeter_right_side);
     add_point_to_end_perimeter_list(first_p_pt_inv, perimeter_right_side);
 
-    bGPDspoint *curr;
-    int i;
+    float curr_pt[4], next_pt[4], prev_pt[4];
+    float vec_next[2], vec_prev[2];
+    float nvec_next[2], nvec_prev[2];
+    float vec_tangent[2];
 
-    float curr_pt[4];
-    float next_pt[4];
-    float prev_pt[4];
-
-    float vec_next[2];
-    float vec_prev[2];
-
-    float nvec_next[2];
-    float nvec_prev[2];
-
-    float vec_miter_left[2];
-    float vec_miter_right[2];
-
-    float miter_left_pt[3];
-    float miter_right_pt[3];
-
+    float vec_miter_left[2], vec_miter_right[2];
+    float miter_left_pt[3], miter_right_pt[3];
     tPerimeterPoint *miter_right, *miter_left;
 
+    bGPDspoint *curr;
+    int i;
     for (i = 1, curr = gps->points + 1; i < gps->totpoints - 1; i++, curr++) {
       float radius = stroke_radius * curr->pressure;
       bGPDspoint *prev = &gps->points[i - 1];
@@ -3904,21 +3894,38 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       gpencil_point_to_view_space(viewmat, &next->x, next_pt);
       gpencil_point_to_view_space(viewmat, &prev->x, prev_pt);
       
-      sub_v2_v2v2(vec_prev, prev_pt, curr_pt);
+      sub_v2_v2v2(vec_prev, curr_pt, prev_pt);
       sub_v2_v2v2(vec_next, next_pt, curr_pt);
-      normalize_v2(vec_prev);
-      normalize_v2(vec_next);
+      if (normalize_v2(vec_prev) == 0.0f) {
+        vec_prev[0] = 1.0f;
+        vec_prev[1] = 0.0f;
+      }
+      if (normalize_v2(vec_next) == 0.0f) {
+        vec_next[0] = 1.0f;
+        vec_next[1] = 0.0f;
+      }
 
       nvec_prev[0] = -vec_prev[1];
       nvec_prev[1] = vec_prev[0];
 
       nvec_next[0] = -vec_next[1];
       nvec_next[1] = vec_next[0];
-      
-      add_v2_v2v2(vec_miter_right, vec_prev, vec_next);
-      normalize_v2(vec_miter_right);
 
-      float an1 = dot_v2v2(vec_miter_right, nvec_prev);
+      float angle = dot_v2v2(vec_next, nvec_prev);
+      if (angle == 0) {
+
+      }
+      
+      add_v2_v2v2(vec_tangent, vec_prev, vec_next);
+      if (normalize_v2(vec_tangent) == 0.0f) {
+        copy_v2_v2(vec_tangent, nvec_prev);
+      }
+
+      vec_miter_left[0] = -vec_tangent[1];
+      vec_miter_left[1] = vec_tangent[0];
+
+      /* calculate miter length */
+      float an1 = dot_v2v2(vec_miter_left, nvec_prev);
       if (an1 == 0.0f) {
         an1 = 1.0f;
       }
@@ -3926,19 +3933,10 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       if (miter_length <= 0.0f) {
         miter_length = 0.01f;
       }
+      normalize_v2_length(vec_miter_left, miter_length);
 
-      float angle = dot_v2v2(vec_next, nvec_prev);
-      /* left bend */
-      if (angle > 0) {
-        normalize_v2_length(vec_miter_right, miter_length);
-      }
-      else {
-        normalize_v2_length(vec_miter_right, -miter_length);
-      }
-      
-
-      copy_v2_v2(vec_miter_left, vec_miter_right);
-      negate_v2(vec_miter_left);
+      copy_v2_v2(vec_miter_right, vec_miter_left);
+      negate_v2(vec_miter_right);
 
       copy_v3_v3(miter_left_pt, curr_pt);
       add_v2_v2(miter_left_pt, vec_miter_left);
