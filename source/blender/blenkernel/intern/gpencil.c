@@ -3459,6 +3459,52 @@ static void add_point_to_end_perimeter_list(tPerimeterPoint *pt, tPerimeterPoint
   list->num_points++;
 }
 
+static void insert_point_between_points(tPerimeterPointList *list, tPerimeterPoint *a, tPerimeterPoint *b, tPerimeterPoint *insert)
+{
+  /* check if points are linked */
+  if (a->next != b || b->prev != a) {
+    return;
+  }
+
+  a->next = insert;
+  b->prev = insert;
+
+  insert->prev = a;
+  insert->next = b;
+
+  list->num_points++;
+}
+
+static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, const tPerimeterPoint *from, const tPerimeterPoint *to, int num_points)
+{
+  float center_pt[3];
+  interp_v3_v3v3(center_pt, &from->x, &to->x, 0.5f);
+
+  float vec_center[2];
+  sub_v2_v2v2(vec_center, &from->x, center_pt);
+  if (is_zero_v2(vec_center)) {
+    return;
+  }
+
+  float vec_p[3]; // temp vector to do the vector math
+  float angle_incr = M_PI / ((float)num_points - 1);
+  
+  tPerimeterPoint *last_point = from;
+  for (int i = 1; i < num_points; i++) {
+    float angle = i * angle_incr;
+
+    /* rotate vector around point to get perimeter points */
+    rotate_v2_v2fl(vec_p, vec_center, angle);
+    add_v2_v2(vec_p, center_pt);
+    vec_p[2] = center_pt[2];
+
+    tPerimeterPoint *new_point = new_perimeter_point(vec_p, 1.0f, from->pressure);
+    insert_point_between_points(list, last_point, to, new_point);
+
+    last_point = new_point;
+  }
+}
+
 static void add_point_to_start_perimeter_list(tPerimeterPoint *pt, tPerimeterPointList *list)
 {
   if (list->first != NULL) {
@@ -3834,6 +3880,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     bGPDspoint *first_next_pt = &gps->points[1];
     bGPDspoint *last_prev_pt = &gps->points[gps->totpoints - 2];
 
+    int num_points_round_cap = (1 << (subdivisions + 1)) + 1;
+
     float first_pt_vs[4];
     float last_pt_vs[4];
     float first_next_pt_vs[4];
@@ -3873,6 +3921,10 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
 
     add_point_to_end_perimeter_list(first_p_pt, perimeter_right_side);
     add_point_to_end_perimeter_list(first_p_pt_inv, perimeter_right_side);
+
+    if (gps->caps[0] == GP_STROKE_CAP_ROUND) {
+      generate_semi_circle_from_point_to_point(perimeter_right_side, first_p_pt, first_p_pt_inv, num_points_round_cap);
+    }
 
     float curr_pt[4], next_pt[4], prev_pt[4];
     float vec_next[2], vec_prev[2];
@@ -3985,6 +4037,10 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     /* merge both sides to one list */
     reverse_perimeter_list(perimeter_left_side);
     extend_perimeter_list(perimeter_right_side, perimeter_left_side);
+
+    if (gps->caps[1] == GP_STROKE_CAP_ROUND) {
+      generate_semi_circle_from_point_to_point(perimeter_right_side, last_p_pt, last_p_pt_inv, num_points_round_cap);
+    }
 
     /* transfrom back to 3d space and get flat array */
     transform_perimeter_list(perimeter_right_side, viewinv);
