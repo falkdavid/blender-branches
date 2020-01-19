@@ -399,7 +399,6 @@ void deg_evaluate_on_refresh(Depsgraph *graph)
   state.stage = EvaluationStage::THREADED_EVALUATION;
   schedule_graph(&state, schedule_node_to_pool, task_pool);
   BLI_task_pool_work_and_wait(task_pool);
-
   BLI_task_pool_free(task_pool);
 
   if (state.need_single_thread_pass) {

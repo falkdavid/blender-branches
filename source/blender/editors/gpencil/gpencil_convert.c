@@ -1750,3 +1750,5 @@ void GPENCIL_OT_convert(wmOperatorType *ot)
       "Whether the converted Grease Pencil layer has valid timing data (internal use)");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
+
+/* ************************************************ */
