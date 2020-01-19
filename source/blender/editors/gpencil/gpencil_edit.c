@@ -4733,13 +4733,13 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 
 static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
-  printf("Enter gp_stroke_to_perimeter_exec\n");
   Object *ob = CTX_data_active_object(C);
   Main *bmain = CTX_data_main(C);
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   ARegion *ar = CTX_wm_region(C);
   RegionView3D *rv3d = ar->regiondata;
-  const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
+  const int subdivisions = RNA_int_get(op->ptr, "cap_subdivisions");
+  const float dist = RNA_float_get(op->ptr, "sample_dist");
 
   const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
   bool changed = false;
@@ -4760,10 +4760,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
               gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
             continue;
           }
-
-          printf("Number of verts: %d\n", gps->totpoints);
-          printf("Resolution: %d\n", subdivisions);
-          printf("Thickness: %d\n", gps->thickness);
 
           int num_perimeter_points = 0;
           float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d->viewmat, rv3d->viewinv, 
@@ -4797,16 +4793,18 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             pt->flag |= GP_SPOINT_SELECT;
           }
 
+          /* free temp data */
+          MEM_SAFE_FREE(perimeter_points);
+
+          /* project and sample */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
+          BKE_gpencil_sample_stroke(perimeter_stroke, dist, true);
 
           /* triangles cache needs to be recalculated */
           perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
           perimeter_stroke->tot_triangles = 0;
 
           perimeter_stroke->flag |= GP_STROKE_SELECT;
-
-          /* free temp data */
-          MEM_SAFE_FREE(perimeter_points);
 
           /* Delete the old stroke */
           BLI_remlink(&gpl->actframe->strokes, gps);
@@ -4846,8 +4844,10 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   /* properties */
   prop = RNA_def_int(ot->srna, 
-                    "subdivisions", 3, 0, 10, 
-                    "Subdivisions", 
-                    "Number of subdivisions", 0, 6);
+                    "cap_subdivisions", 3, 0, 10, 
+                    "Cap subdivisions", 
+                    "Number of subdivisions on the end caps", 0, 6);
+
+  prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
   //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
