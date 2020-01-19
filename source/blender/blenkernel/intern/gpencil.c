@@ -3442,6 +3442,16 @@ static tPerimeterPoint *new_perimeter_point(const float p[3], const float pressu
   return new_point;
 }
 
+static tPerimeterPoint *copy_perimeter_point(const tPerimeterPoint *pt)
+{
+  tPerimeterPoint *new_point = MEM_callocN(sizeof(tPerimeterPoint), __func__);
+  copy_v3_v3(&new_point->x, &pt->x);
+  new_point->pressure = pt->pressure;
+  new_point->strength = pt->strength;
+
+  return new_point;
+}
+
 static void add_point_to_end_perimeter_list(tPerimeterPoint *pt, tPerimeterPointList *list)
 {
   if (list->last) {
@@ -3639,6 +3649,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     return NULL;
   }
 
+  float miter_limit = 0.75f;
+
   float defaultpixsize = 1000.0f / gpd->pixfactor;
   float stroke_radius = (gps->thickness / defaultpixsize) / 2.0f;
 
@@ -3680,197 +3692,9 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     }
   }
   else {
-    // /* calculate number of points on perimeter and indicies into array*/
-    // int num_points_round_cap = (1 << (subdivisions + 1)) + 1;
-    // int num_points_flat_cap = (1 << subdivisions) + 1;
-    // int num_points_border = ((gps->totpoints - 1) * (1 << (subdivisions + 1))) - 2;
-    // int idx_start_cap = 0, idx_right_half, idx_end_cap, idx_left_half;
-
-    // num_points = num_points_border;
-    // if (gps->caps[0] == GP_STROKE_CAP_ROUND) {
-    //   num_points += num_points_round_cap;
-    //   idx_right_half = idx_start_cap + num_points_round_cap * GP_PRIM_DATABUF_SIZE;
-    // }
-    // else {
-    //   num_points += num_points_flat_cap;
-    //   idx_right_half = idx_start_cap + num_points_flat_cap * GP_PRIM_DATABUF_SIZE;
-    // }
-    // idx_end_cap = idx_right_half + ((num_points_border / 2) * GP_PRIM_DATABUF_SIZE);
-    // if (gps->caps[1] == GP_STROKE_CAP_ROUND) {
-    //   num_points += num_points_round_cap;
-    //   idx_left_half = idx_end_cap + num_points_round_cap * GP_PRIM_DATABUF_SIZE;
-    // }
-    // else {
-    //   num_points += num_points_flat_cap;
-    //   idx_left_half = idx_end_cap + num_points_flat_cap * GP_PRIM_DATABUF_SIZE;
-    // }
-    // printf("num_points_round_cap: %d\n", num_points_round_cap);
-    // printf("num_points_flat_cap: %d\n", num_points_flat_cap);
-    // printf("num_points_border: %d\n", num_points_border);
-    // printf("idx_start_cap: %d\n", idx_start_cap);
-    // printf("idx_right_half: %d\n", idx_right_half);
-    // printf("idx_end_cap: %d\n", idx_end_cap);
-    // printf("num points: %d\n", num_points);
-    // perimeter_points = MEM_callocN(sizeof(float[GP_PRIM_DATABUF_SIZE]) * num_points, __func__);
-
-    // /* generate caps */
-    // bGPDspoint *first_pt = &gps->points[0];
-    // bGPDspoint *last_pt = &gps->points[gps->totpoints - 1];
-
-    // float first_radius = stroke_radius * first_pt->pressure;
-    // float last_radius = stroke_radius * last_pt->pressure;
-
-    // bGPDspoint *next_pt = &gps->points[1];
-    // bGPDspoint *prev_pt = &gps->points[gps->totpoints - 2];
-
-    // float first_pt_vs[4];
-    // gpencil_point_to_view_space(viewmat, &first_pt->x, first_pt_vs);
-    // float last_pt_vs[4];
-    // gpencil_point_to_view_space(viewmat, &last_pt->x, last_pt_vs);
-
-    // float next_pt_vs[4];
-    // gpencil_point_to_view_space(viewmat, &next_pt->x, next_pt_vs);
-    // float prev_pt_vs[4];
-    // gpencil_point_to_view_space(viewmat, &prev_pt->x, prev_pt_vs);
-
-    // float vec_first[2];
-    // sub_v2_v2v2(vec_first, next_pt_vs, first_pt_vs);
-    // normalize_v2(vec_first);
-    // print_v2("vec_first", vec_first);
-
-    // float vec_last[2];
-    // sub_v2_v2v2(vec_last,  prev_pt_vs, last_pt_vs);
-    // normalize_v2(vec_last);
-    // print_v2("vec_last", vec_last);
-
-    // float nvec_first[2];
-    // if (is_zero_v2(vec_first)) {
-    //   nvec_first[0] = 0;
-    //   nvec_first[1] = first_radius;
-    // } 
-    // else {
-    //   nvec_first[0] = -vec_first[1];
-    //   nvec_first[1] = vec_first[0];
-    //   mul_v2_fl(nvec_first, first_radius);
-    // }
-    // float nvec_first_inv[2];
-    // negate_v2_v2(nvec_first_inv, nvec_first);
-    // print_v2("nvec_first", nvec_first);
-
-    // float nvec_last[2];
-    // if (is_zero_v2(vec_last)) {
-    //   nvec_last[0] = 0;
-    //   nvec_last[1] = -last_radius;
-    // } 
-    // else {
-    //   nvec_last[0] = -vec_last[1];
-    //   nvec_last[1] = vec_last[0];
-    //   mul_v2_fl(nvec_last, last_radius);
-    // }
-    // float nvec_last_inv[2];
-    // negate_v2_v2(nvec_last_inv, nvec_last);
-    // print_v2("nvec_last", nvec_last);
-
-    // /* start cap */
-    // /* generate half circle for round cap */
-    // if (gps->caps[0] == GP_STROKE_CAP_ROUND) {
-    //   printf("first is round\n");
-    //   float vec_p[4]; // temp vector to do the vector math
-    //   float angle_incr = M_PI / ((float)num_points_round_cap - 1);
-      
-    //   for (int i = 0; i < num_points_round_cap; i++) {
-    //     float *c_pt = &perimeter_points[idx_start_cap + i * GP_PRIM_DATABUF_SIZE];
-    //     float angle = i * angle_incr;
-    //     copy_v4_v4(vec_p, first_pt_vs);
-
-    //     /* rotate vector around point to get perimeter points */
-    //     rotate_v2_v2fl(vec_p, nvec_first, angle);
-    //     add_v2_v2(vec_p, first_pt_vs);
-
-    //     /* project back into 3d world coords */
-    //     mul_m4_v4(viewinv, vec_p);
-
-    //     copy_v3_v3(c_pt, vec_p);
-    //     c_pt[3] = 1.0f; // set pressure to 1
-    //     c_pt[4] = first_pt->strength;
-    //   }
-    // }
-    // /* generate line for straight cap */
-    // else {
-    //   printf("first is flat\n");
-    //   float vec_p[4];
-    //   float interp_incr = 1.0f / ((float)num_points_flat_cap - 1);
-    //   for (int i = 0; i < num_points_flat_cap; i++) {
-
-    //     float *c_pt = &perimeter_points[idx_start_cap + i * GP_PRIM_DATABUF_SIZE];
-    //     float interp_fac = i * interp_incr;
-    //     copy_v4_v4(vec_p, first_pt_vs);
-
-    //     /* interpolate between normals to get subdivided line */
-    //     interp_v2_v2v2(vec_p, nvec_first, nvec_first_inv, interp_fac);
-    //     add_v2_v2(vec_p, first_pt_vs);
-
-    //     /* project back into 3d world coords */
-    //     mul_m4_v4(viewinv, vec_p);
-
-    //     copy_v3_v3(c_pt, vec_p);
-    //     c_pt[3] = 1.0f; // set pressure to 1
-    //     c_pt[4] = first_pt->strength;
-    //   }
-    // }
-
-    // /* end cap */
-    // /* generate half circle for round cap */
-    // if (gps->caps[1] == GP_STROKE_CAP_ROUND) {
-    //   printf("last is round\n");
-    //   float vec_p[4]; // temp vector to do the vector math
-    //   float angle_incr = M_PI / ((float)num_points_round_cap - 1);
-      
-    //   for (int i = 0; i < num_points_round_cap; i++) {
-    //     float *c_pt = &perimeter_points[idx_end_cap + i * GP_PRIM_DATABUF_SIZE];
-    //     float angle = i * angle_incr;
-    //     copy_v4_v4(vec_p, last_pt_vs);
-
-    //     /* rotate vector around point to get perimeter points */
-    //     rotate_v2_v2fl(vec_p, nvec_last, angle);
-    //     add_v2_v2(vec_p, last_pt_vs);
-
-    //     /* project back into 3d world coords */
-    //     mul_m4_v4(viewinv, vec_p);
-
-    //     copy_v3_v3(c_pt, vec_p);
-    //     c_pt[3] = 1.0f; // set pressure to 1
-    //     c_pt[4] = last_pt->strength;
-    //   }
-    // }
-    // /* generate line for straight cap */
-    // else {
-    //   printf("last is flat\n");
-    //   float vec_p[4];
-    //   float interp_incr = 1.0f / ((float)num_points_flat_cap - 1);
-
-    //   for (int i = 0; i < num_points_flat_cap; i++) {
-    //     float *c_pt = &perimeter_points[idx_end_cap + i * GP_PRIM_DATABUF_SIZE];
-    //     float interp_fac = i * interp_incr;
-    //     copy_v4_v4(vec_p, last_pt_vs);
-
-    //     /* interpolate between normals to get subdivided line */
-    //     interp_v2_v2v2(vec_p, nvec_last, nvec_last_inv, interp_fac);
-    //     add_v2_v2(vec_p, last_pt_vs);
-
-    //     /* project back into 3d world coords */
-    //     mul_m4_v4(viewinv, vec_p);
-
-    //     copy_v3_v3(c_pt, vec_p);
-    //     c_pt[3] = 1.0f; // set pressure to 1
-    //     c_pt[4] = last_pt->strength;
-    //   }
-    // }
-
     tPerimeterPointList *perimeter_right_side = init_perimeter_point_list();
     tPerimeterPointList *perimeter_left_side = init_perimeter_point_list();
 
-    /* generate caps */
     bGPDspoint *first_pt = &gps->points[0];
     bGPDspoint *last_pt = &gps->points[gps->totpoints - 1];
 
@@ -3891,6 +3715,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     gpencil_point_to_view_space(viewmat, &first_next_pt->x, first_next_pt_vs);
     gpencil_point_to_view_space(viewmat, &last_prev_pt->x, last_prev_pt_vs);
 
+    /* generate points for start cap */
     float first_vec[2];
     sub_v2_v2v2(first_vec, first_next_pt_vs, first_pt_vs);
     normalize_v2(first_vec);
@@ -3929,11 +3754,14 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     float curr_pt[4], next_pt[4], prev_pt[4];
     float vec_next[2], vec_prev[2];
     float nvec_next[2], nvec_prev[2];
+    float nvec_next_pt[3], nvec_prev_pt[3];
     float vec_tangent[2];
 
     float vec_miter_left[2], vec_miter_right[2];
     float miter_left_pt[3], miter_right_pt[3];
     tPerimeterPoint *miter_right, *miter_left;
+    tPerimeterPoint *normal_next_right, *normal_prev_right,
+                    *normal_next_left, *normal_prev_left;
 
     bGPDspoint *curr;
     int i;
@@ -3962,11 +3790,6 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
 
       nvec_next[0] = -vec_next[1];
       nvec_next[1] = vec_next[0];
-
-      float angle = dot_v2v2(vec_next, nvec_prev);
-      if (angle == 0) {
-
-      }
       
       add_v2_v2v2(vec_tangent, vec_prev, vec_next);
       if (normalize_v2(vec_tangent) == 0.0f) {
@@ -3985,24 +3808,65 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       if (miter_length <= 0.0f) {
         miter_length = 0.01f;
       }
+
       normalize_v2_length(vec_miter_left, miter_length);
 
       copy_v2_v2(vec_miter_right, vec_miter_left);
       negate_v2(vec_miter_right);
+      
+      /* cut miter if too long */
+      float angle = dot_v2v2(vec_prev, vec_next);
+      if (angle < -miter_limit) {
+        normalize_v2_length(nvec_prev, radius);
+        normalize_v2_length(nvec_next, radius);
 
-      copy_v3_v3(miter_left_pt, curr_pt);
-      add_v2_v2(miter_left_pt, vec_miter_left);
+        copy_v3_v3(nvec_prev_pt, curr_pt);
+        add_v2_v2(nvec_prev_pt, nvec_prev);
 
-      copy_v3_v3(miter_right_pt, curr_pt);
-      add_v2_v2(miter_right_pt, vec_miter_right);
+        copy_v3_v3(nvec_next_pt, curr_pt);
+        add_v2_v2(nvec_next_pt, nvec_next);
 
-      miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
-      add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
+        normal_prev_right = new_perimeter_point(nvec_prev_pt, 1.0f, curr->strength);
+        normal_next_right = new_perimeter_point(nvec_next_pt, 1.0f, curr->strength);
 
-      miter_left = new_perimeter_point(miter_left_pt, 1.0f, curr->strength);
-      add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+        angle = dot_v2v2(vec_next, nvec_prev);
+        if (angle < 0) {
+          add_point_to_end_perimeter_list(normal_prev_right, perimeter_left_side);
+          add_point_to_end_perimeter_list(normal_next_right, perimeter_left_side);
+
+          copy_v3_v3(miter_right_pt, curr_pt);
+          add_v2_v2(miter_right_pt, vec_miter_right);
+
+          miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
+          add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
+        }
+        else {
+          add_point_to_end_perimeter_list(normal_next_right, perimeter_right_side);
+          add_point_to_end_perimeter_list(normal_prev_right, perimeter_right_side);
+
+          copy_v3_v3(miter_left_pt, curr_pt);
+          add_v2_v2(miter_left_pt, vec_miter_left);
+
+          miter_left = new_perimeter_point(miter_left_pt, 1.0f, curr->strength);
+          add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+        } 
+      }
+      else {
+        copy_v3_v3(miter_left_pt, curr_pt);
+        add_v2_v2(miter_left_pt, vec_miter_left);
+
+        copy_v3_v3(miter_right_pt, curr_pt);
+        add_v2_v2(miter_right_pt, vec_miter_right);
+
+        miter_left = new_perimeter_point(miter_left_pt, 1.0f, curr->strength);
+        add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+
+        miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
+        add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
+      }
     }
 
+    /* generate points for end cap */
     float last_vec[2];
     sub_v2_v2v2(last_vec,  last_prev_pt_vs, last_pt_vs);
     normalize_v2(last_vec);
@@ -4047,6 +3911,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     perimeter_points = get_flat_array_from_perimeter_list(perimeter_right_side);
     num_points = perimeter_right_side->num_points;
 
+    /* free temp data */
     free_perimeter_list(perimeter_right_side);
   }
   

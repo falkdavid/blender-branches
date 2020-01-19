@@ -4781,7 +4781,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 
           /* create new stroke with fill material and add points */
           bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, mat_idx, num_perimeter_points, 1);
-          perimeter_stroke->flag |= GP_STROKE_CYCLIC;
+          
           for (int i = 0; i < num_perimeter_points; i++) {
             bGPDspoint *pt = &perimeter_stroke->points[i];
             const int x = GP_PRIM_DATABUF_SIZE * i;
@@ -4796,9 +4796,10 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           /* free temp data */
           MEM_SAFE_FREE(perimeter_points);
 
-          /* project and sample */
+          /* project, sample and close */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_sample_stroke(perimeter_stroke, dist, true);
+          BKE_gpencil_close_stroke(perimeter_stroke);
 
           /* triangles cache needs to be recalculated */
           perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
