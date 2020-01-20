@@ -4796,15 +4796,13 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           /* free temp data */
           MEM_SAFE_FREE(perimeter_points);
 
-          /* project, sample and close */
+          /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_sample_stroke(perimeter_stroke, dist, true);
-          BKE_gpencil_close_stroke(perimeter_stroke);
 
           /* triangles cache needs to be recalculated */
           perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
           perimeter_stroke->tot_triangles = 0;
-
           perimeter_stroke->flag |= GP_STROKE_SELECT;
 
           /* Delete the old stroke */

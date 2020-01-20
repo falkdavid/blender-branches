@@ -3485,8 +3485,9 @@ static void insert_point_between_points(tPerimeterPointList *list, tPerimeterPoi
   list->num_points++;
 }
 
-static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, const tPerimeterPoint *from, const tPerimeterPoint *to, int num_points)
+static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, const tPerimeterPoint *from, const tPerimeterPoint *to, int subdivisions)
 {
+  int num_points = (1 << (subdivisions + 1)) + 1;
   float center_pt[3];
   interp_v3_v3v3(center_pt, &from->x, &to->x, 0.5f);
 
@@ -3704,8 +3705,6 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     bGPDspoint *first_next_pt = &gps->points[1];
     bGPDspoint *last_prev_pt = &gps->points[gps->totpoints - 2];
 
-    int num_points_round_cap = (1 << (subdivisions + 1)) + 1;
-
     float first_pt_vs[4];
     float last_pt_vs[4];
     float first_next_pt_vs[4];
@@ -3748,7 +3747,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     add_point_to_end_perimeter_list(first_p_pt_inv, perimeter_right_side);
 
     if (gps->caps[0] == GP_STROKE_CAP_ROUND) {
-      generate_semi_circle_from_point_to_point(perimeter_right_side, first_p_pt, first_p_pt_inv, num_points_round_cap);
+      generate_semi_circle_from_point_to_point(perimeter_right_side, first_p_pt, first_p_pt_inv, subdivisions);
     }
 
     float curr_pt[4], next_pt[4], prev_pt[4];
@@ -3760,8 +3759,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     float vec_miter_left[2], vec_miter_right[2];
     float miter_left_pt[3], miter_right_pt[3];
     tPerimeterPoint *miter_right, *miter_left;
-    tPerimeterPoint *normal_next_right, *normal_prev_right,
-                    *normal_next_left, *normal_prev_left;
+    tPerimeterPoint *normal_next, *normal_prev;
 
     bGPDspoint *curr;
     int i;
@@ -3776,6 +3774,9 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       
       sub_v2_v2v2(vec_prev, curr_pt, prev_pt);
       sub_v2_v2v2(vec_next, next_pt, curr_pt);
+      float prev_length = len_v2(vec_prev);
+      float next_length = len_v2(vec_next);
+
       if (normalize_v2(vec_prev) == 0.0f) {
         vec_prev[0] = 1.0f;
         vec_prev[1] = 0.0f;
@@ -3817,35 +3818,62 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       /* cut miter if too long */
       float angle = dot_v2v2(vec_prev, vec_next);
       if (angle < -miter_limit) {
-        normalize_v2_length(nvec_prev, radius);
-        normalize_v2_length(nvec_next, radius);
-
-        copy_v3_v3(nvec_prev_pt, curr_pt);
-        add_v2_v2(nvec_prev_pt, nvec_prev);
-
-        copy_v3_v3(nvec_next_pt, curr_pt);
-        add_v2_v2(nvec_next_pt, nvec_next);
-
-        normal_prev_right = new_perimeter_point(nvec_prev_pt, 1.0f, curr->strength);
-        normal_next_right = new_perimeter_point(nvec_next_pt, 1.0f, curr->strength);
 
         angle = dot_v2v2(vec_next, nvec_prev);
         if (angle < 0) {
-          add_point_to_end_perimeter_list(normal_prev_right, perimeter_left_side);
-          add_point_to_end_perimeter_list(normal_next_right, perimeter_left_side);
+          normalize_v2_length(nvec_prev, radius);
+          normalize_v2_length(nvec_next, radius);
 
-          copy_v3_v3(miter_right_pt, curr_pt);
-          add_v2_v2(miter_right_pt, vec_miter_right);
+          copy_v3_v3(nvec_prev_pt, curr_pt);
+          add_v2_v2(nvec_prev_pt, nvec_prev);
+
+          copy_v3_v3(nvec_next_pt, curr_pt);
+          add_v2_v2(nvec_next_pt, nvec_next);
+          
+          normal_prev = new_perimeter_point(nvec_prev_pt, 1.0f, curr->strength);
+          normal_next = new_perimeter_point(nvec_next_pt, 1.0f, curr->strength);
+
+          add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
+          add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
+
+          if (miter_length < prev_length && miter_length < next_length) {
+            copy_v3_v3(miter_right_pt, curr_pt);
+            add_v2_v2(miter_right_pt, vec_miter_right);
+          }
+          else {
+            copy_v3_v3(miter_right_pt, curr_pt);
+            negate_v2(nvec_next);
+            add_v2_v2(miter_right_pt, nvec_next);
+          }
 
           miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
           add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
         }
         else {
-          add_point_to_end_perimeter_list(normal_next_right, perimeter_right_side);
-          add_point_to_end_perimeter_list(normal_prev_right, perimeter_right_side);
+          normalize_v2_length(nvec_prev, -radius);
+          normalize_v2_length(nvec_next, -radius);
 
-          copy_v3_v3(miter_left_pt, curr_pt);
-          add_v2_v2(miter_left_pt, vec_miter_left);
+          copy_v3_v3(nvec_prev_pt, curr_pt);
+          add_v2_v2(nvec_prev_pt, nvec_prev);
+
+          copy_v3_v3(nvec_next_pt, curr_pt);
+          add_v2_v2(nvec_next_pt, nvec_next);
+
+          normal_prev = new_perimeter_point(nvec_prev_pt, 1.0f, curr->strength);
+          normal_next = new_perimeter_point(nvec_next_pt, 1.0f, curr->strength);
+
+          add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
+          add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
+
+          if (miter_length < prev_length && miter_length < next_length) {
+            copy_v3_v3(miter_left_pt, curr_pt);
+            add_v2_v2(miter_left_pt, vec_miter_left);
+          }
+          else {
+            copy_v3_v3(miter_left_pt, curr_pt);
+            negate_v2(nvec_prev);
+            add_v2_v2(miter_left_pt, nvec_prev);
+          }
 
           miter_left = new_perimeter_point(miter_left_pt, 1.0f, curr->strength);
           add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
@@ -3903,7 +3931,15 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     extend_perimeter_list(perimeter_right_side, perimeter_left_side);
 
     if (gps->caps[1] == GP_STROKE_CAP_ROUND) {
-      generate_semi_circle_from_point_to_point(perimeter_right_side, last_p_pt, last_p_pt_inv, num_points_round_cap);
+      generate_semi_circle_from_point_to_point(perimeter_right_side, last_p_pt, last_p_pt_inv, subdivisions);
+    }
+
+    /* close by creating a point close to the first (make a small gap) */
+    float close_pt[3];
+    interp_v3_v3v3(close_pt, &perimeter_right_side->last->x, &perimeter_right_side->first->x, 0.99f);
+    if (compare_v3v3(close_pt, &perimeter_right_side->first->x, FLT_EPSILON) == false) {
+      tPerimeterPoint *close_p_pt = new_perimeter_point(close_pt, perimeter_right_side->last->pressure, perimeter_right_side->last->strength);
+      add_point_to_end_perimeter_list(close_p_pt, perimeter_right_side);
     }
 
     /* transfrom back to 3d space and get flat array */
