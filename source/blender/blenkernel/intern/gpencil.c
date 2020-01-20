@@ -3524,6 +3524,7 @@ static void transform_perimeter_list(const tPerimeterPointList *list, const floa
   }
 }
 
+/* Helper: return a flat float array from a perimeter point list */
 static float *get_flat_array_from_perimeter_list(const tPerimeterPointList *list)
 {
   if (list->num_points == 0) {
@@ -3565,6 +3566,7 @@ static void extend_perimeter_list(tPerimeterPointList *list_a, tPerimeterPointLi
   MEM_SAFE_FREE(list_b);
 }
 
+/* Helper: reverse the order of a perimeter point list */
 static void reverse_perimeter_list(tPerimeterPointList *list)
 {
   tPerimeterPoint *pt_tmp;
@@ -3603,7 +3605,7 @@ static void gpencil_point_to_view_space(const float mat[4][4], const float p[3],
  * list of x,y,z,pressure,strength data points.
  * \param viewmat: View matrix of the RegionView3D (to determin the direction of the projection)
  * \param viewinv: Inverse of the view matrix of the RegionView3D
- * \param subdivisions: Number of subdivions along the perimeter (resolution)
+ * \param subdivisions: Number of subdivions for the start and end caps
  * \return: Flat float array with x,y,z,pressure,strength data points
  */
 float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
@@ -3618,6 +3620,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     return NULL;
   }
 
+  /* value used by stroke shader */
   float miter_limit = 0.75f;
 
   float defaultpixsize = 1000.0f / gpd->pixfactor;
@@ -3626,7 +3629,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
   int num_points = 0;
   float *perimeter_points = NULL;
 
-  /* edgecase if only single point*/
+  /* edgecase for single point */
   if (gps->totpoints == 1) {
     bGPDspoint *pt = &gps->points[0];
     float point_radius = stroke_radius * pt->pressure;
@@ -3718,6 +3721,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       generate_semi_circle_from_point_to_point(perimeter_right_side, first_p_pt, first_p_pt_inv, subdivisions);
     }
 
+    /* generate perimeter points  */
     float curr_pt[4], next_pt[4], prev_pt[4];
     float vec_next[2], vec_prev[2];
     float nvec_next[2], nvec_prev[2];
@@ -3787,8 +3791,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       float angle = dot_v2v2(vec_prev, vec_next);
       if (angle < -miter_limit) {
 
-        angle = dot_v2v2(vec_next, nvec_prev);
-        if (angle < 0) {
+        /* bend to the left */
+        if (dot_v2v2(vec_next, nvec_prev) < 0) {
           normalize_v2_length(nvec_prev, radius);
           normalize_v2_length(nvec_next, radius);
 
@@ -3817,6 +3821,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
           miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
           add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
         }
+        /* bend to the right */
         else {
           normalize_v2_length(nvec_prev, -radius);
           normalize_v2_length(nvec_next, -radius);
