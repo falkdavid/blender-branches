@@ -3448,16 +3448,6 @@ static tPerimeterPoint *new_perimeter_point(const float p[3], const float pressu
   return new_point;
 }
 
-static tPerimeterPoint *copy_perimeter_point(const tPerimeterPoint *pt)
-{
-  tPerimeterPoint *new_point = MEM_callocN(sizeof(tPerimeterPoint), __func__);
-  copy_v3_v3(&new_point->x, &pt->x);
-  new_point->pressure = pt->pressure;
-  new_point->strength = pt->strength;
-
-  return new_point;
-}
-
 static void add_point_to_end_perimeter_list(tPerimeterPoint *pt, tPerimeterPointList *list)
 {
   if (list->last) {
@@ -3491,7 +3481,7 @@ static void insert_point_between_points(tPerimeterPointList *list, tPerimeterPoi
   list->num_points++;
 }
 
-static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, const tPerimeterPoint *from, const tPerimeterPoint *to, int subdivisions)
+static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, tPerimeterPoint *from, tPerimeterPoint *to, int subdivisions)
 {
   int num_points = (1 << (subdivisions + 1)) + 1;
   float center_pt[3];
@@ -3520,23 +3510,6 @@ static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, 
 
     last_point = new_point;
   }
-}
-
-static void add_point_to_start_perimeter_list(tPerimeterPoint *pt, tPerimeterPointList *list)
-{
-  if (list->first != NULL) {
-    list->first->prev = pt;
-  }
-
-  pt->prev = NULL;
-  pt->next = list->first;
-
-  if (list->last == NULL) {
-    list->last = pt;
-  }
-
-  list->first = pt;
-  list->num_points++;
 }
 
 static void transform_perimeter_list(const tPerimeterPointList *list, const float mat[4][4])
@@ -3615,17 +3588,6 @@ static void free_perimeter_list(tPerimeterPointList *list)
   }
 
   MEM_SAFE_FREE(list);
-}
-
-/* Helper: Printing for debugging purposes */
-static void print_perimeter_list(const char *str, const tPerimeterPointList *list)
-{
-  tPerimeterPoint *pt;
-  printf("%s: [", str);
-  for (pt = list->first; pt; pt = pt->next) {
-    printf("{x:%f, y:%f, z:%f, p:%f, s:%f}, ", pt->x, pt->y, pt->z, pt->pressure, pt->strength);
-  }
-  printf("]\n");
 }
 
 /* Helper: get 3d point into view space */
