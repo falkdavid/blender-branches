@@ -270,11 +270,12 @@ void BKE_gpencil_convert_curve(struct Main *bmain,
                                const bool only_stroke);
 
 float* BKE_gpencil_stroke_perimeter(const struct bGPdata *gpd,
-                                  const struct bGPDstroke *gps, 
-                                  const float viewmat[4][4],
-                                  const float viewinv[4][4], 
-                                  const int subdivisions,
-                                  int* r_num_perimeter_points);
+                                    const struct bGPDlayer *gpl, 
+                                    const struct bGPDstroke *gps, 
+                                    const float viewmat[4][4],
+                                    const float viewinv[4][4], 
+                                    const int subdivisions,
+                                    int* r_num_perimeter_points);
 
 extern void (*BKE_gpencil_batch_cache_dirty_tag_cb)(struct bGPdata *gpd);
 extern void (*BKE_gpencil_batch_cache_free_cb)(struct bGPdata *gpd);

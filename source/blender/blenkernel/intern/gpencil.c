@@ -3609,6 +3609,7 @@ static void gpencil_point_to_view_space(const float mat[4][4], const float p[3],
  * \return: Flat float array with x,y,z,pressure,strength data points
  */
 float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
+                                    const bGPDlayer *gpl, 
                                     const bGPDstroke *gps, 
                                     const float viewmat[4][4],
                                     const float viewinv[4][4],
@@ -3624,7 +3625,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
   float miter_limit = 0.75f;
 
   float defaultpixsize = 1000.0f / gpd->pixfactor;
-  float stroke_radius = (gps->thickness / defaultpixsize) / 2.0f;
+  float stroke_radius = ((gps->thickness + gpl->line_change) / defaultpixsize) / 2.0f;
 
   int num_points = 0;
   float *perimeter_points = NULL;

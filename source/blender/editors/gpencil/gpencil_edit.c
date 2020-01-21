@@ -4760,9 +4760,9 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
               gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
             continue;
           }
-
+          
           int num_perimeter_points = 0;
-          float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gps, rv3d->viewmat, rv3d->viewinv, 
+          float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, 
                                                                  subdivisions, &num_perimeter_points);
 
           /* skip if no points were generated */
