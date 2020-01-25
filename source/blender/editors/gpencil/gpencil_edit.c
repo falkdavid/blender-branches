@@ -4862,10 +4862,26 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 
 /* ********** Stroke to perimeter ********** */
 
+static bool gp_stroke_to_perimeter_poll(bContext *C)
+{
+  bGPdata *gpd = ED_gpencil_data_get_active(C);
+  bool sel_stroke = false;
+  if (gpd != NULL && GPENCIL_EDIT_MODE(gpd)) {
+    GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+      if ((gps->flag & GP_STROKE_SELECT) && (~gps->flag & GP_STROKE_CYCLIC)) {
+        sel_stroke = true;
+      }
+    }
+    GP_EDITABLE_STROKES_END(gpstroke_iter);
+
+    return sel_stroke;
+  }
+
+  return false;
+}
+
 static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = CTX_data_active_object(C);
-  Main *bmain = CTX_data_main(C);
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   ARegion *ar = CTX_wm_region(C);
   RegionView3D *rv3d = ar->regiondata;
@@ -4883,11 +4899,11 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 
     for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
       if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && is_multiedit_)) {
-        /* loop over strokes backwards so we can insert new strokes at the end */
-        bGPDstroke *gps, *gps_prev;
+        /* loop over strokes */
+        bGPDstroke *gps, *gps_next;
 
-        for (gps = gpf->strokes.last; gps; gps = gps_prev) {
-          gps_prev = gps->prev;
+        for (gps = gpf->strokes.first; gps; gps = gps_next) {
+          gps_next = gps->next;
           /* skip strokes that are invalid for current view, cyclic or not selected */
           if (ED_gpencil_stroke_can_use(C, gps) == false || 
               gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
@@ -4904,7 +4920,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           }
 
           /* create new stroke and add points */
-          perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, gps->mat_nr, num_perimeter_points, 1);
+          perimeter_stroke = BKE_gpencil_stroke_add(gpl->actframe, gps->mat_nr, num_perimeter_points, 1, true);
           
           bGPDspoint *pt;
           for (int i = 0; i < num_perimeter_points; i++) {
@@ -4923,12 +4939,13 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
-          BKE_gpencil_sample_stroke(perimeter_stroke, dist, true);
+          BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
 
           /* triangles cache needs to be recalculated */
-          perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
+          //perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
           perimeter_stroke->tot_triangles = 0;
           perimeter_stroke->flag |= GP_STROKE_SELECT;
+          perimeter_stroke->flag |= GP_STROKE_CYCLIC;
 
           /* Delete the old stroke */
           BLI_remlink(&gpl->actframe->strokes, gps);
@@ -4942,7 +4959,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   if (changed) {
-    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE );
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     return OPERATOR_FINISHED;
@@ -4961,7 +4978,7 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = gp_stroke_to_perimeter_exec;
-  ot->poll = gp_stroke_edit_poll;
+  ot->poll = gp_stroke_to_perimeter_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -4971,7 +4988,8 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
                     "cap_subdivisions", 3, 0, 10, 
                     "Cap subdivisions", 
                     "Number of subdivisions on the end caps", 0, 6);
-
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  
   prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
-  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
