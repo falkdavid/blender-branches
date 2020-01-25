@@ -4740,30 +4740,32 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   RegionView3D *rv3d = ar->regiondata;
   const int subdivisions = RNA_int_get(op->ptr, "cap_subdivisions");
   const float dist = RNA_float_get(op->ptr, "sample_dist");
-
-  const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
   bool changed = false;
 
+  int num_perimeter_points;
+  float *perimeter_points;
+  bGPDstroke *perimeter_stroke;
+  const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+  
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
     bGPDframe *init_gpf = (is_multiedit_) ? gpl->frames.first : gpl->actframe;
 
     for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
       if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && is_multiedit_)) {
-        /* loop over strokes */
-        bGPDstroke *gps, *gps_next;
+        /* loop over strokes backwards so we can insert new strokes at the end */
+        bGPDstroke *gps, *gps_prev;
 
-        for (gps = gpf->strokes.first; gps; gps = gps_next) {
-          gps_next = gps->next;
-          /* skip strokes that are invalid for current view or cyclic */
+        for (gps = gpf->strokes.last; gps; gps = gps_prev) {
+          gps_prev = gps->prev;
+          /* skip strokes that are invalid for current view, cyclic or not selected */
           if (ED_gpencil_stroke_can_use(C, gps) == false || 
-              ED_gpencil_stroke_color_use(ob, gpl, gps) == false ||
               gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
             continue;
           }
           
-          int num_perimeter_points = 0;
-          float *perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, 
-                                                                 subdivisions, &num_perimeter_points);
+          num_perimeter_points = 0;
+          perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, 
+                                                                  subdivisions, &num_perimeter_points);
 
           /* skip if no points were generated */
           if (num_perimeter_points == 0) {
@@ -4771,10 +4773,11 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           }
 
           /* create new stroke and add points */
-          bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, gps->mat_nr, num_perimeter_points, 1);
+          perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, gps->mat_nr, num_perimeter_points, 1);
           
+          bGPDspoint *pt;
           for (int i = 0; i < num_perimeter_points; i++) {
-            bGPDspoint *pt = &perimeter_stroke->points[i];
+            pt = &perimeter_stroke->points[i];
             const int x = GP_PRIM_DATABUF_SIZE * i;
 
             copy_v3_v3(&pt->x, &perimeter_points[x]);
@@ -4808,7 +4811,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   if (changed) {
-    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     return OPERATOR_FINISHED;
