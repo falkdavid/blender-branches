@@ -4859,3 +4859,119 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
       ot->srna, "use_unselected", 0, "Unselected", "Use whole stroke, not only selected points");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
+
+/* ********** Stroke to perimeter ********** */
+
+static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = CTX_data_active_object(C);
+  Main *bmain = CTX_data_main(C);
+  bGPdata *gpd = ED_gpencil_data_get_active(C);
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
+  const int subdivisions = RNA_int_get(op->ptr, "cap_subdivisions");
+  const float dist = RNA_float_get(op->ptr, "sample_dist");
+  bool changed = false;
+
+  int num_perimeter_points;
+  float *perimeter_points;
+  bGPDstroke *perimeter_stroke;
+  const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+  
+  CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
+    bGPDframe *init_gpf = (is_multiedit_) ? gpl->frames.first : gpl->actframe;
+
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && is_multiedit_)) {
+        /* loop over strokes backwards so we can insert new strokes at the end */
+        bGPDstroke *gps, *gps_prev;
+
+        for (gps = gpf->strokes.last; gps; gps = gps_prev) {
+          gps_prev = gps->prev;
+          /* skip strokes that are invalid for current view, cyclic or not selected */
+          if (ED_gpencil_stroke_can_use(C, gps) == false || 
+              gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
+            continue;
+          }
+          
+          num_perimeter_points = 0;
+          perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, 
+                                                                  subdivisions, &num_perimeter_points);
+
+          /* skip if no points were generated */
+          if (num_perimeter_points == 0) {
+            continue;
+          }
+
+          /* create new stroke and add points */
+          perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, gps->mat_nr, num_perimeter_points, 1);
+          
+          bGPDspoint *pt;
+          for (int i = 0; i < num_perimeter_points; i++) {
+            pt = &perimeter_stroke->points[i];
+            const int x = GP_PRIM_DATABUF_SIZE * i;
+
+            copy_v3_v3(&pt->x, &perimeter_points[x]);
+            pt->pressure = perimeter_points[x + 3];
+            pt->strength = perimeter_points[x + 4];
+
+            pt->flag |= GP_SPOINT_SELECT;
+          }
+
+          /* free temp data */
+          MEM_SAFE_FREE(perimeter_points);
+
+          /* project and sample stroke */
+          ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
+          BKE_gpencil_sample_stroke(perimeter_stroke, dist, true);
+
+          /* triangles cache needs to be recalculated */
+          perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
+          perimeter_stroke->tot_triangles = 0;
+          perimeter_stroke->flag |= GP_STROKE_SELECT;
+
+          /* Delete the old stroke */
+          BLI_remlink(&gpl->actframe->strokes, gps);
+          BKE_gpencil_free_stroke(gps);
+
+          changed = true;
+        }
+      }
+    }
+  }
+  CTX_DATA_END;
+
+  if (changed) {
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
+    WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
+    WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
+    return OPERATOR_FINISHED;
+  }
+  return OPERATOR_CANCELLED;
+}
+
+void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  /* identifiers */
+  ot->name = "Stroke to perimeter";
+  ot->idname = "GPENCIL_OT_stroke_to_perimeter";
+  ot->description = "Convert stroke to stroke perimeter";
+
+  /* callbacks */
+  ot->exec = gp_stroke_to_perimeter_exec;
+  ot->poll = gp_stroke_edit_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  prop = RNA_def_int(ot->srna, 
+                    "cap_subdivisions", 3, 0, 10, 
+                    "Cap subdivisions", 
+                    "Number of subdivisions on the end caps", 0, 6);
+
+  prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
+  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
