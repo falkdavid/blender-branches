@@ -4770,17 +4770,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             continue;
           }
 
-          Material *mat = BKE_material_gpencil_get(ob, gps->mat_nr + 1);
-          int mat_idx;
-          Material *new_mat = BKE_gpencil_object_material_new(bmain, ob, mat->id.name + 2, &mat_idx);
-
-          /* copy the stroke color to fill and only show fill */
-          copy_v4_v4(new_mat->gp_style->fill_rgba, mat->gp_style->stroke_rgba);
-          new_mat->gp_style->flag |= GP_STYLE_FILL_SHOW;
-          new_mat->gp_style->flag &= ~GP_STYLE_STROKE_SHOW;
-
-          /* create new stroke with fill material and add points */
-          bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, mat_idx, num_perimeter_points, 1);
+          /* create new stroke and add points */
+          bGPDstroke *perimeter_stroke = BKE_gpencil_add_stroke(gpl->actframe, gps->mat_nr, num_perimeter_points, 1);
           
           for (int i = 0; i < num_perimeter_points; i++) {
             bGPDspoint *pt = &perimeter_stroke->points[i];
