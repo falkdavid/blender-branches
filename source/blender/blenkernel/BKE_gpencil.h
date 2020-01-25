@@ -300,6 +300,14 @@ bool BKE_gpencil_from_image(struct SpaceImage *sima,
                             const float size,
                             const bool mask);
 
+float* BKE_gpencil_stroke_perimeter(const struct bGPdata *gpd,
+                                    const struct bGPDlayer *gpl,
+                                    const struct bGPDstroke *gps,
+                                    const float proj_mat[4][4],
+                                    const float proj_inv[4][4],
+                                    const int subdivisions,
+                                    int* r_num_perimeter_points);
+
 /* Iterator */
 /* frame & stroke are NULL if it is a layer callback. */
 typedef void (*gpIterCb)(struct bGPDlayer *layer,
