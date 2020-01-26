@@ -4972,7 +4972,8 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
                     "Cap subdivisions", 
                     "Number of subdivisions on the end caps", 0, 6);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-  
+
   prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  //RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.02f, 5);
 }
