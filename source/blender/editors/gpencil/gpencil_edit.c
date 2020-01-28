@@ -4901,7 +4901,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             continue;
           }
 
-          /* create new stroke and add points */
+          /* create new stroke (insert at head to prevent looping over new stroke again) and add points */
           perimeter_stroke = BKE_gpencil_stroke_add(gpl->actframe, gps->mat_nr, num_perimeter_points, 1, true);
 
           bGPDspoint *pt;
@@ -4910,6 +4910,8 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             const int x = i * 3;
 
             copy_v3_v3(&pt->x, &perimeter_points[x]);
+
+            /* Set pressure and strength to one */
             pt->pressure = 1.0f;
             pt->strength = 1.0f;
 
@@ -4971,9 +4973,9 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
                     "subdivisions", 3, 0, 10,
                     "Corner subdivisions",
                     "Number of subdivisions on the rounded corners", 0, 6);
-  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
-  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   //RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.02f, 5);
 }
