@@ -3908,6 +3908,45 @@ static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, 
   }
 }
 
+static void generate_perimeter_cap(const float point[4], const float other_point[4], float radius,
+                                   tPerimeterPointList* list, int subdivisions, short cap_type)
+{
+  float cap_vec[2];
+  sub_v2_v2v2(cap_vec, other_point, point);
+  normalize_v2(cap_vec);
+
+  float cap_nvec[2];
+  if (is_zero_v2(cap_vec)) {
+    cap_nvec[0] = 0;
+    cap_nvec[1] = radius;
+  }
+  else {
+    cap_nvec[0] = -cap_vec[1];
+    cap_nvec[1] = cap_vec[0];
+    mul_v2_fl(cap_nvec, radius);
+  }
+  float cap_nvec_inv[2];
+  negate_v2_v2(cap_nvec_inv, cap_nvec);
+
+  float vec_perimeter[3];
+  copy_v3_v3(vec_perimeter, point);
+  add_v2_v2(vec_perimeter, cap_nvec);
+
+  float vec_perimeter_inv[3];
+  copy_v3_v3(vec_perimeter_inv, point);
+  add_v2_v2(vec_perimeter_inv, cap_nvec_inv);
+
+  tPerimeterPoint *p_pt = new_perimeter_point(vec_perimeter);
+  tPerimeterPoint *p_pt_inv = new_perimeter_point(vec_perimeter_inv);
+
+  add_point_to_end_perimeter_list(p_pt, list);
+  add_point_to_end_perimeter_list(p_pt_inv, list);
+
+  if (cap_type == GP_STROKE_CAP_ROUND) {
+    generate_semi_circle_from_point_to_point(list, p_pt, p_pt_inv, subdivisions);
+  }
+}
+
 static void transform_perimeter_list(const tPerimeterPointList *list, const float mat[4][4])
 {
   tPerimeterPoint *pt;
@@ -4086,40 +4125,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     gpencil_point_to_proj_space(proj_mat, &last_prev_pt->x, last_prev_pt_vs);
 
     /* generate points for start cap */
-    float first_vec[2];
-    sub_v2_v2v2(first_vec, first_next_pt_vs, first_pt_vs);
-    normalize_v2(first_vec);
-
-    float first_nvec[2];
-    if (is_zero_v2(first_vec)) {
-      first_nvec[0] = 0;
-      first_nvec[1] = first_radius;
-    }
-    else {
-      first_nvec[0] = -first_vec[1];
-      first_nvec[1] = first_vec[0];
-      mul_v2_fl(first_nvec, first_radius);
-    }
-    float first_nvec_inv[2];
-    negate_v2_v2(first_nvec_inv, first_nvec);
-
-    float first_vec_perimeter[3];
-    copy_v3_v3(first_vec_perimeter, first_pt_vs);
-    add_v2_v2(first_vec_perimeter, first_nvec);
-
-    float first_vec_perimeter_inv[3];
-    copy_v3_v3(first_vec_perimeter_inv, first_pt_vs);
-    add_v2_v2(first_vec_perimeter_inv, first_nvec_inv);
-
-    tPerimeterPoint *first_p_pt = new_perimeter_point(first_vec_perimeter);
-    tPerimeterPoint *first_p_pt_inv = new_perimeter_point(first_vec_perimeter_inv);
-
-    add_point_to_end_perimeter_list(first_p_pt, perimeter_right_side);
-    add_point_to_end_perimeter_list(first_p_pt_inv, perimeter_right_side);
-
-    if (gps->caps[0] == GP_STROKE_CAP_ROUND) {
-      generate_semi_circle_from_point_to_point(perimeter_right_side, first_p_pt, first_p_pt_inv, subdivisions);
-    }
+    generate_perimeter_cap(first_pt_vs, first_next_pt_vs, first_radius, perimeter_right_side, subdivisions, gps->caps[0]);
 
     /* generate perimeter points  */
     float curr_pt[4], next_pt[4], prev_pt[4];
@@ -4254,60 +4260,28 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     }
 
     /* generate points for end cap */
-    float last_vec[2];
-    sub_v2_v2v2(last_vec,  last_prev_pt_vs, last_pt_vs);
-    normalize_v2(last_vec);
-
-    float last_nvec[2];
-    if (is_zero_v2(last_vec)) {
-      last_nvec[0] = 0;
-      last_nvec[1] = -last_radius;
-    }
-    else {
-      last_nvec[0] = -last_vec[1];
-      last_nvec[1] = last_vec[0];
-      mul_v2_fl(last_nvec, last_radius);
-    }
-    float last_nvec_inv[2];
-    negate_v2_v2(last_nvec_inv, last_nvec);
-
-    float last_vec_perimeter[3];
-    copy_v3_v3(last_vec_perimeter, last_pt_vs);
-    add_v2_v2(last_vec_perimeter, last_nvec);
-
-    float last_vec_perimeter_inv[3];
-    copy_v3_v3(last_vec_perimeter_inv, last_pt_vs);
-    add_v2_v2(last_vec_perimeter_inv, last_nvec_inv);
-
-    tPerimeterPoint *last_p_pt = new_perimeter_point(last_vec_perimeter);
-    tPerimeterPoint *last_p_pt_inv = new_perimeter_point(last_vec_perimeter_inv);
-
-    add_point_to_end_perimeter_list(last_p_pt_inv, perimeter_left_side);
-    add_point_to_end_perimeter_list(last_p_pt, perimeter_left_side);
+    generate_perimeter_cap(last_pt_vs, last_prev_pt_vs, last_radius, perimeter_right_side, subdivisions, gps->caps[1]);
 
     /* merge both sides to one list */
     reverse_perimeter_list(perimeter_left_side);
-    extend_perimeter_list(perimeter_right_side, perimeter_left_side);
-
-    if (gps->caps[1] == GP_STROKE_CAP_ROUND) {
-      generate_semi_circle_from_point_to_point(perimeter_right_side, last_p_pt, last_p_pt_inv, subdivisions);
-    }
+    extend_perimeter_list(perimeter_right_side, perimeter_left_side); // perimeter_right_side contains entire list
+    tPerimeterPointList* perimeter_list = perimeter_right_side;
 
     /* close by creating a point close to the first (make a small gap) */
     float close_pt[3];
-    interp_v3_v3v3(close_pt, &perimeter_right_side->last->x, &perimeter_right_side->first->x, 0.99f);
-    if (compare_v3v3(close_pt, &perimeter_right_side->first->x, FLT_EPSILON) == false) {
+    interp_v3_v3v3(close_pt, &perimeter_list->last->x, &perimeter_list->first->x, 0.99f);
+    if (compare_v3v3(close_pt, &perimeter_list->first->x, FLT_EPSILON) == false) {
       tPerimeterPoint *close_p_pt = new_perimeter_point(close_pt);
-      add_point_to_end_perimeter_list(close_p_pt, perimeter_right_side);
+      add_point_to_end_perimeter_list(close_p_pt, perimeter_list);
     }
 
     /* transfrom back to 3d space and get flat array */
-    transform_perimeter_list(perimeter_right_side, proj_inv);
-    perimeter_points = get_flat_array_from_perimeter_list(perimeter_right_side);
-    num_points = perimeter_right_side->num_points;
+    transform_perimeter_list(perimeter_list, proj_inv);
+    perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
+    num_points = perimeter_list->num_points;
 
     /* free temp data */
-    free_perimeter_list(perimeter_right_side);
+    free_perimeter_list(perimeter_list);
   }
 
   *r_num_perimeter_points = num_points;
