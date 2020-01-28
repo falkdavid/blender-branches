@@ -4885,7 +4885,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   ARegion *ar = CTX_wm_region(C);
   RegionView3D *rv3d = ar->regiondata;
-  const int subdivisions = RNA_int_get(op->ptr, "cap_subdivisions");
+  const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
   const float dist = RNA_float_get(op->ptr, "sample_dist");
   bool changed = false;
 
@@ -4911,8 +4911,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           }
           
           num_perimeter_points = 0;
-          perimeter_points = BKE_gpencil_stroke_perimeter(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, 
-                                                                  subdivisions, &num_perimeter_points);
+          perimeter_points = BKE_gpencil_stroke_perimeter_view(gpd, gpl, gps, rv3d, subdivisions, &num_perimeter_points);
 
           /* skip if no points were generated */
           if (num_perimeter_points == 0) {
@@ -4925,11 +4924,11 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           bGPDspoint *pt;
           for (int i = 0; i < num_perimeter_points; i++) {
             pt = &perimeter_stroke->points[i];
-            const int x = GP_PRIM_DATABUF_SIZE * i;
+            const int x = i * 3;
 
             copy_v3_v3(&pt->x, &perimeter_points[x]);
-            pt->pressure = perimeter_points[x + 3];
-            pt->strength = perimeter_points[x + 4];
+            pt->pressure = 1.0f;
+            pt->strength = 1.0f;
 
             pt->flag |= GP_SPOINT_SELECT;
           }
@@ -4942,8 +4941,9 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
 
           /* triangles cache needs to be recalculated */
-          //perimeter_stroke->flag |= GP_STROKE_RECALC_GEOMETRY;
           perimeter_stroke->tot_triangles = 0;
+          BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+          
           perimeter_stroke->flag |= GP_STROKE_SELECT;
           perimeter_stroke->flag |= GP_STROKE_CYCLIC;
 
@@ -4985,12 +4985,12 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   /* properties */
   prop = RNA_def_int(ot->srna, 
-                    "cap_subdivisions", 3, 0, 10, 
-                    "Cap subdivisions", 
-                    "Number of subdivisions on the end caps", 0, 6);
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+                    "subdivisions", 3, 0, 10, 
+                    "Corner subdivisions", 
+                    "Number of subdivisions on the rounded corners", 0, 6);
+  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   //RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.02f, 5);
 }
