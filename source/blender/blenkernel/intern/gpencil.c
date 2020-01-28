@@ -3665,7 +3665,6 @@ bool BKE_gpencil_from_image(SpaceImage *sima, bGPDframe *gpf, const float size, 
 typedef struct tPerimeterPoint {
   struct tPerimeterPoint *next, *prev;
   float x, y, z;
-  float pressure, strength;
 } tPerimeterPoint;
 
 typedef struct tPerimeterPointList {
@@ -3683,12 +3682,10 @@ static tPerimeterPointList *init_perimeter_point_list(void)
   return new_list;
 }
 
-static tPerimeterPoint *new_perimeter_point(const float p[3], const float pressure, const float strength)
+static tPerimeterPoint *new_perimeter_point(const float p[3])
 {
   tPerimeterPoint *new_point = MEM_callocN(sizeof(tPerimeterPoint), __func__);
   copy_v3_v3(&new_point->x, p);
-  new_point->pressure = pressure;
-  new_point->strength = strength;
 
   return new_point;
 }
@@ -3741,15 +3738,10 @@ static void generate_arc_from_point_to_point(tPerimeterPointList *list, tPerimet
   float det = cross_v2v2(vec_from, vec_to);
   float angle = clockwise ? M_PI - atan2f(-det, -dot) : atan2f(-det, -dot) + M_PI;
 
-  printf("dot: %f\n", dot);
-  printf("det: %f\n", det);
-  printf("angle: %f\n", angle);
-
   /* number of points is 2^(n+1) + 1 on half a circle 
    * so we multiply by (angle / pi) to get the right amount of
    * points to insert */
   int num_points = (int)(((1 << (subdivisions + 1)) - 1) * (angle / M_PI));
-  printf("num_points: %d\n", num_points);
   if (num_points > 0) {
     float angle_incr = angle / (float)num_points;
     
@@ -3764,7 +3756,7 @@ static void generate_arc_from_point_to_point(tPerimeterPointList *list, tPerimet
         add_v2_v2(vec_p, center_pt);
         vec_p[2] = center_pt[2];
 
-        tPerimeterPoint *new_point = new_perimeter_point(vec_p, 1.0f, to->pressure);
+        tPerimeterPoint *new_point = new_perimeter_point(vec_p);
         insert_point_between_points(list, from, last_point, new_point);
 
         last_point = new_point;
@@ -3779,7 +3771,7 @@ static void generate_arc_from_point_to_point(tPerimeterPointList *list, tPerimet
         add_v2_v2(vec_p, center_pt);
         vec_p[2] = center_pt[2];
 
-        tPerimeterPoint *new_point = new_perimeter_point(vec_p, 1.0f, from->pressure);
+        tPerimeterPoint *new_point = new_perimeter_point(vec_p);
         insert_point_between_points(list, last_point, to, new_point);
 
         last_point = new_point;
@@ -3813,7 +3805,7 @@ static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, 
     add_v2_v2(vec_p, center_pt);
     vec_p[2] = center_pt[2];
 
-    tPerimeterPoint *new_point = new_perimeter_point(vec_p, 1.0f, from->pressure);
+    tPerimeterPoint *new_point = new_perimeter_point(vec_p);
     insert_point_between_points(list, last_point, to, new_point);
 
     last_point = new_point;
@@ -3838,15 +3830,13 @@ static float *get_flat_array_from_perimeter_list(const tPerimeterPointList *list
   if (list->num_points == 0) {
     return NULL;
   }
-  float* perimeter_points = MEM_callocN(sizeof(float[GP_PRIM_DATABUF_SIZE]) * list->num_points, __func__);
+  float* perimeter_points = MEM_callocN(sizeof(float[3]) * list->num_points, __func__);
 
   int i;
   tPerimeterPoint *pt;
   for (pt = list->first, i = 0; pt; pt = pt->next, i++) {
-    float *p_pt = &perimeter_points[i * GP_PRIM_DATABUF_SIZE];
+    float *p_pt = &perimeter_points[i * 3];
     copy_v3_v3(p_pt, &pt->x);
-    p_pt[3] = pt->pressure;
-    p_pt[4] = pt->strength;
   }
 
   return perimeter_points;
@@ -3908,21 +3898,31 @@ static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3],
   mul_m4_v4(mat, r);
 }
 
+float *BKE_gpencil_stroke_perimeter_view(const bGPdata *gpd,
+                                         const bGPDlayer *gpl, 
+                                         const bGPDstroke *gps, 
+                                         const RegionView3D *rv3d,
+                                         int subdivisions,
+                                         int* r_num_perimeter_points)
+{
+  return BKE_gpencil_stroke_perimeter_ex(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, subdivisions, r_num_perimeter_points);
+}
+
 /** 
  * Calculate the perimeter (outline) of a stroke as a flat 
- * list of x,y,z,pressure,strength data points.
+ * list of x,y,z data points.
  * \param proj_mat: Matrix to determin the direction of the projection
  * \param proj_inv: Inverse of the projection matrix
  * \param subdivisions: Number of subdivions for the start and end caps
- * \return: Flat float array with x,y,z,pressure,strength data points
+ * \return: Flat float array with x,y,z data points
  */
-float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
-                                    const bGPDlayer *gpl, 
-                                    const bGPDstroke *gps, 
-                                    const float proj_mat[4][4],
-                                    const float proj_inv[4][4],
-                                    int subdivisions,
-                                    int* r_num_perimeter_points)
+float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
+                                       const bGPDlayer *gpl, 
+                                       const bGPDstroke *gps, 
+                                       const float proj_mat[4][4],
+                                       const float proj_inv[4][4],
+                                       int subdivisions,
+                                       int* r_num_perimeter_points)
 {
   /* sanity check */
   if (gps->totpoints < 1) {
@@ -3944,7 +3944,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
 
     /* full circle has 2^(n+2) points, with n = subdivisions */
     num_points = 1 << (subdivisions + 2);
-    perimeter_points = MEM_callocN(sizeof(float[GP_PRIM_DATABUF_SIZE]) * num_points, __func__);
+    perimeter_points = MEM_callocN(sizeof(float[3]) * num_points, __func__);
 
     float vec_p[4]; // temp vector to do the vector math
     float angle_incr = (2.0f * M_PI) / (float)num_points;
@@ -3952,7 +3952,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     mul_v2_fl(rot_vec, point_radius);
 
     for (int i = 0; i < num_points; i++) {
-      float *p_pt = &perimeter_points[i * GP_PRIM_DATABUF_SIZE];
+      float *p_pt = &perimeter_points[i * 3];
       float angle = i * angle_incr;
       vec_p[2] = pt_cp[2];
       vec_p[3] = pt_cp[3];
@@ -3965,8 +3965,6 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
       mul_m4_v4(proj_inv, vec_p);
 
       copy_v3_v3(p_pt, vec_p);
-      p_pt[3] = 1.0f; // set pressure to 1
-      p_pt[4] = pt->strength;
     }
   }
   else {
@@ -4017,8 +4015,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     copy_v3_v3(first_vec_perimeter_inv, first_pt_vs);
     add_v2_v2(first_vec_perimeter_inv, first_nvec_inv);
 
-    tPerimeterPoint *first_p_pt = new_perimeter_point(first_vec_perimeter, 1.0f, first_pt->strength);
-    tPerimeterPoint *first_p_pt_inv = new_perimeter_point(first_vec_perimeter_inv, 1.0f, first_pt->strength);
+    tPerimeterPoint *first_p_pt = new_perimeter_point(first_vec_perimeter);
+    tPerimeterPoint *first_p_pt_inv = new_perimeter_point(first_vec_perimeter_inv);
 
     add_point_to_end_perimeter_list(first_p_pt, perimeter_right_side);
     add_point_to_end_perimeter_list(first_p_pt_inv, perimeter_right_side);
@@ -4104,8 +4102,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
         
-        normal_prev = new_perimeter_point(nvec_prev_pt, 1.0f, curr->strength);
-        normal_next = new_perimeter_point(nvec_next_pt, 1.0f, curr->strength);
+        normal_prev = new_perimeter_point(nvec_prev_pt);
+        normal_next = new_perimeter_point(nvec_next_pt);
 
         add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
         add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
@@ -4122,7 +4120,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
           add_v2_v2(miter_right_pt, nvec_next);
         }
 
-        miter_right = new_perimeter_point(miter_right_pt, 1.0f, curr->strength);
+        miter_right = new_perimeter_point(miter_right_pt);
         add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
       }
       /* bend to the right */
@@ -4136,8 +4134,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
 
-        normal_prev = new_perimeter_point(nvec_prev_pt, 1.0f, curr->strength);
-        normal_next = new_perimeter_point(nvec_next_pt, 1.0f, curr->strength);
+        normal_prev = new_perimeter_point(nvec_prev_pt);
+        normal_next = new_perimeter_point(nvec_next_pt);
 
         add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
         add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
@@ -4154,7 +4152,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
           add_v2_v2(miter_left_pt, nvec_prev);
         }
 
-        miter_left = new_perimeter_point(miter_left_pt, 1.0f, curr->strength);
+        miter_left = new_perimeter_point(miter_left_pt);
         add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
       } 
     }
@@ -4185,8 +4183,8 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     copy_v3_v3(last_vec_perimeter_inv, last_pt_vs);
     add_v2_v2(last_vec_perimeter_inv, last_nvec_inv);
 
-    tPerimeterPoint *last_p_pt = new_perimeter_point(last_vec_perimeter, 1.0f, last_pt->strength);
-    tPerimeterPoint *last_p_pt_inv = new_perimeter_point(last_vec_perimeter_inv, 1.0f, last_pt->strength);
+    tPerimeterPoint *last_p_pt = new_perimeter_point(last_vec_perimeter);
+    tPerimeterPoint *last_p_pt_inv = new_perimeter_point(last_vec_perimeter_inv);
 
     add_point_to_end_perimeter_list(last_p_pt_inv, perimeter_left_side);
     add_point_to_end_perimeter_list(last_p_pt, perimeter_left_side);
@@ -4203,7 +4201,7 @@ float *BKE_gpencil_stroke_perimeter(const bGPdata *gpd,
     float close_pt[3];
     interp_v3_v3v3(close_pt, &perimeter_right_side->last->x, &perimeter_right_side->first->x, 0.99f);
     if (compare_v3v3(close_pt, &perimeter_right_side->first->x, FLT_EPSILON) == false) {
-      tPerimeterPoint *close_p_pt = new_perimeter_point(close_pt, perimeter_right_side->last->pressure, perimeter_right_side->last->strength);
+      tPerimeterPoint *close_p_pt = new_perimeter_point(close_pt);
       add_point_to_end_perimeter_list(close_p_pt, perimeter_right_side);
     }
 
