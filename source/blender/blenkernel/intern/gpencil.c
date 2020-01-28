@@ -3834,13 +3834,13 @@ static void generate_arc_from_point_to_point(tPerimeterPointList *list, tPerimet
   float det = cross_v2v2(vec_from, vec_to);
   float angle = clockwise ? M_PI - atan2f(-det, -dot) : atan2f(-det, -dot) + M_PI;
 
-  /* number of points is 2^(n+1) + 1 on half a circle 
+  /* number of points is 2^(n+1) + 1 on half a circle
    * so we multiply by (angle / pi) to get the right amount of
    * points to insert */
   int num_points = (int)(((1 << (subdivisions + 1)) - 1) * (angle / M_PI));
   if (num_points > 0) {
     float angle_incr = angle / (float)num_points;
-    
+
     float vec_p[3];
     float tmp_angle;
     if (clockwise) {
@@ -3891,7 +3891,7 @@ static void generate_semi_circle_from_point_to_point(tPerimeterPointList *list, 
 
   float vec_p[3]; // temp vector to do the vector math
   float angle_incr = M_PI / ((float)num_points - 1);
-  
+
   tPerimeterPoint *last_point = from;
   for (int i = 1; i < num_points; i++) {
     float angle = i * angle_incr;
@@ -3968,7 +3968,7 @@ static void reverse_perimeter_list(tPerimeterPointList *list)
     pt_tmp = pt->next;
     pt->next = pt->prev;
     pt->prev = pt_tmp;
-  }
+  } 
 
   pt_tmp = list->first;
   list->first = list->last;
@@ -3995,8 +3995,8 @@ static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3],
 }
 
 float *BKE_gpencil_stroke_perimeter_view(const bGPdata *gpd,
-                                         const bGPDlayer *gpl, 
-                                         const bGPDstroke *gps, 
+                                         const bGPDlayer *gpl,
+                                         const bGPDstroke *gps,
                                          const RegionView3D *rv3d,
                                          int subdivisions,
                                          int* r_num_perimeter_points)
@@ -4004,8 +4004,8 @@ float *BKE_gpencil_stroke_perimeter_view(const bGPdata *gpd,
   return BKE_gpencil_stroke_perimeter_ex(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, subdivisions, r_num_perimeter_points);
 }
 
-/** 
- * Calculate the perimeter (outline) of a stroke as a flat 
+/**
+ * Calculate the perimeter (outline) of a stroke as a flat
  * list of x,y,z data points.
  * \param proj_mat: Matrix to determin the direction of the projection
  * \param proj_inv: Inverse of the projection matrix
@@ -4013,8 +4013,8 @@ float *BKE_gpencil_stroke_perimeter_view(const bGPdata *gpd,
  * \return: Flat float array with x,y,z data points
  */
 float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
-                                       const bGPDlayer *gpl, 
-                                       const bGPDstroke *gps, 
+                                       const bGPDlayer *gpl,
+                                       const bGPDstroke *gps,
                                        const float proj_mat[4][4],
                                        const float proj_inv[4][4],
                                        int subdivisions,
@@ -4036,7 +4036,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     bGPDspoint *pt = &gps->points[0];
     float point_radius = stroke_radius * pt->pressure;
     float pt_cp[4];
-    gpencil_point_to_proj_space(proj_mat, &pt->x, pt_cp); 
+    gpencil_point_to_proj_space(proj_mat, &pt->x, pt_cp);
 
     /* full circle has 2^(n+2) points, with n = subdivisions */
     num_points = 1 << (subdivisions + 2);
@@ -4094,7 +4094,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     if (is_zero_v2(first_vec)) {
       first_nvec[0] = 0;
       first_nvec[1] = first_radius;
-    } 
+    }
     else {
       first_nvec[0] = -first_vec[1];
       first_nvec[1] = first_vec[0];
@@ -4139,11 +4139,11 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
       float radius = stroke_radius * curr->pressure;
       bGPDspoint *prev = &gps->points[i - 1];
       bGPDspoint *next = &gps->points[i + 1];
-      
+
       gpencil_point_to_proj_space(proj_mat, &curr->x, curr_pt);
       gpencil_point_to_proj_space(proj_mat, &next->x, next_pt);
       gpencil_point_to_proj_space(proj_mat, &prev->x, prev_pt);
-      
+
       sub_v2_v2v2(vec_prev, curr_pt, prev_pt);
       sub_v2_v2v2(vec_next, next_pt, curr_pt);
       float prev_length = len_v2(vec_prev);
@@ -4163,7 +4163,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
       nvec_next[0] = -vec_next[1];
       nvec_next[1] = vec_next[0];
-      
+
       add_v2_v2v2(vec_tangent, vec_prev, vec_next);
       if (normalize_v2(vec_tangent) == 0.0f) {
         copy_v2_v2(vec_tangent, nvec_prev);
@@ -4197,7 +4197,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
-        
+
         normal_prev = new_perimeter_point(nvec_prev_pt);
         normal_next = new_perimeter_point(nvec_next_pt);
 
@@ -4250,7 +4250,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
         miter_left = new_perimeter_point(miter_left_pt);
         add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
-      } 
+      }
     }
 
     /* generate points for end cap */
@@ -4262,7 +4262,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     if (is_zero_v2(last_vec)) {
       last_nvec[0] = 0;
       last_nvec[1] = -last_radius;
-    } 
+    }
     else {
       last_nvec[0] = -last_vec[1];
       last_nvec[1] = last_vec[0];
@@ -4309,7 +4309,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     /* free temp data */
     free_perimeter_list(perimeter_right_side);
   }
-  
+
   *r_num_perimeter_points = num_points;
   return perimeter_points;
 }

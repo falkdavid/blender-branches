@@ -4893,7 +4893,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   float *perimeter_points;
   bGPDstroke *perimeter_stroke;
   const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
-  
+
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
     bGPDframe *init_gpf = (is_multiedit_) ? gpl->frames.first : gpl->actframe;
 
@@ -4905,11 +4905,11 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         for (gps = gpf->strokes.first; gps; gps = gps_next) {
           gps_next = gps->next;
           /* skip strokes that are invalid for current view, cyclic or not selected */
-          if (ED_gpencil_stroke_can_use(C, gps) == false || 
+          if (ED_gpencil_stroke_can_use(C, gps) == false ||
               gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
             continue;
           }
-          
+
           num_perimeter_points = 0;
           perimeter_points = BKE_gpencil_stroke_perimeter_view(gpd, gpl, gps, rv3d, subdivisions, &num_perimeter_points);
 
@@ -4920,7 +4920,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 
           /* create new stroke and add points */
           perimeter_stroke = BKE_gpencil_stroke_add(gpl->actframe, gps->mat_nr, num_perimeter_points, 1, true);
-          
+
           bGPDspoint *pt;
           for (int i = 0; i < num_perimeter_points; i++) {
             pt = &perimeter_stroke->points[i];
@@ -4943,7 +4943,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           /* triangles cache needs to be recalculated */
           perimeter_stroke->tot_triangles = 0;
           BKE_gpencil_stroke_geometry_update(perimeter_stroke);
-          
+
           perimeter_stroke->flag |= GP_STROKE_SELECT;
           perimeter_stroke->flag |= GP_STROKE_CYCLIC;
 
@@ -4984,9 +4984,9 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  prop = RNA_def_int(ot->srna, 
-                    "subdivisions", 3, 0, 10, 
-                    "Corner subdivisions", 
+  prop = RNA_def_int(ot->srna,
+                    "subdivisions", 3, 0, 10,
+                    "Corner subdivisions",
                     "Number of subdivisions on the rounded corners", 0, 6);
   //RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
