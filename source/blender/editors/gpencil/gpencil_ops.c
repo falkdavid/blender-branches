@@ -568,6 +568,8 @@ void ED_operatortypes_gpencil(void)
   WM_operatortype_append(GPENCIL_OT_sculpt_paint);
   WM_operatortype_append(GPENCIL_OT_weight_paint);
 
+  WM_operatortype_append(GPENCIL_OT_stroke_difference);
+
   /* Editing (Buttons) ------------ */
 
   WM_operatortype_append(GPENCIL_OT_annotation_add);

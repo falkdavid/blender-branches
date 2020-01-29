@@ -4957,3 +4957,55 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 5);
 }
+
+/* ********** Stroke difference ********** */
+
+static int gp_stroke_difference_exec(bContext *C)
+{
+  Object *ob = CTX_data_active_object(C);
+  bGPdata *gpd = (bGPdata *)ob->data;
+
+  /* sanity checks */
+  if (ELEM(NULL, gpd)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Go through each editable selected stroke */
+  bGPDstroke *strokes[2];
+  int i = 0;
+  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+    if (gps->flag & GP_STROKE_SELECT) {
+      printf("num_verts: %d\n", gps->totpoints);
+      strokes[i] = gps;
+      i++;
+      if (i == 2) {
+        BKE_gpencil_stroke_difference(strokes[0], strokes[1]);
+        BKE_gpencil_free_stroke(strokes[1]);
+        BLI_freelinkN(&gpf_->strokes, strokes[1]);
+        break;
+      }
+    }
+  }
+  GP_EDITABLE_STROKES_END(gpstroke_iter);
+
+  /* notifiers */
+  DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+
+  return OPERATOR_FINISHED;
+}
+
+
+void GPENCIL_OT_stroke_difference(wmOperatorType *ot)
+{
+  ot->name = "Difference";
+  ot->idname = "GPENCIL_OT_stroke_difference";
+  ot->description = "Merge points by distance";
+
+  /* api callbacks */
+  ot->exec = gp_stroke_difference_exec;
+  ot->poll = gp_active_layer_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}

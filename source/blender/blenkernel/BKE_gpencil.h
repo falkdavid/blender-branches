@@ -346,6 +346,8 @@ float* BKE_gpencil_stroke_perimeter_ex(const struct bGPdata *gpd,
                                        const int subdivisions,
                                        int* r_num_perimeter_points);
 
+void BKE_gpencil_stroke_difference(struct bGPDstroke *gps_A, struct bGPDstroke *gps_B);
+
 /* Iterator */
 /* frame & stroke are NULL if it is a layer callback. */
 typedef void (*gpIterCb)(struct bGPDlayer *layer,

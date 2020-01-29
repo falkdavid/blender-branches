@@ -429,6 +429,8 @@ void GPENCIL_OT_recalc_geometry(struct wmOperatorType *ot);
 void GPENCIL_OT_sculpt_paint(struct wmOperatorType *ot);
 void GPENCIL_OT_weight_paint(struct wmOperatorType *ot);
 
+void GPENCIL_OT_stroke_difference(struct wmOperatorType *ot);
+
 /* buttons editing --- */
 
 void GPENCIL_OT_annotation_add(struct wmOperatorType *ot);
