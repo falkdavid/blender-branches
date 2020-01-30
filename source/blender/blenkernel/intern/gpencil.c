@@ -3947,13 +3947,14 @@ static void generate_perimeter_cap(const float point[4], const float other_point
   }
 }
 
-static void transform_perimeter_list(const tPerimeterPointList *list, const float mat[4][4])
+static void transform_perimeter_list(const tPerimeterPointList *list, const float mat[4][4], const float depth)
 {
   tPerimeterPoint *pt;
   float vec_p[4];
   vec_p[3] = 1.0f;
   for (pt = list->first; pt; pt = pt->next) {
     copy_v3_v3(vec_p, &pt->x);
+    vec_p[2] = depth;
     mul_m4_v4(mat, vec_p);
     copy_v3_v3(&pt->x, vec_p);
   }
@@ -3977,26 +3978,24 @@ static float *get_flat_array_from_perimeter_list(const tPerimeterPointList *list
   return perimeter_points;
 }
 
-/* Helper: will append perimeter list B to perimeter list A (and free list B reference) */
+/* Helper: will append perimeter list B to perimeter list A */
 static void extend_perimeter_list(tPerimeterPointList *list_a, tPerimeterPointList *list_b)
 {
-  if (list_a == NULL || list_b == NULL) {
+  if (list_a == NULL || list_b == NULL || list_a->first == NULL || list_b->last == NULL) {
     return;
   }
 
-  if (list_a->last && list_b->first) {
-    list_a->last->next = list_b->first;
-    list_b->first->prev = list_a->last;
-  }
-
-  if (list_a->first == NULL) {
-    list_a->first = list_b->first;
-  }
+  /* link lists together */
+  list_a->last->next = list_b->first;
+  list_b->first->prev = list_a->last;
 
   list_a->last = list_b->last;
   list_a->num_points += list_b->num_points;
 
-  MEM_SAFE_FREE(list_b);
+  /* clear data in list B */
+  list_b->first = NULL;
+  list_b->last = NULL;
+  list_b->num_points = 0;
 }
 
 /* Helper: reverse the order of a perimeter point list */
@@ -4070,219 +4069,203 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   int num_points = 0;
   float *perimeter_points = NULL;
 
-  /* edgecase for single point */
-  if (gps->totpoints == 1) {
-    bGPDspoint *pt = &gps->points[0];
-    float point_radius = stroke_radius * pt->pressure;
-    float pt_cp[4];
-    gpencil_point_to_proj_space(proj_mat, &pt->x, pt_cp);
+  tPerimeterPointList *perimeter_right_side = init_perimeter_point_list();
+  tPerimeterPointList *perimeter_left_side = init_perimeter_point_list();
 
-    /* full circle has 2^(n+2) points, with n = subdivisions */
-    num_points = 1 << (subdivisions + 2);
-    perimeter_points = MEM_callocN(sizeof(float[3]) * num_points, __func__);
+  bGPDspoint *first_pt = &gps->points[0];
+  bGPDspoint *last_pt = &gps->points[gps->totpoints - 1];
 
-    float vec_p[4]; // temp vector to do the vector math
-    float angle_incr = (2.0f * M_PI) / (float)num_points;
-    float rot_vec[2] = {1.0f, 0.0f};
-    mul_v2_fl(rot_vec, point_radius);
+  float first_radius = stroke_radius * first_pt->pressure;
+  float last_radius = stroke_radius * last_pt->pressure;
 
-    for (int i = 0; i < num_points; i++) {
-      float *p_pt = &perimeter_points[i * 3];
-      float angle = i * angle_incr;
-      vec_p[2] = pt_cp[2];
-      vec_p[3] = pt_cp[3];
-
-      /* rotate vector around point to get perimeter points */
-      rotate_v2_v2fl(vec_p, rot_vec, angle);
-      add_v2_v2(vec_p, pt_cp);
-
-      /* project back into 3d world coords*/
-      mul_m4_v4(proj_inv, vec_p);
-
-      copy_v3_v3(p_pt, vec_p);
-    }
+  bGPDspoint *first_next_pt;
+  bGPDspoint *last_prev_pt;
+  if (gps->totpoints > 1) {
+    first_next_pt = &gps->points[1];
+    last_prev_pt = &gps->points[gps->totpoints - 2];
   }
   else {
-    tPerimeterPointList *perimeter_right_side = init_perimeter_point_list();
-    tPerimeterPointList *perimeter_left_side = init_perimeter_point_list();
-
-    bGPDspoint *first_pt = &gps->points[0];
-    bGPDspoint *last_pt = &gps->points[gps->totpoints - 1];
-
-    float first_radius = stroke_radius * first_pt->pressure;
-    float last_radius = stroke_radius * last_pt->pressure;
-
-    bGPDspoint *first_next_pt = &gps->points[1];
-    bGPDspoint *last_prev_pt = &gps->points[gps->totpoints - 2];
-
-    float first_pt_vs[4];
-    float last_pt_vs[4];
-    float first_next_pt_vs[4];
-    float last_prev_pt_vs[4];
-    gpencil_point_to_proj_space(proj_mat, &first_pt->x, first_pt_vs);
-    gpencil_point_to_proj_space(proj_mat, &last_pt->x, last_pt_vs);
-    gpencil_point_to_proj_space(proj_mat, &first_next_pt->x, first_next_pt_vs);
-    gpencil_point_to_proj_space(proj_mat, &last_prev_pt->x, last_prev_pt_vs);
-
-    /* generate points for start cap */
-    generate_perimeter_cap(first_pt_vs, first_next_pt_vs, first_radius, perimeter_right_side, subdivisions, gps->caps[0]);
-
-    /* generate perimeter points  */
-    float curr_pt[4], next_pt[4], prev_pt[4];
-    float vec_next[2], vec_prev[2];
-    float nvec_next[2], nvec_prev[2];
-    float nvec_next_pt[3], nvec_prev_pt[3];
-    float vec_tangent[2];
-
-    float vec_miter_left[2], vec_miter_right[2];
-    float miter_left_pt[3], miter_right_pt[3];
-    tPerimeterPoint *miter_right, *miter_left;
-    tPerimeterPoint *normal_next, *normal_prev;
-
-    bGPDspoint *curr;
-    int i;
-    for (i = 1, curr = gps->points + 1; i < gps->totpoints - 1; i++, curr++) {
-      float radius = stroke_radius * curr->pressure;
-      bGPDspoint *prev = &gps->points[i - 1];
-      bGPDspoint *next = &gps->points[i + 1];
-
-      gpencil_point_to_proj_space(proj_mat, &curr->x, curr_pt);
-      gpencil_point_to_proj_space(proj_mat, &next->x, next_pt);
-      gpencil_point_to_proj_space(proj_mat, &prev->x, prev_pt);
-
-      sub_v2_v2v2(vec_prev, curr_pt, prev_pt);
-      sub_v2_v2v2(vec_next, next_pt, curr_pt);
-      float prev_length = len_v2(vec_prev);
-      float next_length = len_v2(vec_next);
-
-      if (normalize_v2(vec_prev) == 0.0f) {
-        vec_prev[0] = 1.0f;
-        vec_prev[1] = 0.0f;
-      }
-      if (normalize_v2(vec_next) == 0.0f) {
-        vec_next[0] = 1.0f;
-        vec_next[1] = 0.0f;
-      }
-
-      nvec_prev[0] = -vec_prev[1];
-      nvec_prev[1] = vec_prev[0];
-
-      nvec_next[0] = -vec_next[1];
-      nvec_next[1] = vec_next[0];
-
-      add_v2_v2v2(vec_tangent, vec_prev, vec_next);
-      if (normalize_v2(vec_tangent) == 0.0f) {
-        copy_v2_v2(vec_tangent, nvec_prev);
-      }
-
-      vec_miter_left[0] = -vec_tangent[1];
-      vec_miter_left[1] = vec_tangent[0];
-
-      /* calculate miter length */
-      float an1 = dot_v2v2(vec_miter_left, nvec_prev);
-      if (an1 == 0.0f) {
-        an1 = 1.0f;
-      }
-      float miter_length = radius / an1;
-      if (miter_length <= 0.0f) {
-        miter_length = 0.01f;
-      }
-
-      normalize_v2_length(vec_miter_left, miter_length);
-
-      copy_v2_v2(vec_miter_right, vec_miter_left);
-      negate_v2(vec_miter_right);
-
-      /* bend to the left */
-      if (dot_v2v2(vec_next, nvec_prev) < 0) {
-        normalize_v2_length(nvec_prev, radius);
-        normalize_v2_length(nvec_next, radius);
-
-        copy_v3_v3(nvec_prev_pt, curr_pt);
-        add_v2_v2(nvec_prev_pt, nvec_prev);
-
-        copy_v3_v3(nvec_next_pt, curr_pt);
-        add_v2_v2(nvec_next_pt, nvec_next);
-
-        normal_prev = new_perimeter_point(nvec_prev_pt);
-        normal_next = new_perimeter_point(nvec_next_pt);
-
-        add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
-        add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
-
-        generate_arc_from_point_to_point(perimeter_left_side, normal_prev, normal_next, curr_pt, subdivisions, true);
-
-        if (miter_length < prev_length && miter_length < next_length) {
-          copy_v3_v3(miter_right_pt, curr_pt);
-          add_v2_v2(miter_right_pt, vec_miter_right);
-        }
-        else {
-          copy_v3_v3(miter_right_pt, curr_pt);
-          negate_v2(nvec_next);
-          add_v2_v2(miter_right_pt, nvec_next);
-        }
-
-        miter_right = new_perimeter_point(miter_right_pt);
-        add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
-      }
-      /* bend to the right */
-      else {
-        normalize_v2_length(nvec_prev, -radius);
-        normalize_v2_length(nvec_next, -radius);
-
-        copy_v3_v3(nvec_prev_pt, curr_pt);
-        add_v2_v2(nvec_prev_pt, nvec_prev);
-
-        copy_v3_v3(nvec_next_pt, curr_pt);
-        add_v2_v2(nvec_next_pt, nvec_next);
-
-        normal_prev = new_perimeter_point(nvec_prev_pt);
-        normal_next = new_perimeter_point(nvec_next_pt);
-
-        add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
-        add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
-
-        generate_arc_from_point_to_point(perimeter_right_side, normal_prev, normal_next, curr_pt, subdivisions, false);
-
-        if (miter_length < prev_length && miter_length < next_length) {
-          copy_v3_v3(miter_left_pt, curr_pt);
-          add_v2_v2(miter_left_pt, vec_miter_left);
-        }
-        else {
-          copy_v3_v3(miter_left_pt, curr_pt);
-          negate_v2(nvec_prev);
-          add_v2_v2(miter_left_pt, nvec_prev);
-        }
-
-        miter_left = new_perimeter_point(miter_left_pt);
-        add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
-      }
-    }
-
-    /* generate points for end cap */
-    generate_perimeter_cap(last_pt_vs, last_prev_pt_vs, last_radius, perimeter_right_side, subdivisions, gps->caps[1]);
-
-    /* merge both sides to one list */
-    reverse_perimeter_list(perimeter_left_side);
-    extend_perimeter_list(perimeter_right_side, perimeter_left_side); // perimeter_right_side contains entire list
-    tPerimeterPointList* perimeter_list = perimeter_right_side;
-
-    /* close by creating a point close to the first (make a small gap) */
-    float close_pt[3];
-    interp_v3_v3v3(close_pt, &perimeter_list->last->x, &perimeter_list->first->x, 0.99f);
-    if (compare_v3v3(close_pt, &perimeter_list->first->x, FLT_EPSILON) == false) {
-      tPerimeterPoint *close_p_pt = new_perimeter_point(close_pt);
-      add_point_to_end_perimeter_list(close_p_pt, perimeter_list);
-    }
-
-    /* transfrom back to 3d space and get flat array */
-    transform_perimeter_list(perimeter_list, proj_inv);
-    perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
-    num_points = perimeter_list->num_points;
-
-    /* free temp data */
-    free_perimeter_list(perimeter_list);
+    first_next_pt = first_pt;
+    last_prev_pt = last_pt;
   }
+
+  float first_pt_vs[4];
+  float last_pt_vs[4];
+  float first_next_pt_vs[4];
+  float last_prev_pt_vs[4];
+  gpencil_point_to_proj_space(proj_mat, &first_pt->x, first_pt_vs);
+  gpencil_point_to_proj_space(proj_mat, &last_pt->x, last_pt_vs);
+  gpencil_point_to_proj_space(proj_mat, &first_next_pt->x, first_next_pt_vs);
+  gpencil_point_to_proj_space(proj_mat, &last_prev_pt->x, last_prev_pt_vs);
+
+  /* use depth of first point as depth for projection */
+  float stroke_depth = first_pt_vs[2];
+
+  /* edgecase if single point */
+  if (gps->totpoints == 1) {
+    first_next_pt_vs[0] += 1.0f;
+    last_prev_pt_vs[0] -= 1.0f;
+  }
+
+  /* generate points for start cap */
+  generate_perimeter_cap(first_pt_vs, first_next_pt_vs, first_radius, perimeter_right_side, subdivisions, gps->caps[0]);
+
+  /* generate perimeter points  */
+  float curr_pt[4], next_pt[4], prev_pt[4];
+  float vec_next[2], vec_prev[2];
+  float nvec_next[2], nvec_prev[2];
+  float nvec_next_pt[3], nvec_prev_pt[3];
+  float vec_tangent[2];
+
+  float vec_miter_left[2], vec_miter_right[2];
+  float miter_left_pt[3], miter_right_pt[3];
+  tPerimeterPoint *miter_right, *miter_left;
+  tPerimeterPoint *normal_next, *normal_prev;
+
+  bGPDspoint *curr;
+  int i;
+  for (i = 1, curr = gps->points + 1; i < gps->totpoints - 1; i++, curr++) {
+    float radius = stroke_radius * curr->pressure;
+    bGPDspoint *prev = &gps->points[i - 1];
+    bGPDspoint *next = &gps->points[i + 1];
+
+    gpencil_point_to_proj_space(proj_mat, &curr->x, curr_pt);
+    gpencil_point_to_proj_space(proj_mat, &next->x, next_pt);
+    gpencil_point_to_proj_space(proj_mat, &prev->x, prev_pt);
+
+    sub_v2_v2v2(vec_prev, curr_pt, prev_pt);
+    sub_v2_v2v2(vec_next, next_pt, curr_pt);
+    float prev_length = len_v2(vec_prev);
+    float next_length = len_v2(vec_next);
+
+    if (normalize_v2(vec_prev) == 0.0f) {
+      vec_prev[0] = 1.0f;
+      vec_prev[1] = 0.0f;
+    }
+    if (normalize_v2(vec_next) == 0.0f) {
+      vec_next[0] = 1.0f;
+      vec_next[1] = 0.0f;
+    }
+
+    nvec_prev[0] = -vec_prev[1];
+    nvec_prev[1] = vec_prev[0];
+
+    nvec_next[0] = -vec_next[1];
+    nvec_next[1] = vec_next[0];
+
+    add_v2_v2v2(vec_tangent, vec_prev, vec_next);
+    if (normalize_v2(vec_tangent) == 0.0f) {
+      copy_v2_v2(vec_tangent, nvec_prev);
+    }
+
+    vec_miter_left[0] = -vec_tangent[1];
+    vec_miter_left[1] = vec_tangent[0];
+
+    /* calculate miter length */
+    float an1 = dot_v2v2(vec_miter_left, nvec_prev);
+    if (an1 == 0.0f) {
+      an1 = 1.0f;
+    }
+    float miter_length = radius / an1;
+    if (miter_length <= 0.0f) {
+      miter_length = 0.01f;
+    }
+
+    normalize_v2_length(vec_miter_left, miter_length);
+
+    copy_v2_v2(vec_miter_right, vec_miter_left);
+    negate_v2(vec_miter_right);
+
+    /* bend to the left */
+    if (dot_v2v2(vec_next, nvec_prev) < 0) {
+      normalize_v2_length(nvec_prev, radius);
+      normalize_v2_length(nvec_next, radius);
+
+      copy_v3_v3(nvec_prev_pt, curr_pt);
+      add_v2_v2(nvec_prev_pt, nvec_prev);
+
+      copy_v3_v3(nvec_next_pt, curr_pt);
+      add_v2_v2(nvec_next_pt, nvec_next);
+
+      normal_prev = new_perimeter_point(nvec_prev_pt);
+      normal_next = new_perimeter_point(nvec_next_pt);
+
+      add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
+      add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
+
+      generate_arc_from_point_to_point(perimeter_left_side, normal_prev, normal_next, curr_pt, subdivisions, true);
+
+      if (miter_length < prev_length && miter_length < next_length) {
+        copy_v3_v3(miter_right_pt, curr_pt);
+        add_v2_v2(miter_right_pt, vec_miter_right);
+      }
+      else {
+        copy_v3_v3(miter_right_pt, curr_pt);
+        negate_v2(nvec_next);
+        add_v2_v2(miter_right_pt, nvec_next);
+      }
+
+      miter_right = new_perimeter_point(miter_right_pt);
+      add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
+    }
+    /* bend to the right */
+    else {
+      normalize_v2_length(nvec_prev, -radius);
+      normalize_v2_length(nvec_next, -radius);
+
+      copy_v3_v3(nvec_prev_pt, curr_pt);
+      add_v2_v2(nvec_prev_pt, nvec_prev);
+
+      copy_v3_v3(nvec_next_pt, curr_pt);
+      add_v2_v2(nvec_next_pt, nvec_next);
+
+      normal_prev = new_perimeter_point(nvec_prev_pt);
+      normal_next = new_perimeter_point(nvec_next_pt);
+
+      add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
+      add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
+
+      generate_arc_from_point_to_point(perimeter_right_side, normal_prev, normal_next, curr_pt, subdivisions, false);
+
+      if (miter_length < prev_length && miter_length < next_length) {
+        copy_v3_v3(miter_left_pt, curr_pt);
+        add_v2_v2(miter_left_pt, vec_miter_left);
+      }
+      else {
+        copy_v3_v3(miter_left_pt, curr_pt);
+        negate_v2(nvec_prev);
+        add_v2_v2(miter_left_pt, nvec_prev);
+      }
+
+      miter_left = new_perimeter_point(miter_left_pt);
+      add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+    }
+  }
+
+  /* generate points for end cap */
+  generate_perimeter_cap(last_pt_vs, last_prev_pt_vs, last_radius, perimeter_right_side, subdivisions, gps->caps[1]);
+
+  /* merge both sides to one list */
+  reverse_perimeter_list(perimeter_left_side);
+  extend_perimeter_list(perimeter_right_side, perimeter_left_side); // perimeter_right_side contains entire list
+  tPerimeterPointList* perimeter_list = perimeter_right_side;
+
+  /* close by creating a point close to the first (make a small gap) */
+  float close_pt[3];
+  interp_v3_v3v3(close_pt, &perimeter_list->last->x, &perimeter_list->first->x, 0.99f);
+  if (compare_v3v3(close_pt, &perimeter_list->first->x, FLT_EPSILON) == false) {
+    tPerimeterPoint *close_p_pt = new_perimeter_point(close_pt);
+    add_point_to_end_perimeter_list(close_p_pt, perimeter_list);
+  }
+
+  /* transfrom back to 3d space and get flat array */
+  transform_perimeter_list(perimeter_list, proj_inv, stroke_depth);
+  perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
+  num_points = perimeter_list->num_points;
+
+  /* free temp data */
+  free_perimeter_list(perimeter_right_side);
+  free_perimeter_list(perimeter_left_side);
 
   *r_num_perimeter_points = num_points;
   return perimeter_points;
