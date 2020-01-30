@@ -4922,7 +4922,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           MEM_SAFE_FREE(perimeter_points);
 
           /* project and sample stroke */
-          ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
+          //ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
 
           /* triangles cache needs to be recalculated */
