@@ -4922,7 +4922,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           MEM_SAFE_FREE(perimeter_points);
 
           /* project and sample stroke */
-          //ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
+          ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
 
           /* triangles cache needs to be recalculated */
@@ -4944,9 +4944,10 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   if (changed) {
-    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE );
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
-    WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
+    //WM_event_add_notifier(C, NC_GPENCIL | ND_DATA , NULL); //| NA_EDITED
+    //WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
