@@ -4865,16 +4865,18 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 static bool gp_stroke_to_perimeter_poll(bContext *C)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
-  bool sel_stroke = false;
   if (gpd != NULL && GPENCIL_EDIT_MODE(gpd)) {
-    GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-      if ((gps->flag & GP_STROKE_SELECT) && (~gps->flag & GP_STROKE_CYCLIC)) {
-        sel_stroke = true;
+    LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+      if (gpl->actframe != NULL) {
+        bGPDframe *gpf = gpl->actframe;
+        
+        LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+          if ((gps->flag & GP_STROKE_SELECT) && ((gps->flag & GP_STROKE_CYCLIC) == 0)) {
+            return true;
+          }
+        }
       }
     }
-    GP_EDITABLE_STROKES_END(gpstroke_iter);
-
-    return sel_stroke;
   }
 
   return false;
@@ -4906,7 +4908,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           gps_next = gps->next;
           /* skip strokes that are invalid for current view, cyclic or not selected */
           if (ED_gpencil_stroke_can_use(C, gps) == false ||
-              gps->flag & GP_STROKE_CYCLIC || !(gps->flag & GP_STROKE_SELECT) ) {
+              gps->flag & GP_STROKE_CYCLIC || (gps->flag & GP_STROKE_SELECT) == 0 ) {
             continue;
           }
 
@@ -4963,8 +4965,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   if (changed) {
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
-    //WM_event_add_notifier(C, NC_GPENCIL | ND_DATA , NULL); //| NA_EDITED
-    //WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
