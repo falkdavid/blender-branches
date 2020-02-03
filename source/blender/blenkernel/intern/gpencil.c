@@ -3947,14 +3947,13 @@ static void generate_perimeter_cap(const float point[4], const float other_point
   }
 }
 
-static void transform_perimeter_list(const tPerimeterPointList *list, const float mat[4][4], const float depth)
+static void transform_perimeter_list(const tPerimeterPointList *list, const float mat[4][4])
 {
   tPerimeterPoint *pt;
   float vec_p[4];
   vec_p[3] = 1.0f;
   for (pt = list->first; pt; pt = pt->next) {
     copy_v3_v3(vec_p, &pt->x);
-    vec_p[2] = depth;
     mul_m4_v4(mat, vec_p);
     copy_v3_v3(&pt->x, vec_p);
   }
@@ -4097,9 +4096,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   gpencil_point_to_proj_space(proj_mat, &last_pt->x, last_pt_vs);
   gpencil_point_to_proj_space(proj_mat, &first_next_pt->x, first_next_pt_vs);
   gpencil_point_to_proj_space(proj_mat, &last_prev_pt->x, last_prev_pt_vs);
-
-  /* use depth of first point as depth for projection */
-  float stroke_depth = first_pt_vs[2];
 
   /* edgecase if single point */
   if (gps->totpoints == 1) {
@@ -4259,7 +4255,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   }
 
   /* transfrom back to 3d space and get flat array */
-  transform_perimeter_list(perimeter_list, proj_inv, stroke_depth);
+  transform_perimeter_list(perimeter_list, proj_inv);
   perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
   num_points = perimeter_list->num_points;
 
