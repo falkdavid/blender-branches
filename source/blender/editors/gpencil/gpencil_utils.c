@@ -273,12 +273,10 @@ bGPdata *ED_annotation_data_get_active_direct(ID *screen_id, ScrArea *sa, Scene 
 bGPdata *ED_gpencil_data_get_active(const bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
-  if (ob == NULL) {
+  if ((ob == NULL) || (ob->type != OB_GPENCIL)) {
     return NULL;
   }
-  bGPdata *gpd = (bGPdata *)ob->data;
-
-  return gpd;
+  return ob->data;
 }
 
 /* Get the active Grease Pencil datablock
@@ -2474,6 +2472,21 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
   return buffer_array;
 }
 
+void ED_gpencil_sbuffer_update_eval(Depsgraph *depsgraph, Object *ob)
+{
+  bGPdata *gpd = (bGPdata *)ob->data;
+
+  Object *ob_eval = (Object *)DEG_get_evaluated_id(depsgraph, &ob->id);
+  bGPdata *gpd_eval = (bGPdata *)ob_eval->data;
+
+  gpd_eval->runtime.sbuffer = gpd->runtime.sbuffer;
+  gpd_eval->runtime.sbuffer_sflag = gpd->runtime.sbuffer_sflag;
+  gpd_eval->runtime.sbuffer_used = gpd->runtime.sbuffer_used;
+  gpd_eval->runtime.sbuffer_size = gpd->runtime.sbuffer_size;
+  gpd_eval->runtime.tot_cp_points = gpd->runtime.tot_cp_points;
+  gpd_eval->runtime.cp_points = gpd->runtime.cp_points;
+}
+
 /* Tag all scene grease pencil object to update. */
 void ED_gpencil_tag_scene_gpencil(Scene *scene)
 {
@@ -2540,4 +2553,41 @@ void ED_gpencil_sbuffer_vertex_color_set(ToolSettings *ts, Brush *brush, bGPdata
   else {
     zero_v4(gpd->runtime.vert_color);
   }
+}
+
+/* Check if the stroke collides with brush. */
+bool ED_gpencil_stroke_check_collision(GP_SpaceConversion *gsc,
+                                       bGPDstroke *gps,
+                                       float mouse[2],
+                                       const int radius,
+                                       const float diff_mat[4][4])
+{
+  const int offset = (int)ceil(sqrt((radius * radius) * 2));
+  bGPDspoint pt_dummy, pt_dummy_ps;
+  float gps_collision_min[2] = {0.0f};
+  float gps_collision_max[2] = {0.0f};
+  float zerov3[3];
+
+  /* Check we have something to use (only for old files). */
+  if (equals_v3v3(zerov3, gps->collision_min)) {
+    BKE_gpencil_stroke_collision_get(gps);
+  }
+
+  /* Convert bound box to 2d */
+  copy_v3_v3(&pt_dummy.x, gps->collision_min);
+  gp_point_to_parent_space(&pt_dummy, diff_mat, &pt_dummy_ps);
+  gp_point_to_xy_fl(gsc, gps, &pt_dummy_ps, &gps_collision_min[0], &gps_collision_min[1]);
+
+  copy_v3_v3(&pt_dummy.x, gps->collision_max);
+  gp_point_to_parent_space(&pt_dummy, diff_mat, &pt_dummy_ps);
+  gp_point_to_xy_fl(gsc, gps, &pt_dummy_ps, &gps_collision_max[0], &gps_collision_max[1]);
+
+  rcti rect_stroke = {
+      gps_collision_min[0], gps_collision_max[0], gps_collision_min[1], gps_collision_max[1]};
+
+  /* For mouse, add a small offet to avoid false negative in corners. */
+  rcti rect_mouse = {mouse[0] - offset, mouse[0] + offset, mouse[1] - offset, mouse[1] + offset};
+
+  /* Check collision between both rectangles. */
+  return BLI_rcti_isect(&rect_stroke, &rect_mouse, NULL);
 }

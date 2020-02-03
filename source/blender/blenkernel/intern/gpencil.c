@@ -1327,6 +1327,13 @@ void BKE_gpencil_centroid_3d(bGPdata *gpd, float r_centroid[3])
   mul_v3_v3fl(r_centroid, tot, 0.5f);
 }
 
+/* Compute stroke collision detection center and radius. */
+void BKE_gpencil_stroke_collision_get(bGPDstroke *gps)
+{
+  INIT_MINMAX(gps->collision_min, gps->collision_max);
+  BKE_gpencil_stroke_minmax(gps, false, gps->collision_min, gps->collision_max);
+}
+
 /* create bounding box values */
 static void boundbox_gpencil(Object *ob)
 {
@@ -2794,6 +2801,9 @@ void BKE_gpencil_stroke_geometry_update(bGPDstroke *gps)
 
   /* calc uv data along the stroke */
   BKE_gpencil_stroke_uv_update(gps);
+
+  /* Calc collision center and radius. */
+  BKE_gpencil_stroke_collision_get(gps);
 }
 
 float BKE_gpencil_stroke_length(const bGPDstroke *gps, bool use_3d)
@@ -4265,6 +4275,9 @@ void BKE_gpencil_visible_stroke_iter(
     }
 
     if (sta_gpf == NULL && act_gpf == NULL) {
+      if (layer_cb) {
+        layer_cb(gpl, act_gpf, NULL, thunk);
+      }
       continue;
     }
 
@@ -4301,23 +4314,21 @@ void BKE_gpencil_visible_stroke_iter(
 void BKE_gpencil_frame_original_pointers_update(const struct bGPDframe *gpf_orig,
                                                 const struct bGPDframe *gpf_eval)
 {
-  int stroke_idx = -1;
+  bGPDstroke *gps_eval = gpf_eval->strokes.first;
   LISTBASE_FOREACH (bGPDstroke *, gps_orig, &gpf_orig->strokes) {
-    stroke_idx++;
 
     /* Assign original stroke pointer. */
-    if (gpf_eval != NULL) {
-      bGPDstroke *gps_eval = BLI_findlink(&gpf_eval->strokes, stroke_idx);
-      if (gps_eval != NULL) {
-        gps_eval->runtime.gps_orig = gps_orig;
+    if (gps_eval != NULL) {
+      gps_eval->runtime.gps_orig = gps_orig;
 
-        /* Assign original point pointer. */
-        for (int i = 0; i < gps_orig->totpoints; i++) {
-          bGPDspoint *pt_eval = &gps_eval->points[i];
-          pt_eval->runtime.pt_orig = &gps_orig->points[i];
-          pt_eval->runtime.idx_orig = i;
-        }
+      /* Assign original point pointer. */
+      for (int i = 0; i < gps_orig->totpoints; i++) {
+        bGPDspoint *pt_eval = &gps_eval->points[i];
+        pt_eval->runtime.pt_orig = &gps_orig->points[i];
+        pt_eval->runtime.idx_orig = i;
       }
+      /* Increase pointer. */
+      gps_eval = gps_eval->next;
     }
   }
 }
@@ -4332,29 +4343,22 @@ void BKE_gpencil_update_orig_pointers(const Object *ob_orig, const Object *ob_ev
    * so we can assume the layer index is the same in both datablocks.
    * This data will be used by operators. */
 
-  int layer_idx = -1;
+  bGPDlayer *gpl_eval = gpd_eval->layers.first;
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd_orig->layers) {
-    layer_idx++;
-    /* Retry evaluated layer. */
-    bGPDlayer *gpl_eval = BLI_findlink(&gpd_eval->layers, layer_idx);
-    if (gpl_eval == NULL) {
-      continue;
-    }
-    /* Update layer reference pointers. */
-    gpl_eval->runtime.gpl_orig = (bGPDlayer *)gpl;
+    if (gpl_eval != NULL) {
+      /* Update layer reference pointers. */
+      gpl_eval->runtime.gpl_orig = (bGPDlayer *)gpl;
 
-    int frame_idx = -1;
-    LISTBASE_FOREACH (bGPDframe *, gpf_orig, &gpl->frames) {
-      frame_idx++;
-      /* Retry evaluated frame. */
-      bGPDframe *gpf_eval = BLI_findlink(&gpl_eval->frames, frame_idx);
-      if (gpf_eval == NULL) {
-        continue;
+      bGPDframe *gpf_eval = gpl_eval->frames.first;
+      LISTBASE_FOREACH (bGPDframe *, gpf_orig, &gpl->frames) {
+        if (gpf_eval != NULL) {
+          /* Update frame reference pointers. */
+          gpf_eval->runtime.gpf_orig = (bGPDframe *)gpf_orig;
+          BKE_gpencil_frame_original_pointers_update(gpf_orig, gpf_eval);
+          gpf_eval = gpf_eval->next;
+        }
       }
-
-      /* Update frame reference pointers. */
-      gpf_eval->runtime.gpf_orig = (bGPDframe *)gpf_orig;
-      BKE_gpencil_frame_original_pointers_update(gpf_orig, gpf_eval);
+      gpl_eval = gpl_eval->next;
     }
   }
 }

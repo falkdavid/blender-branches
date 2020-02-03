@@ -35,6 +35,7 @@ struct bGPDspoint;
 struct bGPDstroke;
 struct bGPdata;
 struct tGPspoint;
+struct GP_SpaceConversion;
 
 struct ARegion;
 struct Depsgraph;
@@ -287,6 +288,8 @@ struct tGPspoint *ED_gpencil_sbuffer_ensure(struct tGPspoint *buffer_array,
                                             int *buffer_size,
                                             int *buffer_used,
                                             const bool clear);
+void ED_gpencil_sbuffer_update_eval(struct Depsgraph *depsgraph, struct Object *ob);
+
 /* Tag all scene grease pencil object to update. */
 void ED_gpencil_tag_scene_gpencil(struct Scene *scene);
 
@@ -300,5 +303,11 @@ void ED_gpencil_point_vertex_color_set(struct ToolSettings *ts,
 void ED_gpencil_sbuffer_vertex_color_set(struct ToolSettings *ts,
                                          struct Brush *brush,
                                          struct bGPdata *gpd);
+
+bool ED_gpencil_stroke_check_collision(struct GP_SpaceConversion *gsc,
+                                       struct bGPDstroke *gps,
+                                       float mouse[2],
+                                       const int radius,
+                                       const float diff_mat[4][4]);
 
 #endif /*  __ED_GPENCIL_H__ */
