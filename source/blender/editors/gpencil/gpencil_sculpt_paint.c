@@ -620,9 +620,6 @@ static bool gp_brush_push_apply(tGP_BrushEditData *gso,
   /* compute lock axis */
   gpsculpt_compute_lock_axis(gso, pt, save_pt);
 
-  /* Calc geometry data. */
-  BKE_gpencil_stroke_geometry_update(gps);
-
   /* done */
   return true;
 }
@@ -1572,6 +1569,7 @@ static bool gpsculpt_brush_do_frame(bContext *C,
                                     const float diff_mat[4][4])
 {
   bool changed = false;
+  bool redo_geom = false;
   Object *ob = gso->object;
   char tool = gso->brush->gpencil_sculpt_tool;
 
@@ -1589,6 +1587,7 @@ static bool gpsculpt_brush_do_frame(bContext *C,
       case GPSCULPT_TOOL_SMOOTH: /* Smooth strokes */
       {
         changed |= gpsculpt_brush_do_stroke(gso, gps, diff_mat, gp_brush_smooth_apply);
+        redo_geom |= changed;
         break;
       }
 
@@ -1622,30 +1621,35 @@ static bool gpsculpt_brush_do_frame(bContext *C,
             changed |= true;
           }
         }
+        redo_geom |= changed;
         break;
       }
 
       case GPSCULPT_TOOL_PUSH: /* Push points */
       {
         changed |= gpsculpt_brush_do_stroke(gso, gps, diff_mat, gp_brush_push_apply);
+        redo_geom |= changed;
         break;
       }
 
       case GPSCULPT_TOOL_PINCH: /* Pinch points */
       {
         changed |= gpsculpt_brush_do_stroke(gso, gps, diff_mat, gp_brush_pinch_apply);
+        redo_geom |= changed;
         break;
       }
 
       case GPSCULPT_TOOL_TWIST: /* Twist points around midpoint */
       {
         changed |= gpsculpt_brush_do_stroke(gso, gps, diff_mat, gp_brush_twist_apply);
+        redo_geom |= changed;
         break;
       }
 
       case GPSCULPT_TOOL_RANDOMIZE: /* Apply jitter */
       {
         changed |= gpsculpt_brush_do_stroke(gso, gps, diff_mat, gp_brush_randomize_apply);
+        redo_geom |= changed;
         break;
       }
 
@@ -1655,7 +1659,7 @@ static bool gpsculpt_brush_do_frame(bContext *C,
     }
 
     /* Triangulation must be calculated. */
-    if (changed) {
+    if (redo_geom) {
       bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
       if (gpl->actframe == gpf) {
         MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
