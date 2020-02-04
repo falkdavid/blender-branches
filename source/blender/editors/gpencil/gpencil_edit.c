@@ -4864,22 +4864,18 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 
 static bool gp_stroke_to_perimeter_poll(bContext *C)
 {
-  bGPdata *gpd = ED_gpencil_data_get_active(C);
-  if (gpd != NULL && GPENCIL_EDIT_MODE(gpd)) {
-    LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-      if (gpl->actframe != NULL) {
-        bGPDframe *gpf = gpl->actframe;
-
-        LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-          if ((gps->flag & GP_STROKE_SELECT) && ((gps->flag & GP_STROKE_CYCLIC) == 0)) {
-            return true;
-          }
-        }
-      }
-    }
+  Object *ob = CTX_data_active_object(C);
+  if ((ob == NULL) || (ob->type != OB_GPENCIL)) {
+    return false;
+  }
+  bGPdata *gpd = (bGPdata *)ob->data;
+  if (gpd == NULL) {
+    return false;
   }
 
-  return false;
+  bGPDlayer *gpl = BKE_gpencil_layer_active_get(gpd);
+
+  return ((gpl != NULL) && (ob->mode == OB_MODE_EDIT_GPENCIL));
 }
 
 static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
@@ -4948,8 +4944,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           perimeter_stroke->tot_triangles = 0;
           BKE_gpencil_stroke_geometry_update(perimeter_stroke);
 
-          perimeter_stroke->flag |= GP_STROKE_SELECT;
-          perimeter_stroke->flag |= GP_STROKE_CYCLIC;
+          perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
 
           /* Delete the old stroke */
           BLI_remlink(&gpl->actframe->strokes, gps);
@@ -4965,9 +4960,9 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   if (changed) {
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
-    return OPERATOR_FINISHED;
   }
-  return OPERATOR_CANCELLED;
+
+  return OPERATOR_FINISHED;
 }
 
 void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
