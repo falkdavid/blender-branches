@@ -4202,6 +4202,50 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   return perimeter_points;
 }
 
+bGPDstroke *BKE_gpencil_perimeter_stroke_get(const bGPdata *gpd,
+                                             const bGPDlayer *gpl,
+                                             const bGPDstroke *gps,
+                                             const RegionView3D *rv3d,
+                                             int subdivisions)
+{
+  int num_perimeter_points = 0;
+  float *perimeter_points = BKE_gpencil_stroke_perimeter_view(gpd, gpl, gps, rv3d, subdivisions, &num_perimeter_points);
+
+  if (num_perimeter_points == 0) {
+    return NULL;
+  }
+
+  /* create new stroke (insert at head to prevent looping over new stroke again) and add points */
+  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
+
+  bGPDspoint *pt;
+  for (int i = 0; i < num_perimeter_points; i++) {
+    pt = &perimeter_stroke->points[i];
+    const int x = i * 3;
+
+    copy_v3_v3(&pt->x, &perimeter_points[x]);
+
+    /* Set pressure and strength to one */
+    pt->pressure = 1.0f;
+    pt->strength = 1.0f;
+
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+
+  /* free temp data */
+  MEM_SAFE_FREE(perimeter_points);
+
+  /* triangles cache needs to be recalculated */
+  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+
+  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* Delete the old stroke */
+  BLI_remlink(&gpl->actframe->strokes, gps);
+  BKE_gpencil_free_stroke(gps);
+
+  return perimeter_stroke;
+}
 /* -------------------------------------------------------------------- */
 /** \name Iterators
  *

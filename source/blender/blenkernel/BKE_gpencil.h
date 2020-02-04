@@ -317,6 +317,12 @@ float* BKE_gpencil_stroke_perimeter_ex(const struct bGPdata *gpd,
                                        const int subdivisions,
                                        int* r_num_perimeter_points);
 
+struct bGPDstroke *BKE_gpencil_perimeter_stroke_get(const struct bGPdata *gpd,
+                                                    const struct bGPDlayer *gpl, 
+                                                    const struct bGPDstroke *gps, 
+                                                    const struct RegionView3D *rv3d,
+                                                    int subdivisions);
+
 /* Iterator */
 /* frame & stroke are NULL if it is a layer callback. */
 typedef void (*gpIterCb)(struct bGPDlayer *layer,

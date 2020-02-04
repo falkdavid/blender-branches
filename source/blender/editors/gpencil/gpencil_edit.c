@@ -4850,8 +4850,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   const float dist = RNA_float_get(op->ptr, "sample_dist");
   bool changed = false;
 
-  int num_perimeter_points;
-  float *perimeter_points;
   bGPDstroke *perimeter_stroke;
   const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
@@ -4871,47 +4869,11 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             continue;
           }
 
-          num_perimeter_points = 0;
-          perimeter_points = BKE_gpencil_stroke_perimeter_view(gpd, gpl, gps, rv3d, subdivisions, &num_perimeter_points);
-
-          /* skip if no points were generated */
-          if (num_perimeter_points == 0) {
-            continue;
-          }
-
-          /* create new stroke (insert at head to prevent looping over new stroke again) and add points */
-          perimeter_stroke = BKE_gpencil_stroke_add(gpl->actframe, gps->mat_nr, num_perimeter_points, 1, true);
-
-          bGPDspoint *pt;
-          for (int i = 0; i < num_perimeter_points; i++) {
-            pt = &perimeter_stroke->points[i];
-            const int x = i * 3;
-
-            copy_v3_v3(&pt->x, &perimeter_points[x]);
-
-            /* Set pressure and strength to one */
-            pt->pressure = 1.0f;
-            pt->strength = 1.0f;
-
-            pt->flag |= GP_SPOINT_SELECT;
-          }
-
-          /* free temp data */
-          MEM_SAFE_FREE(perimeter_points);
+          perimeter_stroke = BKE_gpencil_perimeter_stroke_get(gpd, gpl, gps, rv3d, subdivisions);
 
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
-
-          /* triangles cache needs to be recalculated */
-          perimeter_stroke->tot_triangles = 0;
-          BKE_gpencil_stroke_geometry_update(perimeter_stroke);
-
-          perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
-
-          /* Delete the old stroke */
-          BLI_remlink(&gpl->actframe->strokes, gps);
-          BKE_gpencil_free_stroke(gps);
 
           changed = true;
         }
@@ -4953,5 +4915,5 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-  //RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.02f, 5);
+  RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 5);
 }
