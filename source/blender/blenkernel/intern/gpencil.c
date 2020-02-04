@@ -4172,8 +4172,9 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     copy_v2_v2(vec_miter_right, vec_miter_left);
     negate_v2(vec_miter_right);
 
-    /* bend to the left */
-    if (dot_v2v2(vec_next, nvec_prev) < 0) {
+    float angle = dot_v2v2(vec_next, nvec_prev);
+    /* add two points if angle is close to beeing straight */
+    if (fabsf(angle) < 0.0001f) {
       normalize_v2_length(nvec_prev, radius);
       normalize_v2_length(nvec_next, radius);
 
@@ -4181,60 +4182,79 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
       add_v2_v2(nvec_prev_pt, nvec_prev);
 
       copy_v3_v3(nvec_next_pt, curr_pt);
+      negate_v2(nvec_next);
       add_v2_v2(nvec_next_pt, nvec_next);
 
       normal_prev = new_perimeter_point(nvec_prev_pt);
       normal_next = new_perimeter_point(nvec_next_pt);
 
       add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
-      add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
-
-      generate_arc_from_point_to_point(perimeter_left_side, normal_prev, normal_next, curr_pt, subdivisions, true);
-
-      if (miter_length < prev_length && miter_length < next_length) {
-        copy_v3_v3(miter_right_pt, curr_pt);
-        add_v2_v2(miter_right_pt, vec_miter_right);
-      }
-      else {
-        copy_v3_v3(miter_right_pt, curr_pt);
-        negate_v2(nvec_next);
-        add_v2_v2(miter_right_pt, nvec_next);
-      }
-
-      miter_right = new_perimeter_point(miter_right_pt);
-      add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
-    }
-    /* bend to the right */
-    else {
-      normalize_v2_length(nvec_prev, -radius);
-      normalize_v2_length(nvec_next, -radius);
-
-      copy_v3_v3(nvec_prev_pt, curr_pt);
-      add_v2_v2(nvec_prev_pt, nvec_prev);
-
-      copy_v3_v3(nvec_next_pt, curr_pt);
-      add_v2_v2(nvec_next_pt, nvec_next);
-
-      normal_prev = new_perimeter_point(nvec_prev_pt);
-      normal_next = new_perimeter_point(nvec_next_pt);
-
-      add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
       add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
+    } else {
+      /* bend to the left */
+      if (angle < 0.0f) {
+        normalize_v2_length(nvec_prev, radius);
+        normalize_v2_length(nvec_next, radius);
 
-      generate_arc_from_point_to_point(perimeter_right_side, normal_prev, normal_next, curr_pt, subdivisions, false);
+        copy_v3_v3(nvec_prev_pt, curr_pt);
+        add_v2_v2(nvec_prev_pt, nvec_prev);
 
-      if (miter_length < prev_length && miter_length < next_length) {
-        copy_v3_v3(miter_left_pt, curr_pt);
-        add_v2_v2(miter_left_pt, vec_miter_left);
+        copy_v3_v3(nvec_next_pt, curr_pt);
+        add_v2_v2(nvec_next_pt, nvec_next);
+
+        normal_prev = new_perimeter_point(nvec_prev_pt);
+        normal_next = new_perimeter_point(nvec_next_pt);
+
+        add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
+        add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
+
+        generate_arc_from_point_to_point(perimeter_left_side, normal_prev, normal_next, curr_pt, subdivisions, true);
+
+        if (miter_length < prev_length && miter_length < next_length) {
+          copy_v3_v3(miter_right_pt, curr_pt);
+          add_v2_v2(miter_right_pt, vec_miter_right);
+        }
+        else {
+          copy_v3_v3(miter_right_pt, curr_pt);
+          negate_v2(nvec_next);
+          add_v2_v2(miter_right_pt, nvec_next);
+        }
+
+        miter_right = new_perimeter_point(miter_right_pt);
+        add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
       }
+      /* bend to the right */
       else {
-        copy_v3_v3(miter_left_pt, curr_pt);
-        negate_v2(nvec_prev);
-        add_v2_v2(miter_left_pt, nvec_prev);
-      }
+        normalize_v2_length(nvec_prev, -radius);
+        normalize_v2_length(nvec_next, -radius);
 
-      miter_left = new_perimeter_point(miter_left_pt);
-      add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+        copy_v3_v3(nvec_prev_pt, curr_pt);
+        add_v2_v2(nvec_prev_pt, nvec_prev);
+
+        copy_v3_v3(nvec_next_pt, curr_pt);
+        add_v2_v2(nvec_next_pt, nvec_next);
+
+        normal_prev = new_perimeter_point(nvec_prev_pt);
+        normal_next = new_perimeter_point(nvec_next_pt);
+
+        add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
+        add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
+
+        generate_arc_from_point_to_point(perimeter_right_side, normal_prev, normal_next, curr_pt, subdivisions, false);
+
+        if (miter_length < prev_length && miter_length < next_length) {
+          copy_v3_v3(miter_left_pt, curr_pt);
+          add_v2_v2(miter_left_pt, vec_miter_left);
+        }
+        else {
+          copy_v3_v3(miter_left_pt, curr_pt);
+          negate_v2(nvec_prev);
+          add_v2_v2(miter_left_pt, nvec_prev);
+        }
+
+        miter_left = new_perimeter_point(miter_left_pt);
+        add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
+      }
     }
   }
 
