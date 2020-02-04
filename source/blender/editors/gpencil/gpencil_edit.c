@@ -4925,9 +4925,10 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   if (changed) {
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
+    return OPERATOR_FINISHED;
   }
 
-  return OPERATOR_FINISHED;
+  return OPERATOR_CANCELLED;
 }
 
 void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
