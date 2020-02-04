@@ -4869,7 +4869,7 @@ static bool gp_stroke_to_perimeter_poll(bContext *C)
     LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
       if (gpl->actframe != NULL) {
         bGPDframe *gpf = gpl->actframe;
-        
+
         LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
           if ((gps->flag & GP_STROKE_SELECT) && ((gps->flag & GP_STROKE_CYCLIC) == 0)) {
             return true;
