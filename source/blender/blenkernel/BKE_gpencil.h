@@ -45,6 +45,7 @@ struct bGPDstroke;
 struct bGPdata;
 struct MaterialGPencilStyle;
 struct MDeformVert;
+struct RegionView3D;
 
 #define GPENCIL_SIMPLIFY(scene) ((scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_ENABLE))
 #define GPENCIL_SIMPLIFY_ONPLAY(playing) \
