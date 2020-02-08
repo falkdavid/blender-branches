@@ -4023,7 +4023,7 @@ static void free_perimeter_list(tPerimeterPointList *list)
   MEM_SAFE_FREE(list);
 }
 
-/* Helper: get 3d point into view space */
+/* Helper: get 3d point into proj space */
 static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3], float r[4])
 {
   copy_v3_v3(r, p);
@@ -4031,14 +4031,132 @@ static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3],
   mul_m4_v4(mat, r);
 }
 
-float *BKE_gpencil_stroke_perimeter_view(const bGPdata *gpd,
+/**
+ * Calculates the perimeter of a stroke projected from the view and
+ * returns it as a new stroke.
+ * \param subdivisions: Number of subdivions for the start and end caps
+ * \return: bGPDstroke pointer to stroke perimeter
+ */
+bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const RegionView3D *rv3d,
+                                                   const bGPdata *gpd,
+                                                   const bGPDlayer *gpl,
+                                                   const bGPDstroke *gps,
+                                                   int subdivisions)
+{
+  int num_perimeter_points = 0;
+  float *perimeter_points = BKE_gpencil_stroke_perimeter_view(rv3d, gpd, gpl, gps, subdivisions, &num_perimeter_points);
+
+  if (num_perimeter_points == 0) {
+    return NULL;
+  }
+
+  /* create new stroke */
+  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
+
+  bGPDspoint *pt;
+  for (int i = 0; i < num_perimeter_points; i++) {
+    pt = &perimeter_stroke->points[i];
+    const int x = i * 3;
+
+    copy_v3_v3(&pt->x, &perimeter_points[x]);
+
+    /* Set pressure and strength to one */
+    pt->pressure = 1.0f;
+    pt->strength = 1.0f;
+
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+
+  /* free temp data */
+  MEM_SAFE_FREE(perimeter_points);
+
+  /* triangles cache needs to be recalculated */
+  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+
+  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* Delete the old stroke */
+  BLI_remlink(&gpl->actframe->strokes, gps);
+  BKE_gpencil_free_stroke(gps);
+
+  return perimeter_stroke;
+}
+
+/**
+ * Calculates the perimeter of a stroke using a projection matrix as the
+ * direction of projextion and returns it as a new stroke.
+ * \param subdivisions: Number of subdivions for the start and end caps
+ * \return: bGPDstroke pointer to stroke perimeter
+ */
+bGPDstroke *BKE_gpencil_stroke_perimeter_from_proj_mat(const bGPdata *gpd,
+                                                       const bGPDlayer *gpl,
+                                                       const bGPDstroke *gps,
+                                                       const float proj_mat[4][4],
+                                                       int subdivisions)
+{
+  int num_perimeter_points = 0;
+  float *perimeter_points = BKE_gpencil_stroke_perimeter_mat(gpd, gpl, gps, proj_mat, subdivisions, &num_perimeter_points);
+
+  if (num_perimeter_points == 0) {
+    return NULL;
+  }
+
+  /* create new stroke */
+  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
+
+  bGPDspoint *pt;
+  for (int i = 0; i < num_perimeter_points; i++) {
+    pt = &perimeter_stroke->points[i];
+    const int x = i * 3;
+
+    copy_v3_v3(&pt->x, &perimeter_points[x]);
+
+    /* Set pressure and strength to one */
+    pt->pressure = 1.0f;
+    pt->strength = 1.0f;
+
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+
+  /* free temp data */
+  MEM_SAFE_FREE(perimeter_points);
+
+  /* triangles cache needs to be recalculated */
+  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+
+  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* Delete the old stroke */
+  BLI_remlink(&gpl->actframe->strokes, gps);
+  BKE_gpencil_free_stroke(gps);
+
+  return perimeter_stroke;
+}
+
+float *BKE_gpencil_stroke_perimeter_view(const RegionView3D *rv3d,
+                                         const bGPdata *gpd,
                                          const bGPDlayer *gpl,
                                          const bGPDstroke *gps,
-                                         const RegionView3D *rv3d,
                                          int subdivisions,
                                          int* r_num_perimeter_points)
 {
   return BKE_gpencil_stroke_perimeter_ex(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, subdivisions, r_num_perimeter_points);
+}
+
+float *BKE_gpencil_stroke_perimeter_mat(const bGPdata *gpd,
+                                        const bGPDlayer *gpl,
+                                        const bGPDstroke *gps,
+                                        const float proj_mat[4][4],
+                                        int subdivisions,
+                                        int* r_num_perimeter_points)
+{
+  float proj_inv[4][4];
+  if (invert_m4_m4(proj_inv, proj_mat) == false) {
+    *r_num_perimeter_points = 0;
+    return NULL;
+  }
+
+  return BKE_gpencil_stroke_perimeter_ex(gpd, gpl, gps, proj_mat, proj_inv, subdivisions, r_num_perimeter_points);
 }
 
 /**
@@ -4064,9 +4182,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   float defaultpixsize = 1000.0f / gpd->pixfactor;
   float stroke_radius = ((gps->thickness + gpl->line_change) / defaultpixsize) / 2.0f;
-
-  int num_points = 0;
-  float *perimeter_points = NULL;
 
   tPerimeterPointList *perimeter_right_side = init_perimeter_point_list();
   tPerimeterPointList *perimeter_left_side = init_perimeter_point_list();
@@ -4115,8 +4230,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   float vec_miter_left[2], vec_miter_right[2];
   float miter_left_pt[3], miter_right_pt[3];
-  tPerimeterPoint *miter_right, *miter_left;
-  tPerimeterPoint *normal_next, *normal_prev;
 
   bGPDspoint *curr;
   int i;
@@ -4185,8 +4298,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
       negate_v2(nvec_next);
       add_v2_v2(nvec_next_pt, nvec_next);
 
-      normal_prev = new_perimeter_point(nvec_prev_pt);
-      normal_next = new_perimeter_point(nvec_next_pt);
+      tPerimeterPoint *normal_prev = new_perimeter_point(nvec_prev_pt);
+      tPerimeterPoint *normal_next = new_perimeter_point(nvec_next_pt);
 
       add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
       add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
@@ -4202,8 +4315,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
 
-        normal_prev = new_perimeter_point(nvec_prev_pt);
-        normal_next = new_perimeter_point(nvec_next_pt);
+        tPerimeterPoint *normal_prev = new_perimeter_point(nvec_prev_pt);
+        tPerimeterPoint *normal_next = new_perimeter_point(nvec_next_pt);
 
         add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
         add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
@@ -4220,7 +4333,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
           add_v2_v2(miter_right_pt, nvec_next);
         }
 
-        miter_right = new_perimeter_point(miter_right_pt);
+        tPerimeterPoint *miter_right = new_perimeter_point(miter_right_pt);
         add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
       }
       /* bend to the right */
@@ -4234,8 +4347,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
 
-        normal_prev = new_perimeter_point(nvec_prev_pt);
-        normal_next = new_perimeter_point(nvec_next_pt);
+        tPerimeterPoint *normal_prev = new_perimeter_point(nvec_prev_pt);
+        tPerimeterPoint *normal_next = new_perimeter_point(nvec_next_pt);
 
         add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
         add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
@@ -4252,7 +4365,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
           add_v2_v2(miter_left_pt, nvec_prev);
         }
 
-        miter_left = new_perimeter_point(miter_left_pt);
+        tPerimeterPoint *miter_left = new_perimeter_point(miter_left_pt);
         add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
       }
     }
@@ -4276,8 +4389,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   /* transfrom back to 3d space and get flat array */
   transform_perimeter_list(perimeter_list, proj_inv);
-  perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
-  num_points = perimeter_list->num_points;
+  float *perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
+  int num_points = perimeter_list->num_points;
 
   /* free temp data */
   free_perimeter_list(perimeter_right_side);
@@ -4287,50 +4400,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   return perimeter_points;
 }
 
-bGPDstroke *BKE_gpencil_perimeter_stroke_get(const bGPdata *gpd,
-                                             const bGPDlayer *gpl,
-                                             const bGPDstroke *gps,
-                                             const RegionView3D *rv3d,
-                                             int subdivisions)
-{
-  int num_perimeter_points = 0;
-  float *perimeter_points = BKE_gpencil_stroke_perimeter_view(gpd, gpl, gps, rv3d, subdivisions, &num_perimeter_points);
-
-  if (num_perimeter_points == 0) {
-    return NULL;
-  }
-
-  /* create new stroke (insert at head to prevent looping over new stroke again) and add points */
-  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
-
-  bGPDspoint *pt;
-  for (int i = 0; i < num_perimeter_points; i++) {
-    pt = &perimeter_stroke->points[i];
-    const int x = i * 3;
-
-    copy_v3_v3(&pt->x, &perimeter_points[x]);
-
-    /* Set pressure and strength to one */
-    pt->pressure = 1.0f;
-    pt->strength = 1.0f;
-
-    pt->flag |= GP_SPOINT_SELECT;
-  }
-
-  /* free temp data */
-  MEM_SAFE_FREE(perimeter_points);
-
-  /* triangles cache needs to be recalculated */
-  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
-
-  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
-
-  /* Delete the old stroke */
-  BLI_remlink(&gpl->actframe->strokes, gps);
-  BKE_gpencil_free_stroke(gps);
-
-  return perimeter_stroke;
-}
 /* -------------------------------------------------------------------- */
 /** \name Iterators
  *
