@@ -1660,6 +1660,47 @@ class VIEW3D_PT_tools_grease_pencil_brush_random(View3DPanel, Panel):
         row.prop(gp_settings, "use_jitter_pressure", text="", icon='STYLUS_PRESSURE')
 
 
+class VIEW3D_PT_tools_grease_pencil_brush_outline_stroke(View3DPanel, Panel):
+    bl_context = ".greasepencil_paint"
+    bl_parent_id = 'VIEW3D_PT_tools_grease_pencil_brush_stroke'
+    bl_label = "Outline Stroke"
+    bl_category = "Tool"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        brush = context.tool_settings.gpencil_paint.brush
+        return brush is not None and brush.gpencil_tool not in {'ERASE', 'FILL', 'TINT'}
+
+    def draw_header(self, context):
+        if self.is_popover:
+            return
+
+        brush = context.tool_settings.gpencil_paint.brush
+        gp_settings = brush.gpencil_settings
+        self.layout.prop(gp_settings, "use_settings_outline", text="")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        brush = context.tool_settings.gpencil_paint.brush
+        gp_settings = brush.gpencil_settings
+
+        if self.is_popover:
+            row = layout.row()
+            row.prop(gp_settings, "use_settings_outline", text="")
+            row.label(text=self.bl_label)
+
+        col = layout.column()
+        col.active = gp_settings.use_settings_outline
+
+        col = col.column(align=True)
+        col.prop(gp_settings, "cap_subdivisions", text="Cap Subdivisions", slider=True)
+        col.prop(gp_settings, "sample_length", text="Sample Length", slider=True)
+
+
 # Grease Pencil drawingcurves
 class VIEW3D_PT_tools_grease_pencil_brushcurves(View3DPanel, Panel):
     bl_context = ".greasepencil_paint"
@@ -2328,6 +2369,7 @@ classes = (
     VIEW3D_PT_tools_grease_pencil_brush_post_processing,
     VIEW3D_PT_tools_grease_pencil_brush_random,
     VIEW3D_PT_tools_grease_pencil_brush_stabilizer,
+    VIEW3D_PT_tools_grease_pencil_brush_outline_stroke,
     VIEW3D_PT_tools_grease_pencil_brushcurves,
     VIEW3D_PT_tools_grease_pencil_brushcurves_sensitivity,
     VIEW3D_PT_tools_grease_pencil_brushcurves_strength,

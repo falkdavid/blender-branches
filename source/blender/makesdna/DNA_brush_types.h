@@ -63,6 +63,10 @@ typedef struct BrushGpencilSettings {
   float draw_random_press;
   /** Factor of strength for strength. */
   float draw_random_strength;
+  /** cap subdivisions for creating outline */
+  int draw_cap_subdivisions;
+  /** sample length for creating outline */
+  float draw_sample_length;
   /** Number of times to apply smooth factor to new strokes. */
   short draw_smoothlvl;
   /** Number of times to subdivide new strokes. */
@@ -196,14 +200,16 @@ typedef enum eGPDbrush_Flag {
   GP_BRUSH_GROUP_SETTINGS = (1 << 11),
   /* Random settings group */
   GP_BRUSH_GROUP_RANDOM = (1 << 12),
+  /* Outline settings group */
+  GP_BRUSH_GROUP_OUTLINE = (1 << 13),
   /* Keep material assigned to brush */
-  GP_BRUSH_MATERIAL_PINNED = (1 << 13),
+  GP_BRUSH_MATERIAL_PINNED = (1 << 14),
   /* Do not show fill color while drawing (no lasso mode) */
-  GP_BRUSH_DISSABLE_LASSO = (1 << 14),
+  GP_BRUSH_DISSABLE_LASSO = (1 << 15),
   /* Do not erase strokes oLcluded */
-  GP_BRUSH_OCCLUDE_ERASER = (1 << 15),
+  GP_BRUSH_OCCLUDE_ERASER = (1 << 16),
   /* Post process trim stroke */
-  GP_BRUSH_TRIM_STROKE = (1 << 16),
+  GP_BRUSH_TRIM_STROKE = (1 << 17),
 } eGPDbrush_Flag;
 
 /* BrushGpencilSettings->gp_fill_draw_mode */

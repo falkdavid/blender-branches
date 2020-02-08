@@ -1206,6 +1206,26 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
 
+  /* Subdivisions on caps for outline  */
+  prop = RNA_def_property(srna, "cap_subdivisions", PROP_INT, PROP_FACTOR);
+  RNA_def_property_int_sdna(prop, NULL, "draw_cap_subdivisions");
+  RNA_def_property_range(prop, 0, 5);
+  RNA_def_property_ui_text(
+      prop, "Cap Subdivisions", "Number of subdivisons on rounded caps for outline");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+
+  /* Sample length for outline */
+  prop = RNA_def_property(srna, "sample_length", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(prop, NULL, "draw_sample_length");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 5);
+  RNA_def_property_ui_text(
+      prop, "Sample Length", "Resample outline to fixed length between points "
+                             "(with a value of 0, no resample is done)");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+
   /* Angle when brush is full size */
   prop = RNA_def_property(srna, "angle", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, NULL, "draw_angle");
@@ -1569,6 +1589,11 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_settings_random", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_GROUP_RANDOM);
   RNA_def_property_ui_text(prop, "Random Settings", "Random brush settings");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  prop = RNA_def_property(srna, "use_settings_outline", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_GROUP_OUTLINE);
+  RNA_def_property_ui_text(prop, "Outline Stroke", "Settings for converting strokes to outline");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
   prop = RNA_def_property(srna, "use_material_pin", PROP_BOOLEAN, PROP_NONE);
