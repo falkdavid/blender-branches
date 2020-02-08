@@ -1146,6 +1146,12 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
       BKE_gpencil_stroke_simplify_adaptive(gps, brush->gpencil_settings->simplify_f);
     }
 
+    /* Outline stroke */
+    if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
+      printf("cap subdivs: %d\n", brush->gpencil_settings->draw_cap_subdivisions);
+      printf("sample len: %d\n", brush->gpencil_settings->draw_sample_length);
+    }
+
     /* reproject to plane (only in 3d space) */
     gp_reproject_toplane(p, gps);
     /* change position relative to parent object */
