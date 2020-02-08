@@ -4850,7 +4850,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   const float dist = RNA_float_get(op->ptr, "sample_dist");
   bool changed = false;
 
-  bGPDstroke *perimeter_stroke;
   const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
@@ -4869,7 +4868,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
             continue;
           }
 
-          perimeter_stroke = BKE_gpencil_perimeter_stroke_get(gpd, gpl, gps, rv3d, subdivisions);
+          bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(rv3d, gpd, gpl, gps, subdivisions);
 
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);

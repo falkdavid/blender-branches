@@ -303,12 +303,31 @@ bool BKE_gpencil_from_image(struct SpaceImage *sima,
                             const float size,
                             const bool mask);
 
-float *BKE_gpencil_stroke_perimeter_view(const struct bGPdata *gpd,
+struct bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const struct RegionView3D *rv3d,
+                                                          const struct bGPdata *gpd,
+                                                          const struct bGPDlayer *gpl,
+                                                          const struct bGPDstroke *gps,
+                                                          int subdivisions);
+
+struct bGPDstroke *BKE_gpencil_stroke_perimeter_from_proj_mat(const struct bGPdata *gpd,
+                                                              const struct bGPDlayer *gpl,
+                                                              const struct bGPDstroke *gps,
+                                                              const float proj_mat[4][4],
+                                                              int subdivisions);
+
+float *BKE_gpencil_stroke_perimeter_view(const struct RegionView3D *rv3d,
+                                         const struct bGPdata *gpd,
                                          const struct bGPDlayer *gpl, 
                                          const struct bGPDstroke *gps, 
-                                         const struct RegionView3D *rv3d,
                                          int subdivisions,
                                          int* r_num_perimeter_points);
+
+float *BKE_gpencil_stroke_perimeter_mat(const struct bGPdata *gpd,
+                                        const struct bGPDlayer *gpl, 
+                                        const struct bGPDstroke *gps, 
+                                        const float proj_mat[4][4],
+                                        int subdivisions,
+                                        int* r_num_perimeter_points);
 
 float* BKE_gpencil_stroke_perimeter_ex(const struct bGPdata *gpd,
                                        const struct bGPDlayer *gpl,
@@ -317,12 +336,6 @@ float* BKE_gpencil_stroke_perimeter_ex(const struct bGPdata *gpd,
                                        const float proj_inv[4][4],
                                        const int subdivisions,
                                        int* r_num_perimeter_points);
-
-struct bGPDstroke *BKE_gpencil_perimeter_stroke_get(const struct bGPdata *gpd,
-                                                    const struct bGPDlayer *gpl, 
-                                                    const struct bGPDstroke *gps, 
-                                                    const struct RegionView3D *rv3d,
-                                                    int subdivisions);
 
 /* Iterator */
 /* frame & stroke are NULL if it is a layer callback. */
