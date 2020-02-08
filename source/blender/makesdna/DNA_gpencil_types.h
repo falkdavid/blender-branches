@@ -229,10 +229,10 @@ typedef struct bGPDstroke {
   /** Factor of opacity for Fill color (used by opacity modifier). */
   float fill_opacity_fac;
 
-  /** Min of the collision bound box used to speedup painting. */
-  float collision_min[3];
-  /** Max of the collision bound box used to speedup painting. */
-  float collision_max[3];
+  /** Min of the bound box used to speedup painting operators. */
+  float boundbox_min[3];
+  /** Max of the bound box used to speedup painting operators. */
+  float boundbox_max[3];
 
   /** UV rotation */
   float uv_rotation;
@@ -403,6 +403,9 @@ typedef struct bGPDlayer {
   float gcolor_next[3];
   char _pad1[4];
 
+  /** Mask Layer name. */
+  char mask_layer[64];
+
   bGPDlayer_Runtime runtime;
 } bGPDlayer;
 
@@ -431,7 +434,7 @@ typedef enum eGPDlayer_Flag {
   /* Unlock color */
   GP_LAYER_UNLOCK_COLOR = (1 << 12),
   /* Mask Layer */
-  GP_LAYER_USE_MASK = (1 << 13),
+  GP_LAYER_USE_MASK = (1 << 13), /*TODO: DEPRECATED */
   /* Ruler Layer */
   GP_LAYER_IS_RULER = (1 << 14),
   /* Invert masking behavior */

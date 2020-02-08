@@ -275,7 +275,7 @@ static void gp_draw_datablock(tGPDfill *tgpf, const float ink[4])
         continue;
       }
       /* check if the color is visible */
-      MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
+      MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
       if ((gp_style == NULL) || (gp_style->flag & GP_MATERIAL_HIDE)) {
         continue;
       }
@@ -1192,7 +1192,7 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
   /* if parented change position relative to parent object */
   for (int a = 0; a < tgpf->sbuffer_used; a++) {
     pt = &gps->points[a];
-    gp_apply_parent_point(tgpf->depsgraph, tgpf->ob, tgpf->gpd, tgpf->gpl, pt);
+    gp_apply_parent_point(tgpf->depsgraph, tgpf->ob, tgpf->gpl, pt);
   }
 
   /* if camera view, reproject flat to view to avoid perspective effect */
@@ -1433,7 +1433,7 @@ static int gpencil_fill_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSE
     }
   }
   else {
-    if (give_current_material(ob, ob->actcol) == NULL) {
+    if (BKE_object_material_get(ob, ob->actcol) == NULL) {
       valid = false;
     }
   }

@@ -152,7 +152,7 @@ static const EnumPropertyItem *rna_GPConvert_mode_items(bContext *UNUSED(C),
  * - assumes that the active space is the 3D-View
  */
 static void gp_strokepoint_convertcoords(bContext *C,
-                                         bGPdata *gpd,
+                                         bGPdata *UNUSED(gpd),
                                          bGPDlayer *gpl,
                                          bGPDstroke *gps,
                                          bGPDspoint *source_pt,
@@ -1385,7 +1385,7 @@ static void gp_layer_to_curve(bContext *C,
 
   if (mode == GP_STROKECONVERT_POLY) {
     for (nu = cu->nurb.first; nu; nu = nu->next) {
-      BKE_nurb_type_convert(nu, CU_POLY, false);
+      BKE_nurb_type_convert(nu, CU_POLY, false, NULL);
     }
   }
 

@@ -111,6 +111,8 @@ typedef struct tGPDinterpolate_layer {
 } tGPDinterpolate_layer;
 
 typedef struct tGPDinterpolate {
+  /** Current depsgraph from context */
+  struct Depsgraph *depsgraph;
   /** current scene from context */
   struct Scene *scene;
   /** area where painting originated */
@@ -138,10 +140,6 @@ typedef struct tGPDinterpolate {
   int flag;
 
   NumInput num; /* numeric input */
-  /** handle for drawing strokes while operator is running 3d stuff */
-  void *draw_handle_3d;
-  /** handle for drawing strokes while operator is running screen stuff */
-  void *draw_handle_screen;
 } tGPDinterpolate;
 
 /* Temporary primitive operation data */
@@ -233,10 +231,6 @@ typedef struct tGPDprimitive {
 } tGPDprimitive;
 
 /* Modal Operator Drawing Callbacks ------------------------ */
-
-void ED_gp_draw_interpolation(const struct bContext *C,
-                              struct tGPDinterpolate *tgpi,
-                              const int type);
 void ED_gp_draw_fill(struct tGPDdraw *tgpw);
 
 /* ***************************************************** */
@@ -284,7 +278,6 @@ void gp_point_to_parent_space(const bGPDspoint *pt, const float diff_mat[4][4], 
  */
 void gp_apply_parent(struct Depsgraph *depsgraph,
                      struct Object *obact,
-                     bGPdata *gpd,
                      bGPDlayer *gpl,
                      bGPDstroke *gps);
 /**
@@ -292,7 +285,6 @@ void gp_apply_parent(struct Depsgraph *depsgraph,
  */
 void gp_apply_parent_point(struct Depsgraph *depsgraph,
                            struct Object *obact,
-                           bGPdata *gpd,
                            bGPDlayer *gpl,
                            bGPDspoint *pt);
 
@@ -679,9 +671,9 @@ struct GP_EditableStrokes_Iter {
     Depsgraph *depsgraph_ = CTX_data_ensure_evaluated_depsgraph(C); \
     Object *obact_ = CTX_data_active_object(C); \
     Object *ob_eval_ = (Object *)DEG_get_evaluated_id(depsgraph_, &obact_->id); \
-    bGPdata *gpd = (bGPdata *)ob_eval_->data; \
-    const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd); \
-    LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) { \
+    bGPdata *gpd_ = (bGPdata *)ob_eval_->data; \
+    const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd_); \
+    LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd_->layers) { \
       if (BKE_gpencil_layer_is_editable(gpl)) { \
         bGPDframe *init_gpf_ = gpl->actframe; \
         if (is_multiedit_) { \
