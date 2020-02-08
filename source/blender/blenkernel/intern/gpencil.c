@@ -397,7 +397,7 @@ bGPDlayer *BKE_gpencil_layer_addnew(bGPdata *gpd, const char *name, bool setacti
 
   /* Enable always affected by scene lights. */
   gpl->flag |= GP_LAYER_USE_LIGHTS;
-
+  gpl->mask_layer[0] = '\0';
   /* make this one the active one */
   if (setactive) {
     BKE_gpencil_layer_active_set(gpd, gpl);
@@ -1002,6 +1002,14 @@ bool BKE_gpencil_layer_frame_delete(bGPDlayer *gpl, bGPDframe *gpf)
   return changed;
 }
 
+bGPDlayer *BKE_gpencil_layer_named_get(bGPdata *gpd, const char *name)
+{
+  if (name[0] == '\0') {
+    return NULL;
+  }
+  return BLI_findstring(&gpd->layers, name, offsetof(bGPDlayer, info));
+}
+
 /* get the active gp-layer for editing */
 bGPDlayer *BKE_gpencil_layer_active_get(bGPdata *gpd)
 {
@@ -1128,14 +1136,14 @@ Material *BKE_gpencil_object_material_ensure_from_brush(Main *bmain, Object *ob,
     /* check if the material is already on object material slots and add it if missing */
     if (ma && BKE_gpencil_object_material_index_get(ob, ma) < 0) {
       BKE_object_material_slot_add(bmain, ob);
-      assign_material(bmain, ob, ma, ob->totcol, BKE_MAT_ASSIGN_USERPREF);
+      BKE_object_material_assign(bmain, ob, ma, ob->totcol, BKE_MAT_ASSIGN_USERPREF);
     }
 
     return ma;
   }
   else {
     /* using active material instead */
-    return give_current_material(ob, ob->actcol);
+    return BKE_object_material_get(ob, ob->actcol);
   }
 }
 
@@ -1148,7 +1156,7 @@ int BKE_gpencil_object_material_ensure(Main *bmain, Object *ob, Material *materi
   int index = BKE_gpencil_object_material_index_get(ob, material);
   if (index < 0) {
     BKE_object_material_slot_add(bmain, ob);
-    assign_material(bmain, ob, material, ob->totcol, BKE_MAT_ASSIGN_USERPREF);
+    BKE_object_material_assign(bmain, ob, material, ob->totcol, BKE_MAT_ASSIGN_USERPREF);
     return ob->totcol - 1;
   }
   return index;
@@ -1161,11 +1169,11 @@ int BKE_gpencil_object_material_ensure(Main *bmain, Object *ob, Material *materi
  */
 Material *BKE_gpencil_object_material_new(Main *bmain, Object *ob, const char *name, int *r_index)
 {
-  Material *ma = BKE_material_add_gpencil(bmain, name);
+  Material *ma = BKE_gpencil_material_add(bmain, name);
   id_us_min(&ma->id); /* no users yet */
 
   BKE_object_material_slot_add(bmain, ob);
-  assign_material(bmain, ob, ma, ob->totcol, BKE_MAT_ASSIGN_USERPREF);
+  BKE_object_material_assign(bmain, ob, ma, ob->totcol, BKE_MAT_ASSIGN_USERPREF);
 
   if (r_index) {
     *r_index = ob->actcol - 1;
@@ -1182,7 +1190,7 @@ Material *BKE_gpencil_object_material_from_brush_get(Object *ob, Brush *brush)
     return ma;
   }
   else {
-    return give_current_material(ob, ob->actcol);
+    return BKE_object_material_get(ob, ob->actcol);
   }
 }
 
@@ -1235,12 +1243,12 @@ Material *BKE_gpencil_object_material_ensure_from_active_input_brush(Main *bmain
  */
 Material *BKE_gpencil_object_material_ensure_from_active_input_material(Object *ob)
 {
-  Material *ma = give_current_material(ob, ob->actcol);
+  Material *ma = BKE_object_material_get(ob, ob->actcol);
   if (ma) {
     return ma;
   }
 
-  return &defgpencil_material;
+  return BKE_material_default_gpencil();
 }
 
 /* Get active color, and add all default settings if we don't find anything */
@@ -1255,7 +1263,7 @@ Material *BKE_gpencil_object_material_ensure_active(Object *ob)
 
   ma = BKE_gpencil_object_material_ensure_from_active_input_material(ob);
   if (ma->gp_style == NULL) {
-    BKE_material_init_gpencil_settings(ma);
+    BKE_gpencil_material_attr_init(ma);
   }
 
   return ma;
@@ -1340,8 +1348,8 @@ void BKE_gpencil_centroid_3d(bGPdata *gpd, float r_centroid[3])
 /* Compute stroke collision detection center and radius. */
 void BKE_gpencil_stroke_collision_get(bGPDstroke *gps)
 {
-  INIT_MINMAX(gps->collision_min, gps->collision_max);
-  BKE_gpencil_stroke_minmax(gps, false, gps->collision_min, gps->collision_max);
+  INIT_MINMAX(gps->boundbox_min, gps->boundbox_max);
+  BKE_gpencil_stroke_minmax(gps, false, gps->boundbox_min, gps->boundbox_max);
 }
 
 /* create bounding box values */
@@ -2382,21 +2390,21 @@ bool BKE_gpencil_merge_materials_table_get(Object *ob,
   MaterialGPencilStyle *gp_style_primary = NULL;
   MaterialGPencilStyle *gp_style_secondary = NULL;
 
-  short *totcol = give_totcolp(ob);
+  short *totcol = BKE_object_material_num(ob);
   if (totcol == 0) {
     return changed;
   }
 
   for (int idx_primary = 0; idx_primary < *totcol; idx_primary++) {
     /* Read primary material to compare. */
-    ma_primary = BKE_material_gpencil_get(ob, idx_primary + 1);
+    ma_primary = BKE_gpencil_material(ob, idx_primary + 1);
     if (ma_primary == NULL) {
       continue;
     }
 
     for (int idx_secondary = idx_primary + 1; idx_secondary < *totcol; idx_secondary++) {
       /* Read secondary material to compare with primary material. */
-      ma_secondary = BKE_material_gpencil_get(ob, idx_secondary + 1);
+      ma_secondary = BKE_gpencil_material(ob, idx_secondary + 1);
       if ((ma_secondary == NULL) ||
           (BLI_ghash_haskey(r_mat_table, POINTER_FROM_INT(idx_secondary)))) {
         continue;
@@ -2487,10 +2495,10 @@ void BKE_gpencil_stats_update(bGPdata *gpd)
 /* get material index (0-based like mat_nr not actcol) */
 int BKE_gpencil_object_material_index_get(Object *ob, Material *ma)
 {
-  short *totcol = give_totcolp(ob);
+  short *totcol = BKE_object_material_num(ob);
   Material *read_ma = NULL;
   for (short i = 0; i < *totcol; i++) {
-    read_ma = give_current_material(ob, i + 1);
+    read_ma = BKE_object_material_get(ob, i + 1);
     if (ma == read_ma) {
       return i;
     }
@@ -2641,42 +2649,6 @@ void BKE_gpencil_stroke_2d_flat_ref(const bGPDspoint *ref_points,
 
   /* Concave (-1), Convex (1), or Autodetect (0)? */
   *r_direction = (int)locy[2];
-}
-
-/* calc bounding box in 2d using flat projection data */
-static void gpencil_calc_2d_bounding_box(const float (*points2d)[2],
-                                         int totpoints,
-                                         float minv[2],
-                                         float maxv[2])
-{
-  minv[0] = points2d[0][0];
-  minv[1] = points2d[0][1];
-  maxv[0] = points2d[0][0];
-  maxv[1] = points2d[0][1];
-
-  for (int i = 1; i < totpoints; i++) {
-    /* min */
-    if (points2d[i][0] < minv[0]) {
-      minv[0] = points2d[i][0];
-    }
-    if (points2d[i][1] < minv[1]) {
-      minv[1] = points2d[i][1];
-    }
-    /* max */
-    if (points2d[i][0] > maxv[0]) {
-      maxv[0] = points2d[i][0];
-    }
-    if (points2d[i][1] > maxv[1]) {
-      maxv[1] = points2d[i][1];
-    }
-  }
-  /* use a perfect square */
-  if (maxv[0] > maxv[1]) {
-    maxv[1] = maxv[0];
-  }
-  else {
-    maxv[0] = maxv[1];
-  }
 }
 
 /* calc texture coordinates using flat projected points */
@@ -3195,7 +3167,7 @@ static int gpencil_check_same_material_color(Object *ob_gp, float color[4], Mate
   hsv1[3] = color[3];
 
   for (int i = 1; i <= ob_gp->totcol; i++) {
-    ma = give_current_material(ob_gp, i);
+    ma = BKE_object_material_get(ob_gp, i);
     MaterialGPencilStyle *gp_style = ma->gp_style;
     /* Check color with small tolerance (better in HSV). */
     float hsv2[4];
@@ -3360,7 +3332,7 @@ static void gpencil_convert_spline(Main *bmain,
    */
   bool do_stroke = false;
   if (ob_cu->totcol == 1) {
-    Material *ma_stroke = give_current_material(ob_cu, 1);
+    Material *ma_stroke = BKE_object_material_get(ob_cu, 1);
     if ((ma_stroke) && (strstr(ma_stroke->id.name, "_stroke") != NULL)) {
       do_stroke = true;
     }
@@ -3368,7 +3340,7 @@ static void gpencil_convert_spline(Main *bmain,
 
   int r_idx = gpencil_check_same_material_color(ob_gp, color, &mat_gp);
   if ((ob_cu->totcol > 0) && (r_idx < 0)) {
-    Material *mat_curve = give_current_material(ob_cu, 1);
+    Material *mat_curve = BKE_object_material_get(ob_cu, 1);
     mat_gp = gpencil_add_from_curve_material(bmain, ob_gp, color, gpencil_lines, fill, &r_idx);
 
     if ((mat_curve) && (mat_curve->gp_style != NULL)) {
@@ -3378,12 +3350,11 @@ static void gpencil_convert_spline(Main *bmain,
       copy_v4_v4(gp_style_gp->mix_rgba, gp_style_cur->mix_rgba);
       gp_style_gp->fill_style = gp_style_cur->fill_style;
       gp_style_gp->mix_factor = gp_style_cur->mix_factor;
-      gp_style_gp->gradient_angle = gp_style_cur->gradient_angle;
     }
 
     /* If object has more than 1 material, use second material for stroke color. */
-    if ((!only_stroke) && (ob_cu->totcol > 1) && (give_current_material(ob_cu, 2))) {
-      mat_curve = give_current_material(ob_cu, 2);
+    if ((!only_stroke) && (ob_cu->totcol > 1) && (BKE_object_material_get(ob_cu, 2))) {
+      mat_curve = BKE_object_material_get(ob_cu, 2);
       if (mat_curve) {
         linearrgb_to_srgb_v3_v3(mat_gp->gp_style->stroke_rgba, &mat_curve->r);
         mat_gp->gp_style->stroke_rgba[3] = mat_curve->a;
@@ -3392,7 +3363,7 @@ static void gpencil_convert_spline(Main *bmain,
     else if ((only_stroke) || (do_stroke)) {
       /* Also use the first color if the fill is none for stroke color. */
       if (ob_cu->totcol > 0) {
-        mat_curve = give_current_material(ob_cu, 1);
+        mat_curve = BKE_object_material_get(ob_cu, 1);
         if (mat_curve) {
           copy_v3_v3(mat_gp->gp_style->stroke_rgba, &mat_curve->r);
           mat_gp->gp_style->stroke_rgba[3] = mat_curve->a;
@@ -3557,7 +3528,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
   if (use_collections) {
     Collection *collection = gpencil_get_parent_collection(scene, ob_cu);
     if (collection != NULL) {
-      gpl = BLI_findstring(&gpd->layers, collection->id.name + 2, offsetof(bGPDlayer, info));
+      gpl = BKE_gpencil_layer_named_get(gpd, collection->id.name + 2);
       if (gpl == NULL) {
         gpl = BKE_gpencil_layer_addnew(gpd, collection->id.name + 2, true);
       }
@@ -3948,7 +3919,7 @@ static void free_perimeter_list(tPerimeterPointList *list)
   MEM_SAFE_FREE(list);
 }
 
-/* Helper: get 3d point into view space */
+/* Helper: get 3d point into proj space */
 static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3], float r[4])
 {
   copy_v3_v3(r, p);
@@ -3956,14 +3927,132 @@ static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3],
   mul_m4_v4(mat, r);
 }
 
-float *BKE_gpencil_stroke_perimeter_view(const bGPdata *gpd,
+/**
+ * Calculates the perimeter of a stroke projected from the view and
+ * returns it as a new stroke.
+ * \param subdivisions: Number of subdivions for the start and end caps
+ * \return: bGPDstroke pointer to stroke perimeter
+ */
+bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const RegionView3D *rv3d,
+                                                   const bGPdata *gpd,
+                                                   const bGPDlayer *gpl,
+                                                   const bGPDstroke *gps,
+                                                   int subdivisions)
+{
+  int num_perimeter_points = 0;
+  float *perimeter_points = BKE_gpencil_stroke_perimeter_view(rv3d, gpd, gpl, gps, subdivisions, &num_perimeter_points);
+
+  if (num_perimeter_points == 0) {
+    return NULL;
+  }
+
+  /* create new stroke */
+  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
+
+  bGPDspoint *pt;
+  for (int i = 0; i < num_perimeter_points; i++) {
+    pt = &perimeter_stroke->points[i];
+    const int x = i * 3;
+
+    copy_v3_v3(&pt->x, &perimeter_points[x]);
+
+    /* Set pressure and strength to one */
+    pt->pressure = 1.0f;
+    pt->strength = 1.0f;
+
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+
+  /* free temp data */
+  MEM_SAFE_FREE(perimeter_points);
+
+  /* triangles cache needs to be recalculated */
+  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+
+  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* Delete the old stroke */
+  BLI_remlink(&gpl->actframe->strokes, gps);
+  BKE_gpencil_free_stroke(gps);
+
+  return perimeter_stroke;
+}
+
+/**
+ * Calculates the perimeter of a stroke using a projection matrix as the
+ * direction of projextion and returns it as a new stroke.
+ * \param subdivisions: Number of subdivions for the start and end caps
+ * \return: bGPDstroke pointer to stroke perimeter
+ */
+bGPDstroke *BKE_gpencil_stroke_perimeter_from_proj_mat(const bGPdata *gpd,
+                                                       const bGPDlayer *gpl,
+                                                       const bGPDstroke *gps,
+                                                       const float proj_mat[4][4],
+                                                       int subdivisions)
+{
+  int num_perimeter_points = 0;
+  float *perimeter_points = BKE_gpencil_stroke_perimeter_mat(gpd, gpl, gps, proj_mat, subdivisions, &num_perimeter_points);
+
+  if (num_perimeter_points == 0) {
+    return NULL;
+  }
+
+  /* create new stroke */
+  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
+
+  bGPDspoint *pt;
+  for (int i = 0; i < num_perimeter_points; i++) {
+    pt = &perimeter_stroke->points[i];
+    const int x = i * 3;
+
+    copy_v3_v3(&pt->x, &perimeter_points[x]);
+
+    /* Set pressure and strength to one */
+    pt->pressure = 1.0f;
+    pt->strength = 1.0f;
+
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+
+  /* free temp data */
+  MEM_SAFE_FREE(perimeter_points);
+
+  /* triangles cache needs to be recalculated */
+  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+
+  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* Delete the old stroke */
+  BLI_remlink(&gpl->actframe->strokes, gps);
+  BKE_gpencil_free_stroke(gps);
+
+  return perimeter_stroke;
+}
+
+float *BKE_gpencil_stroke_perimeter_view(const RegionView3D *rv3d,
+                                         const bGPdata *gpd,
                                          const bGPDlayer *gpl,
                                          const bGPDstroke *gps,
-                                         const RegionView3D *rv3d,
                                          int subdivisions,
                                          int* r_num_perimeter_points)
 {
   return BKE_gpencil_stroke_perimeter_ex(gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, subdivisions, r_num_perimeter_points);
+}
+
+float *BKE_gpencil_stroke_perimeter_mat(const bGPdata *gpd,
+                                        const bGPDlayer *gpl,
+                                        const bGPDstroke *gps,
+                                        const float proj_mat[4][4],
+                                        int subdivisions,
+                                        int* r_num_perimeter_points)
+{
+  float proj_inv[4][4];
+  if (invert_m4_m4(proj_inv, proj_mat) == false) {
+    *r_num_perimeter_points = 0;
+    return NULL;
+  }
+
+  return BKE_gpencil_stroke_perimeter_ex(gpd, gpl, gps, proj_mat, proj_inv, subdivisions, r_num_perimeter_points);
 }
 
 /**
@@ -3989,9 +4078,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   float defaultpixsize = 1000.0f / gpd->pixfactor;
   float stroke_radius = ((gps->thickness + gpl->line_change) / defaultpixsize) / 2.0f;
-
-  int num_points = 0;
-  float *perimeter_points = NULL;
 
   tPerimeterPointList *perimeter_right_side = init_perimeter_point_list();
   tPerimeterPointList *perimeter_left_side = init_perimeter_point_list();
@@ -4040,8 +4126,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   float vec_miter_left[2], vec_miter_right[2];
   float miter_left_pt[3], miter_right_pt[3];
-  tPerimeterPoint *miter_right, *miter_left;
-  tPerimeterPoint *normal_next, *normal_prev;
 
   bGPDspoint *curr;
   int i;
@@ -4110,8 +4194,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
       negate_v2(nvec_next);
       add_v2_v2(nvec_next_pt, nvec_next);
 
-      normal_prev = new_perimeter_point(nvec_prev_pt);
-      normal_next = new_perimeter_point(nvec_next_pt);
+      tPerimeterPoint *normal_prev = new_perimeter_point(nvec_prev_pt);
+      tPerimeterPoint *normal_next = new_perimeter_point(nvec_next_pt);
 
       add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
       add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
@@ -4127,8 +4211,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
 
-        normal_prev = new_perimeter_point(nvec_prev_pt);
-        normal_next = new_perimeter_point(nvec_next_pt);
+        tPerimeterPoint *normal_prev = new_perimeter_point(nvec_prev_pt);
+        tPerimeterPoint *normal_next = new_perimeter_point(nvec_next_pt);
 
         add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
         add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
@@ -4145,7 +4229,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
           add_v2_v2(miter_right_pt, nvec_next);
         }
 
-        miter_right = new_perimeter_point(miter_right_pt);
+        tPerimeterPoint *miter_right = new_perimeter_point(miter_right_pt);
         add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
       }
       /* bend to the right */
@@ -4159,8 +4243,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         copy_v3_v3(nvec_next_pt, curr_pt);
         add_v2_v2(nvec_next_pt, nvec_next);
 
-        normal_prev = new_perimeter_point(nvec_prev_pt);
-        normal_next = new_perimeter_point(nvec_next_pt);
+        tPerimeterPoint *normal_prev = new_perimeter_point(nvec_prev_pt);
+        tPerimeterPoint *normal_next = new_perimeter_point(nvec_next_pt);
 
         add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
         add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
@@ -4177,7 +4261,7 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
           add_v2_v2(miter_left_pt, nvec_prev);
         }
 
-        miter_left = new_perimeter_point(miter_left_pt);
+        tPerimeterPoint *miter_left = new_perimeter_point(miter_left_pt);
         add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
       }
     }
@@ -4201,8 +4285,8 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   /* transfrom back to 3d space and get flat array */
   transform_perimeter_list(perimeter_list, proj_inv);
-  perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
-  num_points = perimeter_list->num_points;
+  float *perimeter_points = get_flat_array_from_perimeter_list(perimeter_list);
+  int num_points = perimeter_list->num_points;
 
   /* free temp data */
   free_perimeter_list(perimeter_right_side);
@@ -4212,50 +4296,6 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   return perimeter_points;
 }
 
-bGPDstroke *BKE_gpencil_perimeter_stroke_get(const bGPdata *gpd,
-                                             const bGPDlayer *gpl,
-                                             const bGPDstroke *gps,
-                                             const RegionView3D *rv3d,
-                                             int subdivisions)
-{
-  int num_perimeter_points = 0;
-  float *perimeter_points = BKE_gpencil_stroke_perimeter_view(gpd, gpl, gps, rv3d, subdivisions, &num_perimeter_points);
-
-  if (num_perimeter_points == 0) {
-    return NULL;
-  }
-
-  /* create new stroke (insert at head to prevent looping over new stroke again) and add points */
-  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_perimeter_points, 1);
-
-  bGPDspoint *pt;
-  for (int i = 0; i < num_perimeter_points; i++) {
-    pt = &perimeter_stroke->points[i];
-    const int x = i * 3;
-
-    copy_v3_v3(&pt->x, &perimeter_points[x]);
-
-    /* Set pressure and strength to one */
-    pt->pressure = 1.0f;
-    pt->strength = 1.0f;
-
-    pt->flag |= GP_SPOINT_SELECT;
-  }
-
-  /* free temp data */
-  MEM_SAFE_FREE(perimeter_points);
-
-  /* triangles cache needs to be recalculated */
-  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
-
-  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
-
-  /* Delete the old stroke */
-  BLI_remlink(&gpl->actframe->strokes, gps);
-  BKE_gpencil_free_stroke(gps);
-
-  return perimeter_stroke;
-}
 /* -------------------------------------------------------------------- */
 /** \name Iterators
  *

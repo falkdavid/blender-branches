@@ -1014,7 +1014,7 @@ static void gp_brush_clone_add(bContext *C, tGP_BrushEditData *gso)
       bGPDlayer *gpl = NULL;
       /* Try to use original layer. */
       if (gps->runtime.tmp_layerinfo != NULL) {
-        gpl = BLI_findstring(&gpd->layers, gps->runtime.tmp_layerinfo, offsetof(bGPDlayer, info));
+        gpl = BKE_gpencil_layer_named_get(gpd, gps->runtime.tmp_layerinfo);
       }
 
       /* if not available, use active layer. */
@@ -1662,7 +1662,7 @@ static bool gpsculpt_brush_do_frame(bContext *C,
     if (redo_geom) {
       bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
       if (gpl->actframe == gpf) {
-        MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
+        MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
         /* Update active frame now, only if material has fill. */
         if (gp_style->flag & GP_MATERIAL_FILL_SHOW) {
           BKE_gpencil_stroke_geometry_update(gps_active);

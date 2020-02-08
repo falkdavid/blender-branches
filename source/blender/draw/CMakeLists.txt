@@ -283,13 +283,16 @@ data_to_c_simple(engines/gpencil/shaders/gpencil_antialiasing_vert.glsl SRC)
 data_to_c_simple(engines/gpencil/shaders/gpencil_common_lib.glsl SRC)
 data_to_c_simple(engines/gpencil/shaders/gpencil_composite_frag.glsl SRC)
 data_to_c_simple(engines/gpencil/shaders/gpencil_layer_blend_frag.glsl SRC)
-data_to_c_simple(engines/gpencil/shaders/gpencil_layer_mask_frag.glsl SRC)
 data_to_c_simple(engines/gpencil/shaders/gpencil_depth_merge_frag.glsl SRC)
 data_to_c_simple(engines/gpencil/shaders/gpencil_depth_merge_vert.glsl SRC)
 data_to_c_simple(engines/gpencil/shaders/gpencil_vfx_frag.glsl SRC)
 
 data_to_c_simple(engines/select/shaders/selection_id_3D_vert.glsl SRC)
 data_to_c_simple(engines/select/shaders/selection_id_frag.glsl SRC)
+
+data_to_c_simple(engines/basic/shaders/conservative_depth_geom.glsl SRC)
+data_to_c_simple(engines/basic/shaders/conservative_depth_vert.glsl SRC)
+data_to_c_simple(engines/basic/shaders/conservative_depth_frag.glsl SRC)
 
 data_to_c_simple(engines/overlay/shaders/antialiasing_frag.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/antialiasing_vert.glsl SRC)

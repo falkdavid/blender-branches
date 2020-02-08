@@ -190,25 +190,6 @@ static void rna_GPencil_editmode_update(Main *UNUSED(bmain), Scene *UNUSED(scene
   WM_main_add_notifier(NC_SCENE | ND_MODE | NC_MOVIECLIP, NULL);
 }
 
-/* Recalc UVs and Fill for all strokes. */
-static void rna_GPencil_strokes_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
-{
-  bGPdata *gpd = (bGPdata *)ptr->owner_id;
-  if (gpd) {
-    LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-      LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-        LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-          BKE_gpencil_stroke_fill_triangulate(gps);
-        }
-      }
-    }
-  }
-
-  /* Now do standard updates... */
-  DEG_id_tag_update(ptr->owner_id, ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
-  WM_main_add_notifier(NC_GPENCIL | NA_EDITED, NULL);
-}
-
 /* Poll Callback to filter GP Datablocks to only show those for Annotations */
 bool rna_GPencil_datablocks_annotations_poll(PointerRNA *UNUSED(ptr), const PointerRNA value)
 {
@@ -483,6 +464,13 @@ static void rna_GPencilLayer_info_set(PointerRNA *ptr, const char *value)
 
   /* now fix animation paths */
   BKE_animdata_fix_paths_rename_all(&gpd->id, "layers", oldname, gpl->info);
+
+  /* Fix mask layer. */
+  LISTBASE_FOREACH (bGPDlayer *, gpl_, &gpd->layers) {
+    if ((gpl_->mask_layer[0] != '\0') && STREQ(gpl_->mask_layer, oldname)) {
+      BLI_strncpy(gpl_->mask_layer, gpl->info, sizeof(gpl_->mask_layer));
+    }
+  }
 }
 
 static void rna_GPencil_layer_mask_set(PointerRNA *ptr, const bool value)
@@ -1477,6 +1465,11 @@ static void rna_def_gpencil_layer(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Blend Mode", "Blend mode");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 
+  prop = RNA_def_property(srna, "mask_layer_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, NULL, "mask_layer");
+  RNA_def_property_ui_text(prop, "Mask", "Name of the masking layer");
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
+
   /* Flags */
   prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_LAYER_HIDE);
@@ -1512,13 +1505,14 @@ static void rna_def_gpencil_layer(BlenderRNA *brna)
       prop, "Disallow Locked Materials Editing", "Avoids editing locked materials in the layer");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
 
+#  /* TODO: Deprecated */
   prop = RNA_def_property(srna, "mask_layer", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_LAYER_USE_MASK);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_boolean_funcs(prop, NULL, "rna_GPencil_layer_mask_set");
   RNA_def_property_ui_text(prop, "Mask Layer", "Mask pixels from underlying layers drawing");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
-
+#
   prop = RNA_def_property(srna, "invert_mask", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_LAYER_MASK_INVERT);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);

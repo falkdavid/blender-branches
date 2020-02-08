@@ -84,7 +84,7 @@ static void deformStroke(GpencilModifierData *md,
     return;
   }
 
-  MaterialGPencilStyle *gp_style = BKE_material_gpencil_settings_get(ob, gps->mat_nr + 1);
+  MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
 
   /* if factor > 1.0, affect the strength of the stroke */
   if (mmd->factor > 1.0f) {
@@ -125,7 +125,10 @@ static void deformStroke(GpencilModifierData *md,
   }
 }
 
-static void bakeModifier(Main *bmain, Depsgraph *depsgraph, GpencilModifierData *md, Object *ob)
+static void bakeModifier(Main *UNUSED(bmain),
+                         Depsgraph *depsgraph,
+                         GpencilModifierData *md,
+                         Object *ob)
 {
   bGPdata *gpd = ob->data;
 
