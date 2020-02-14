@@ -4062,8 +4062,8 @@ bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const RegionView3D *rv3d,
 
     copy_v3_v3(&pt->x, &perimeter_points[x]);
 
-    /* Set pressure and strength to one */
-    pt->pressure = 1.0f;
+    /* Set pressure to zero and strength to one */
+    pt->pressure = 0.0f;
     pt->strength = 1.0f;
 
     pt->flag |= GP_SPOINT_SELECT;
@@ -4113,8 +4113,8 @@ bGPDstroke *BKE_gpencil_stroke_perimeter_from_proj_mat(const bGPdata *gpd,
 
     copy_v3_v3(&pt->x, &perimeter_points[x]);
 
-    /* Set pressure and strength to one */
-    pt->pressure = 1.0f;
+    /* Set pressure to zero and strength to one */
+    pt->pressure = 0.0f;
     pt->strength = 1.0f;
 
     pt->flag |= GP_SPOINT_SELECT;

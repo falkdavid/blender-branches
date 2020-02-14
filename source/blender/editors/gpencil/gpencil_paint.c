@@ -1148,8 +1148,10 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
 
     /* Outline stroke */
     if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
-      printf("cap subdivs: %d\n", brush->gpencil_settings->draw_cap_subdivisions);
-      printf("sample len: %d\n", brush->gpencil_settings->draw_sample_length);
+      gps = BKE_gpencil_stroke_perimeter_from_view(rv3d, gpd, gpl, gps,  brush->gpencil_settings->draw_cap_subdivisions);
+      if (brush->gpencil_settings->draw_sample_length > 0.0f) {
+        BKE_gpencil_stroke_sample(gps, brush->gpencil_settings->draw_sample_length, true);
+      }
     }
 
     /* reproject to plane (only in 3d space) */
@@ -1782,8 +1784,13 @@ static void gp_init_colors(tGPsdata *p)
   /* use brush material */
   p->material = BKE_gpencil_object_material_ensure_from_active_input_brush(p->bmain, p->ob, brush);
 
-  gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, p->material);
-  gpd->runtime.sbuffer_brush = brush;
+  if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
+    gpd->runtime.matid = 0;
+  }
+  else {
+    gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, p->material);
+  }
+  gpd->runtime.brush_size = brush->size;
 }
 
 /* (re)init new painting data */
