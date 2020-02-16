@@ -1784,6 +1784,7 @@ static void gp_init_colors(tGPsdata *p)
   /* use brush material */
   p->material = BKE_gpencil_object_material_ensure_from_active_input_brush(p->bmain, p->ob, brush);
 
+  /* TODO: find a better solution to set the right material */
   if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
     gpd->runtime.matid = 0;
   }
