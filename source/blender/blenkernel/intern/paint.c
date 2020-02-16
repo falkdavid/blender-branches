@@ -703,18 +703,6 @@ static int palettecolor_compare_hsv(const void *a1, const void *a2)
     return -1;
   }
 
-#if 0
-  /* Luminance. */
-  float lum1 = (0.2126f * ps1->rgb[0] + 0.7152f * ps1->rgb[1] + 0.0722f * ps1->rgb[2]);
-  float lum2 = (0.2126f * ps2->rgb[0] + 0.7152f * ps2->rgb[1] + 0.0722f * ps2->rgb[2]);
-  if (lum1 > lum2) {
-    return 1;
-  }
-  else if (lum1 < lum2) {
-    return -1;
-  }
-#endif
-
   /* Saturation. */
   if (ps1->s > ps2->s) {
     return 1;
@@ -989,6 +977,8 @@ void BKE_paint_init(Main *bmain, Scene *sce, ePaintMode mode, const char col[3])
 {
   UnifiedPaintSettings *ups = &sce->toolsettings->unified_paint_settings;
   Paint *paint = BKE_paint_get_active_from_paintmode(sce, mode);
+
+  BKE_paint_ensure_from_paintmode(sce, mode);
 
   /* If there's no brush, create one */
   if (PAINT_MODE_HAS_BRUSH(mode)) {

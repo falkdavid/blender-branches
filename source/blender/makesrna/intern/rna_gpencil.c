@@ -1208,6 +1208,19 @@ static void rna_def_gpencil_stroke(BlenderRNA *brna)
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, 0);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 
+  /* Stroke bound box */
+  prop = RNA_def_property(srna, "bound_box_min", PROP_FLOAT, PROP_XYZ);
+  RNA_def_property_float_sdna(prop, NULL, "boundbox_min");
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Boundbox Min", "");
+
+  prop = RNA_def_property(srna, "bound_box_max", PROP_FLOAT, PROP_XYZ);
+  RNA_def_property_float_sdna(prop, NULL, "boundbox_max");
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Boundbox Max", "");
+
   /* gradient shape ratio */
   prop = RNA_def_property(srna, "aspect", PROP_FLOAT, PROP_XYZ);
   RNA_def_property_float_sdna(prop, NULL, "aspect_ratio");
@@ -1434,7 +1447,7 @@ static void rna_def_gpencil_layer_mask(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "invert", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_MASK_INVERT);
-  RNA_def_property_ui_icon(prop, ICON_HOLDOUT_OFF, 1);
+  RNA_def_property_ui_icon(prop, ICON_CLIPUV_HLT, -1);
   RNA_def_property_ui_text(prop, "Invert", "Invert mask");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 }
@@ -2070,10 +2083,8 @@ static void rna_def_gpencil_data(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_onion_loop", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "onion_flag", GP_ONION_LOOP);
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, 0);
-  RNA_def_property_ui_text(prop,
-                           "Loop",
-                           "Display first onion keyframes using next frame color to show "
-                           "indication of loop start frame");
+  RNA_def_property_ui_text(
+      prop, "Show Start Frame", "Display onion keyframes for looping animations");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 
   prop = RNA_def_property(srna, "onion_factor", PROP_FLOAT, PROP_NONE);
@@ -2088,6 +2099,7 @@ static void rna_def_gpencil_data(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "zdepth_offset");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1f, 3);
+  RNA_def_property_float_default(prop, 0.150f);
   RNA_def_property_ui_text(prop, "Surface Offset", "Offset amount when drawing in surface mode");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 

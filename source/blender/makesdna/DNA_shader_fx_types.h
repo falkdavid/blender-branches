@@ -81,15 +81,13 @@ typedef struct ShaderFxData_Runtime {
 
 typedef struct BlurShaderFxData {
   ShaderFxData shaderfx;
-  int radius[2];
+  float radius[2];
   /** Flags. */
   int flag;
   /** Number of samples. */
   int samples;
-  /** Circle of confusion. */
-  float coc;
-  /** Not visible in rna. */
-  int blur[2];
+  /** Rotation of blur effect.  */
+  float rotation;
   char _pad[4];
 
   ShaderFxData_Runtime runtime;
@@ -144,6 +142,11 @@ typedef struct GlowShaderFxData {
   int mode;
   int blur[2];
   int samples;
+  /** Rotation of effect.  */
+  float rotation;
+  /** Blend modes. */
+  int blend_mode;
+
   ShaderFxData_Runtime runtime;
 } GlowShaderFxData;
 

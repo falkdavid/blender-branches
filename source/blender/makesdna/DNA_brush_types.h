@@ -114,13 +114,11 @@ typedef struct BrushGpencilSettings {
 
   /** eGP_Sculpt_Flag. */
   int sculpt_flag;
-  /** Target weight. */
-  float weight;
   /** eGP_Sculpt_Mode_Flag. */
   int sculpt_mode_flag;
   /** Preset type (used to reset brushes - internal). */
   short preset_type;
-  char _pad3[2];
+  char _pad3[6];
 
   struct CurveMapping *curve_sensitivity;
   struct CurveMapping *curve_strength;
@@ -656,37 +654,20 @@ typedef enum eBrushUVSculptTool {
 #define SCULPT_TOOL_HAS_RAKE(t) ELEM(t, SCULPT_TOOL_SNAKE_HOOK)
 
 #define SCULPT_TOOL_HAS_DYNTOPO(t) \
-  (ELEM( \
-       t, /* These brushes, as currently coded, cannot support dynamic topology */ \
-       SCULPT_TOOL_GRAB, \
-       SCULPT_TOOL_ROTATE, \
-       SCULPT_TOOL_THUMB, \
-       SCULPT_TOOL_LAYER, \
-       SCULPT_TOOL_DRAW_SHARP, \
-       SCULPT_TOOL_SLIDE_RELAX, \
-       SCULPT_TOOL_ELASTIC_DEFORM, \
-       SCULPT_TOOL_POSE, \
+  (ELEM(t, /* These brushes, as currently coded, cannot support dynamic topology */ \
+        SCULPT_TOOL_GRAB, \
+        SCULPT_TOOL_ROTATE, \
+        SCULPT_TOOL_THUMB, \
+        SCULPT_TOOL_LAYER, \
+        SCULPT_TOOL_DRAW_SHARP, \
+        SCULPT_TOOL_SLIDE_RELAX, \
+        SCULPT_TOOL_ELASTIC_DEFORM, \
+        SCULPT_TOOL_POSE, \
 \
-       /* These brushes could handle dynamic topology, \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \
-        * \ \ \
-        * \ \ \ \
-        * \ \ \ \ \
-        * \ \ \ \ \ \
-        * \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-        * \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ but user feedback indicates it's better not to */ \
-       SCULPT_TOOL_SMOOTH, \
-       SCULPT_TOOL_MASK) == 0)
+        /* These brushes could handle dynamic topology, \ \
+         * but user feedback indicates it's better not to */ \
+        SCULPT_TOOL_SMOOTH, \
+        SCULPT_TOOL_MASK) == 0)
 
 #define SCULPT_TOOL_HAS_TOPOLOGY_RAKE(t) \
   (ELEM(t, /* These brushes, as currently coded, cannot support topology rake. */ \

@@ -50,8 +50,6 @@ struct GPUVertFormat;
 /* used to expand VBOs. Size has a big impact in the speed */
 #define GPENCIL_VBO_BLOCK_SIZE 128
 
-#define GP_IS_CAMERAVIEW ((rv3d != NULL) && (rv3d->persp == RV3D_CAMOB && v3d->camera))
-
 #define GP_MAX_MASKBITS 256
 
 /* UBO structure. Watch out for padding. Must match GLSL declaration. */
@@ -293,6 +291,8 @@ typedef struct GPENCIL_PrivateData {
   int cfra;
   /* If we are rendering for final render (F12). */
   bool is_render;
+  /* If we are in viewport display (used for VFX). */
+  bool is_viewport;
   /* True in selection and auto_depth drawing */
   bool draw_depth_only;
   /* Is shading set to wireframe. */

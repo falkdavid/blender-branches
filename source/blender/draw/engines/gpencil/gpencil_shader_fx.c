@@ -36,7 +36,7 @@
 #include "gpencil_engine.h"
 
 /* verify if this fx is active */
-static bool effect_is_active(bGPdata *gpd, ShaderFxData *fx, bool is_render)
+static bool effect_is_active(bGPdata *gpd, ShaderFxData *fx, bool is_viewport)
 {
   if (fx == NULL) {
     return false;
@@ -47,12 +47,12 @@ static bool effect_is_active(bGPdata *gpd, ShaderFxData *fx, bool is_render)
   }
 
   bool is_edit = GPENCIL_ANY_EDIT_MODE(gpd);
-  if (((fx->mode & eShaderFxMode_Editmode) == 0) && (is_edit) && (!is_render)) {
+  if (((fx->mode & eShaderFxMode_Editmode) == 0) && (is_edit) && (is_viewport)) {
     return false;
   }
 
-  if (((fx->mode & eShaderFxMode_Realtime) && (is_render == false)) ||
-      ((fx->mode & eShaderFxMode_Render) && (is_render == true))) {
+  if (((fx->mode & eShaderFxMode_Realtime) && (is_viewport == true)) ||
+      ((fx->mode & eShaderFxMode_Render) && (is_viewport == false))) {
     return true;
   }
 
@@ -95,7 +95,13 @@ static DRWShadingGroup *gpencil_vfx_pass_create(const char *name,
 
 static void gpencil_vfx_blur(BlurShaderFxData *fx, Object *ob, gpIterVfxData *iter)
 {
+  if (fx->radius[0] == 0.0f && fx->radius[1] == 0.0f) {
+    return;
+  }
+
   DRWShadingGroup *grp;
+  const float s = sin(fx->rotation);
+  const float c = cos(fx->rotation);
 
   float winmat[4][4], persmat[4][4];
   float blur_size[2] = {fx->radius[0], fx->radius[1]};
@@ -120,15 +126,19 @@ static void gpencil_vfx_blur(BlurShaderFxData *fx, Object *ob, gpIterVfxData *it
   GPUShader *sh = GPENCIL_shader_fx_blur_get();
 
   DRWState state = DRW_STATE_WRITE_COLOR;
-  grp = gpencil_vfx_pass_create("Fx Blur H", state, iter, sh);
-  DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){blur_size[0], 0.0f});
-  DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, blur_size[0])));
-  DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
-
-  grp = gpencil_vfx_pass_create("Fx Blur V", state, iter, sh);
-  DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){0.0f, blur_size[1]});
-  DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, blur_size[1])));
-  DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
+  if (blur_size[0] > 0.0f) {
+    grp = gpencil_vfx_pass_create("Fx Blur H", state, iter, sh);
+    DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){blur_size[0] * c, blur_size[0] * s});
+    DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, blur_size[0])));
+    DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
+  }
+  if (blur_size[1] > 0.0f) {
+    grp = gpencil_vfx_pass_create("Fx Blur V", state, iter, sh);
+    DRW_shgroup_uniform_vec2_copy(
+        grp, "offset", (float[2]){0.0f - blur_size[1] * s, blur_size[1] * c});
+    DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, blur_size[1])));
+    DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
+  }
 }
 
 static void gpencil_vfx_colorize(ColorizeShaderFxData *fx, Object *UNUSED(ob), gpIterVfxData *iter)
@@ -405,6 +415,8 @@ static void gpencil_vfx_shadow(ShadowShaderFxData *fx, Object *ob, gpIterVfxData
 static void gpencil_vfx_glow(GlowShaderFxData *fx, Object *UNUSED(ob), gpIterVfxData *iter)
 {
   DRWShadingGroup *grp;
+  const float s = sin(fx->rotation);
+  const float c = cos(fx->rotation);
 
   GPUShader *sh = GPENCIL_shader_fx_glow_get();
 
@@ -421,7 +433,7 @@ static void gpencil_vfx_glow(GlowShaderFxData *fx, Object *UNUSED(ob), gpIterVfx
 
   DRWState state = DRW_STATE_WRITE_COLOR;
   grp = gpencil_vfx_pass_create("Fx Glow H", state, iter, sh);
-  DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){fx->blur[0], 0.0f});
+  DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){fx->blur[0] * c, fx->blur[0] * s});
   DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, fx->blur[0])));
   DRW_shgroup_uniform_vec3_copy(grp, "threshold", ref_col);
   DRW_shgroup_uniform_vec3_copy(grp, "glowColor", fx->glow_color);
@@ -432,7 +444,8 @@ static void gpencil_vfx_glow(GlowShaderFxData *fx, Object *UNUSED(ob), gpIterVfx
 
   state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL;
   grp = gpencil_vfx_pass_create("Fx Glow V", state, iter, sh);
-  DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){0.0f, fx->blur[0]});
+  DRW_shgroup_uniform_vec2_copy(
+      grp, "offset", (float[2]){0.0f - fx->blur[1] * s, fx->blur[1] * c});
   DRW_shgroup_uniform_vec3_copy(grp, "threshold", ref_col);
   DRW_shgroup_uniform_vec3_copy(grp, "glowColor", (float[3]){1.0f, 1.0f, 1.0f});
   DRW_shgroup_uniform_bool_copy(grp, "useAlphaMode", (fx->flag & FX_GLOW_USE_ALPHA) != 0);
@@ -562,7 +575,7 @@ void gpencil_vfx_cache_populate(GPENCIL_Data *vedata, Object *ob, GPENCIL_tObjec
   };
 
   LISTBASE_FOREACH (ShaderFxData *, fx, &ob->shader_fx) {
-    if (effect_is_active(gpd, fx, pd->is_render)) {
+    if (effect_is_active(gpd, fx, pd->is_viewport)) {
       switch (fx->type) {
         case eShaderFxType_Blur:
           gpencil_vfx_blur((BlurShaderFxData *)fx, ob, &iter);

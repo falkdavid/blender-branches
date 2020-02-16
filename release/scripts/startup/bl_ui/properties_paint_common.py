@@ -215,7 +215,7 @@ class ClonePanel(BrushPanel):
         settings = cls.paint_settings(context)
 
         mode = cls.get_brush_mode(context)
-        if mode in {'PAINT_TEXTURE', 'PAINT_2D'}:
+        if mode == 'PAINT_TEXTURE':
             brush = settings.brush
             return brush.image_tool == 'CLONE'
         return False
@@ -1122,7 +1122,7 @@ def brush_basic_gpencil_weight_settings(layout, _context, brush, *, compact=Fals
     row.prop(brush, "strength", slider=True)
     row.prop(brush, "use_pressure_strength", text="")
 
-    layout.prop(gp_settings, "weight", slider=True)
+    layout.prop(brush, "weight", slider=True)
 
 
 def brush_basic_gpencil_vertex_settings(layout, _context, brush, *, compact=False):
