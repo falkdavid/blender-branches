@@ -1791,7 +1791,7 @@ static void gp_init_colors(tGPsdata *p)
   else {
     gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, p->material);
   }
-  gpd->runtime.brush_size = brush->size;
+  gpd->runtime.sbuffer_brush = brush;
 }
 
 /* (re)init new painting data */
