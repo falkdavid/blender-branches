@@ -4402,6 +4402,48 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   return perimeter_points;
 }
 
+static void gpencil_copy_point(bGPDspoint *pt_to, bGPDspoint *pt_from)
+{
+  copy_v3_v3(&pt_to->x, &pt_from->x);
+  pt_to->pressure = pt_from->pressure;
+  pt_to->strength = pt_from->strength;
+  pt_to->time = pt_from->time;
+  pt_to->flag = pt_from->flag;
+  copy_v4_v4(&pt_to->vert_color, &pt_from->vert_color);
+}
+
+void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
+{
+  /* Assumes B is entirely inside A, no special checks */
+
+  /* first A (all B) first B (all A) */
+  int num_old_points_a = gps_A->totpoints;
+  int num_points = gps_A->totpoints + gps_B->totpoints + 2;
+
+  bGPDspoint *old_points_a = MEM_dupallocN(gps_A->points);
+
+  gps_A->points = MEM_recallocN(gps_A->points, sizeof(bGPDspoint) * num_points);
+  gps_A->totpoints = num_points;
+  
+  int i = 0, j;
+  gpencil_copy_point(&gps_A->points[i], &old_points_a[0]);
+  i++;
+  for(j = 0; j < gps_B->totpoints; j++) {
+    gpencil_copy_point(&gps_A->points[i], &gps_B->points[j]);
+    i++;
+  }
+  gpencil_copy_point(&gps_A->points[i], &gps_B->points[0]);
+  i++;
+  for(j = 0; j < num_old_points_a; j++) {
+    gpencil_copy_point(&gps_A->points[i], &old_points_a[j]); 
+    i++;
+  }
+
+  MEM_freeN(old_points_a);
+
+  BKE_gpencil_stroke_geometry_update(gps_A);
+}
+
 /* -------------------------------------------------------------------- */
 /** \name Iterators
  *
@@ -4678,42 +4720,5 @@ void BKE_gpencil_update_layer_parent(const Depsgraph *depsgraph, Object *ob)
       }
     }
   }
-}
-
-static void gpencil_copy_point(bGPDspoint *pt_to, bGPDspoint *pt_from)
-{
-  copy_v3_v3(&pt_to->x, &pt_from->x);
-  pt_to->pressure = pt_from->pressure;
-  pt_to->strength = pt_from->strength;
-  pt_to->time = pt_from->time;
-  pt_to->flag = pt_from->flag;
-  copy_v4_v4(pt_to->vert_color, pt_from->vert_color);
-}
-
-void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
-{
-  /* Assumes B is entirely inside A, no special checks */
-
-  /* first A (all B) first B (all A) */
-  int num_points = gps_A->totpoints + gps_B->totpoints + 2;
-
-  bGPDspoint *old_points_a = MEM_dupallocN(gps_A->points);
-  bGPDspoint *old_points_b = MEM_dupallocN(gps_B->points);
-
-  bGPDspoint *new_points = MEM_reallocN(gps_A->points, num_points);
-  
-  int i = 0, j;
-  gpencil_copy_point(&new_points[i], &old_points_a[0]);
-  i++;
-  for(j = 0; j < gps_B->totpoints; j++, i++) {
-    gpencil_copy_point(&new_points[i], &old_points_b[j]);
-  }
-  gpencil_copy_point(&new_points[i], &old_points_b[0]);
-  i++;
-  for(j = 0; j < gps_A->totpoints; j++, i++) {
-    gpencil_copy_point(&new_points[i], &old_points_a[j]);
-  }
-
-  BKE_gpencil_stroke_geometry_update(gps_A);
 }
 /** \} */
