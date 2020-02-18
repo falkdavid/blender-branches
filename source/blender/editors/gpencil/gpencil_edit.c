@@ -4983,14 +4983,6 @@ static int gp_stroke_difference_exec(bContext *C)
   ListBase unselected_strokes = {NULL, NULL};
 
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (ED_gpencil_stroke_can_use(C, gps) == false) {
-      continue;
-    }
-
-    if (ED_gpencil_stroke_color_use(ob, gpl, gps) == false) {
-      continue;
-    }
-
     if (gps->flag & GP_STROKE_SELECT) {
       BLI_addtail(&selected_strokes, gps);
     }
@@ -5000,35 +4992,13 @@ static int gp_stroke_difference_exec(bContext *C)
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
 
-  printf("Sel: %d, unsel: %d\n", BLI_listbase_count(&selected_strokes), BLI_listbase_count(&unselected_strokes));
-
   bool changed = false;
   LISTBASE_FOREACH (bGPDstroke *, gps_B, &selected_strokes) {
     LISTBASE_FOREACH (bGPDstroke *, gps_A, &unselected_strokes) {
-      printf("num_verts B: %d, num_verts A: %d\n", gps_B->totpoints, gps_A->totpoints);
       BKE_gpencil_stroke_difference(gps_A, gps_B);
       changed = true;
     }
   }
-
-  // /* Go through each editable selected stroke */
-  // bGPDstroke *strokes[2];
-  // int i = 0;
-  // GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-  //   if (gps->flag & GP_STROKE_SELECT) {
-  //     GP_EDITABLE_STROKES_BEGIN (gpstroke_iter2, C, gpl, gps) {
-  //     printf("num_verts: %d\n", gps->totpoints);
-  //     strokes[i] = gps;
-  //     i++;
-  //     if (i == 2) {
-  //       BKE_gpencil_stroke_difference(strokes[0], strokes[1]);
-  //       BKE_gpencil_free_stroke(strokes[1]);
-  //       BLI_freelinkN(&gpf_->strokes, strokes[1]);
-  //       break;
-  //     }
-  //   }
-  // }
-  // GP_EDITABLE_STROKES_END(gpstroke_iter);
 
   /* notifiers */
   if (changed) {
