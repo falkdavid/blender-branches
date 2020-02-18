@@ -134,8 +134,7 @@ static void gpencil_vfx_blur(BlurShaderFxData *fx, Object *ob, gpIterVfxData *it
   }
   if (blur_size[1] > 0.0f) {
     grp = gpencil_vfx_pass_create("Fx Blur V", state, iter, sh);
-    DRW_shgroup_uniform_vec2_copy(
-        grp, "offset", (float[2]){0.0f - blur_size[1] * s, blur_size[1] * c});
+    DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){-blur_size[1] * s, blur_size[1] * c});
     DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, blur_size[1])));
     DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
   }
@@ -414,6 +413,7 @@ static void gpencil_vfx_shadow(ShadowShaderFxData *fx, Object *ob, gpIterVfxData
 
 static void gpencil_vfx_glow(GlowShaderFxData *fx, Object *UNUSED(ob), gpIterVfxData *iter)
 {
+  const bool use_glow_under = (fx->flag & FX_GLOW_USE_ALPHA) != 0;
   DRWShadingGroup *grp;
   const float s = sin(fx->rotation);
   const float c = cos(fx->rotation);
@@ -436,19 +436,43 @@ static void gpencil_vfx_glow(GlowShaderFxData *fx, Object *UNUSED(ob), gpIterVfx
   DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){fx->blur[0] * c, fx->blur[0] * s});
   DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, fx->blur[0])));
   DRW_shgroup_uniform_vec3_copy(grp, "threshold", ref_col);
-  DRW_shgroup_uniform_vec3_copy(grp, "glowColor", fx->glow_color);
-  DRW_shgroup_uniform_bool_copy(grp, "useAlphaMode", false);
+  DRW_shgroup_uniform_vec4_copy(grp, "glowColor", fx->glow_color);
+  DRW_shgroup_uniform_bool_copy(grp, "glowUnder", use_glow_under);
+  DRW_shgroup_uniform_bool_copy(grp, "firstPass", true);
   DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
 
-  ref_col[0] = -1.0f;
+  state = DRW_STATE_WRITE_COLOR;
+  /* Blending: Force blending. */
+  switch (fx->blend_mode) {
+    case eGplBlendMode_Regular:
+      state |= DRW_STATE_BLEND_ALPHA_PREMUL;
+      break;
+    case eGplBlendMode_Add:
+      state |= DRW_STATE_BLEND_ADD_FULL;
+      break;
+    case eGplBlendMode_Subtract:
+      state |= DRW_STATE_BLEND_SUB;
+      break;
+    case eGplBlendMode_Multiply:
+    case eGplBlendMode_Divide:
+      state |= DRW_STATE_BLEND_MUL;
+      break;
+  }
 
-  state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL;
+  /* Small Hack: We ask for RGBA16F buffer if using use_glow_under to store original
+   * revealage in alpha channel. */
+  if (fx->blend_mode == eGplBlendMode_Subtract || use_glow_under) {
+    /* For this effect to propagate, we need a signed floating point buffer. */
+    iter->pd->use_signed_fb = true;
+  }
+
   grp = gpencil_vfx_pass_create("Fx Glow V", state, iter, sh);
-  DRW_shgroup_uniform_vec2_copy(
-      grp, "offset", (float[2]){0.0f - fx->blur[1] * s, fx->blur[1] * c});
-  DRW_shgroup_uniform_vec3_copy(grp, "threshold", ref_col);
-  DRW_shgroup_uniform_vec3_copy(grp, "glowColor", (float[3]){1.0f, 1.0f, 1.0f});
-  DRW_shgroup_uniform_bool_copy(grp, "useAlphaMode", (fx->flag & FX_GLOW_USE_ALPHA) != 0);
+  DRW_shgroup_uniform_vec2_copy(grp, "offset", (float[2]){-fx->blur[1] * s, fx->blur[1] * c});
+  DRW_shgroup_uniform_int_copy(grp, "sampCount", max_ii(1, min_ii(fx->samples, fx->blur[0])));
+  DRW_shgroup_uniform_vec3_copy(grp, "threshold", (float[3]){-1.0f, -1.0f, -1.0f});
+  DRW_shgroup_uniform_vec4_copy(grp, "glowColor", (float[4]){1.0f, 1.0f, 1.0f, fx->glow_color[3]});
+  DRW_shgroup_uniform_bool_copy(grp, "firstPass", false);
+  DRW_shgroup_uniform_int_copy(grp, "blendMode", fx->blend_mode);
   DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
 }
 

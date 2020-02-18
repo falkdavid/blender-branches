@@ -142,11 +142,13 @@ void main()
 
 #elif defined(GLOW)
 
-uniform vec3 glowColor;
+uniform vec4 glowColor;
 uniform vec2 offset;
 uniform int sampCount;
 uniform vec3 threshold;
-uniform bool useAlphaMode;
+uniform bool firstPass;
+uniform bool glowUnder;
+uniform int blendMode;
 
 void main()
 {
@@ -154,9 +156,7 @@ void main()
   vec2 ofs = offset * pixel_size;
 
   fragColor = vec4(0.0);
-
-  /* In first pass we copy the reveal buffer. This let us do the alpha under if needed. */
-  fragRevealage = texture(revealBuf, uvcoordsvar.xy);
+  fragRevealage = vec4(0.0);
 
   float weight_accum = 0.0;
   for (int i = -sampCount; i <= sampCount; i++) {
@@ -165,6 +165,7 @@ void main()
     weight_accum += weight;
     vec2 uv = uvcoordsvar.xy + ofs * x;
     vec3 col = texture(colorBuf, uv).rgb;
+    vec3 rev = texture(revealBuf, uv).rgb;
     if (threshold.x > -1.0) {
       if (threshold.y > -1.0) {
         if (all(lessThan(abs(col - threshold), vec3(0.05)))) {
@@ -178,18 +179,32 @@ void main()
       }
     }
     fragColor.rgb += col * weight;
+    fragRevealage.rgb += (1.0 - rev) * weight;
   }
 
-  fragColor *= glowColor.rgbb / weight_accum;
+  if (weight_accum > 0.0) {
+    fragColor *= glowColor.rgbb / weight_accum;
+    fragRevealage = fragRevealage / weight_accum;
+  }
+  fragRevealage = 1.0 - fragRevealage;
 
-  if (useAlphaMode) {
-    /* Equivalent to alpha under. */
-    fragColor *= fragRevealage;
+  if (glowUnder) {
+    if (firstPass) {
+      /* In first pass we copy the revealage buffer in the alpha channel.
+       * This let us do the alpha under in second pass. */
+      vec3 original_revealage = texture(revealBuf, uvcoordsvar.xy).rgb;
+      fragRevealage.a = clamp(dot(original_revealage.rgb, vec3(0.333334)), 0.0, 1.0);
+    }
+    else {
+      /* Recover original revealage. */
+      fragRevealage.a = texture(revealBuf, uvcoordsvar.xy).a;
+    }
   }
 
-  if (threshold.x == -1.0) {
-    /* Blend Mode is additive in 2nd pass. Don't modify revealage. */
-    fragRevealage = vec4(0.0);
+  if (!firstPass) {
+    fragColor.a = clamp(1.0 - dot(fragRevealage.rgb, vec3(0.333334)), 0.0, 1.0);
+    fragRevealage.a *= glowColor.a;
+    blend_mode_output(blendMode, fragColor, fragRevealage.a, fragColor, fragRevealage);
   }
 }
 
