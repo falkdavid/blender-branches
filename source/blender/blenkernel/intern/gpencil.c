@@ -4026,7 +4026,7 @@ static void free_perimeter_list(tPerimeterPointList *list)
 }
 
 /* Helper: get 3d point into proj space */
-static void gpencil_point_to_proj_space(const float mat[4][4], const float p[3], float r[4])
+static void gpencil_point3d_to_proj_space(const float mat[4][4], const float p[3], float r[4])
 {
   copy_v3_v3(r, p);
   r[3] = 1.0f;
@@ -4209,10 +4209,10 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   float last_pt_vs[4];
   float first_next_pt_vs[4];
   float last_prev_pt_vs[4];
-  gpencil_point_to_proj_space(proj_mat, &first_pt->x, first_pt_vs);
-  gpencil_point_to_proj_space(proj_mat, &last_pt->x, last_pt_vs);
-  gpencil_point_to_proj_space(proj_mat, &first_next_pt->x, first_next_pt_vs);
-  gpencil_point_to_proj_space(proj_mat, &last_prev_pt->x, last_prev_pt_vs);
+  gpencil_point3d_to_proj_space(proj_mat, &first_pt->x, first_pt_vs);
+  gpencil_point3d_to_proj_space(proj_mat, &last_pt->x, last_pt_vs);
+  gpencil_point3d_to_proj_space(proj_mat, &first_next_pt->x, first_next_pt_vs);
+  gpencil_point3d_to_proj_space(proj_mat, &last_prev_pt->x, last_prev_pt_vs);
 
   /* edgecase if single point */
   if (gps->totpoints == 1) {
@@ -4240,9 +4240,9 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
     bGPDspoint *prev = &gps->points[i - 1];
     bGPDspoint *next = &gps->points[i + 1];
 
-    gpencil_point_to_proj_space(proj_mat, &curr->x, curr_pt);
-    gpencil_point_to_proj_space(proj_mat, &next->x, next_pt);
-    gpencil_point_to_proj_space(proj_mat, &prev->x, prev_pt);
+    gpencil_point3d_to_proj_space(proj_mat, &curr->x, curr_pt);
+    gpencil_point3d_to_proj_space(proj_mat, &next->x, next_pt);
+    gpencil_point3d_to_proj_space(proj_mat, &prev->x, prev_pt);
 
     sub_v2_v2v2(vec_prev, curr_pt, prev_pt);
     sub_v2_v2v2(vec_next, next_pt, curr_pt);
@@ -4442,6 +4442,41 @@ void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
   MEM_freeN(old_points_a);
 
   BKE_gpencil_stroke_geometry_update(gps_A);
+}
+
+/* ----------------------------------------------------------------------------- */
+/* Stroke clipping */
+
+static float *get_stroke_points_proj_2d(bGPDstroke *gps, const float proj_mat[4][4])
+{
+  float* points_2d = MEM_callocN(sizeof(float[2]) * gps->totpoints, __func__);
+
+  float vec_tmp[4];
+  for (int i = 0; i < gps->totpoints; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    int idx = i * 2;
+    
+    gpencil_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
+    copy_v2_v2(&points_2d[idx], vec_tmp);
+  }
+
+  return points_2d;
+}
+
+static void get_optimal_sweep_direction( float r_dir[2])
+{
+
+}
+
+void BKE_gpencil_stroke_resolve_intersections(RegionView3D *rv3d, bGPDstroke *gps)
+{
+  /* Get C-subchains */
+
+  /* Identify minimal extreme ranges */
+  float *points_2d = get_stroke_points_proj_2d(gps, rv3d->viewmat);
+  
+
+  MEM_SAFE_FREE(points_2d);
 }
 
 /* -------------------------------------------------------------------- */
