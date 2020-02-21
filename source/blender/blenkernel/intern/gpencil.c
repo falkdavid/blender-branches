@@ -4447,36 +4447,167 @@ void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
 /* ----------------------------------------------------------------------------- */
 /* Stroke clipping */
 
-static float *get_stroke_points_proj_2d(bGPDstroke *gps, const float proj_mat[4][4])
+/**
+ * A subchain is defined as a set of consecutive vertices having all the same type,
+ * where the type of a vertex can be convex or concave depending on whether it is 
+ * left or right to the line that connects the vertex before and after.
+ */
+typedef struct tSubchain {
+  struct tSubchain *next, *prev;
+  int num_points;
+  int idx_start, idx_end;
+  float mer_start, mer_end;
+} tSubchain;
+
+typedef struct tSubchainList {
+  tSubchain *first, *last;
+  int num_chains;
+  float *points;
+} tSubchainList;
+
+static tSubchainList *init_subchain_list(float *points)
 {
-  float* points_2d = MEM_callocN(sizeof(float[2]) * gps->totpoints, __func__);
+  tSubchainList *new_list = MEM_callocN(sizeof(tSubchainList), __func__);
+  new_list->first = NULL;
+  new_list->last = NULL;
+  new_list->points = points;
+
+  return new_list;
+}
+
+static tSubchain *new_subchain(void)
+{
+  tSubchain *new_chain = MEM_callocN(sizeof(tSubchain), __func__);
+  new_chain->next = NULL;
+  new_chain->prev = NULL;
+
+  return new_chain;
+}
+
+static void free_subchain_list(tSubchainList *list)
+{
+  tSubchain *chain_next;
+  for (tSubchain *chain = list->first; chain; chain = chain_next) {
+    chain_next = chain->next;
+    MEM_SAFE_FREE(chain);
+  }
+
+  MEM_SAFE_FREE(list);
+}
+
+static void append_subchain_to_list(tSubchainList *list, tSubchain *chain)
+{
+  chain->next = NULL;
+  chain->prev = list->last;
+
+  if (list->last) {
+    list->last->next = chain;
+  }
+  if (list->first == NULL) {
+    list->first = chain;
+  }
+
+  list->last = chain;
+  list->num_chains++;
+}
+
+/* Helper: check if point p is to the left of the line from prev to next */
+static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
+{
+  float a = ((next[0] - prev[0])*(p[1] - prev[1]) - (next[1] - prev[1])*(p[0] - prev[0]));
+  if (a > 0.0f) {
+    return 1; 
+  }
+  else if (a < 0.0f) {
+    return -1; 
+  }
+  return 0; // point is on the line
+}
+
+static void calc_subchain_mer(tSubchain *chain)
+{
+
+}
+
+static float *project_stroke_points_mat(const bGPDstroke *gps, const float proj_mat[4][4])
+{
+  float* points = MEM_callocN(sizeof(float[3]) * gps->totpoints, __func__);
 
   float vec_tmp[4];
   for (int i = 0; i < gps->totpoints; i++) {
     bGPDspoint *pt = &gps->points[i];
-    int idx = i * 2;
-    
     gpencil_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
-    copy_v2_v2(&points_2d[idx], vec_tmp);
+    copy_v3_v3(&points[i*3], vec_tmp);
   }
 
-  return points_2d;
+  return points;
 }
 
-static void get_optimal_sweep_direction( float r_dir[2])
+static float *rotate_stroke_points_by_angle(float *points, int num_points, float angle)
+{
+  float* rotated_points = MEM_callocN(sizeof(float[3]) * num_points, __func__);
+  for (int i = 0; i < num_points; i += 3) {
+    rotate_v2_v2fl(&rotated_points[i], &points[i], angle);
+  }
+
+  return rotated_points;
+}
+
+static tSubchainList *get_stroke_subchainlist(float *points, int num_points)
+{
+  if (num_points < 4) {
+    return NULL;
+  }
+
+  tSubchainList *r_subchain_list = init_subchain_list(points);
+  tSubchain *first_chain = init_subchain();
+  append_subchain_to_list(r_subchain_list, first_chain);
+
+  /* get the type of the first three points */
+  float *prev = &points[0];
+  float *next = &points[1];
+  float *p = &points[2];
+  int prev_type = stroke_point_is_convex(prev, next, p);
+  tSubchain *current = first_chain;
+
+  for (int i = 2; i < num_points - 1; i++) {
+    float *prev = &points[(i-1)*3];
+    float *next = &points[(i+1)*3];
+    float *p = &points[i*3];
+
+    int type = stroke_point_is_convex(prev, next, p);
+    if (type != 0 && type ^ prev_type) { //type has swtiched 
+      tSubchain *next_chain = init_subchain();
+      next_chain->idx_start = i;
+      append_subchain_to_list(r_subchain_list, next_chain);
+
+      current->idx_end = i;
+      current->num_points = i - current->idx_start + 1;
+      calc_subchain_mer(current);
+
+      current = next_chain;
+    }
+    prev_type = type;
+  }
+
+  return r_subchain_list;
+}
+
+static void get_optimal_sweep_direction(float r_dir[2])
 {
 
 }
 
-void BKE_gpencil_stroke_resolve_intersections(RegionView3D *rv3d, bGPDstroke *gps)
+void BKE_gpencil_stroke_resolve_intersections(const RegionView3D *rv3d, bGPDstroke *gps)
 {
-  /* Get C-subchains */
-
+  /* Get subchains */
+  float *points = project_stroke_points_mat(gps, rv3d->viewmat);
+  tSubchainList *chain_list = get_stroke_subchainlist(points, gps->totpoints);
+  printf("Got %d subchains!\n", chain_list->num_chains);
   /* Identify minimal extreme ranges */
-  float *points_2d = get_stroke_points_proj_2d(gps, rv3d->viewmat);
   
-
-  MEM_SAFE_FREE(points_2d);
+  free_subchain_list(chain_list);
+  MEM_SAFE_FREE(points);
 }
 
 /* -------------------------------------------------------------------- */
