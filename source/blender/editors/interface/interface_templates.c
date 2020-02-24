@@ -5385,6 +5385,21 @@ void uiTemplateColorPicker(uiLayout *layout,
   }
 }
 
+static void ui_template_palette_menu(bContext *C, uiLayout *layout, void *but_p)
+{
+  uiLayout *row;
+
+  uiItemL(layout, IFACE_("Sort by:"), ICON_NONE);
+  row = uiLayoutRow(layout, false);
+  uiItemEnumO_value(row, IFACE_("Hue"), ICON_NONE, "PALETTE_OT_sort", "type", 1);
+  row = uiLayoutRow(layout, false);
+  uiItemEnumO_value(row, IFACE_("Saturation"), ICON_NONE, "PALETTE_OT_sort", "type", 2);
+  row = uiLayoutRow(layout, false);
+  uiItemEnumO_value(row, IFACE_("Value"), ICON_NONE, "PALETTE_OT_sort", "type", 3);
+  row = uiLayoutRow(layout, false);
+  uiItemEnumO_value(row, IFACE_("Luminance"), ICON_NONE, "PALETTE_OT_sort", "type", 4);
+}
+
 void uiTemplatePalette(uiLayout *layout,
                        PointerRNA *ptr,
                        const char *propname,
@@ -5466,31 +5481,9 @@ void uiTemplatePalette(uiLayout *layout,
     UI_but_operator_ptr_get(but);
     RNA_enum_set(but->opptr, "type", 1);
 
-    but = uiDefIconButO(block,
-                        UI_BTYPE_BUT,
-                        "PALETTE_OT_sort",
-                        WM_OP_INVOKE_DEFAULT,
-                        ICON_SORTSIZE,
-                        0,
-                        0,
-                        UI_UNIT_X,
-                        UI_UNIT_Y,
-                        NULL);
-    UI_but_operator_ptr_get(but);
-    RNA_enum_set(but->opptr, "type", -1);
-
-    but = uiDefIconButO(block,
-                        UI_BTYPE_BUT,
-                        "PALETTE_OT_sort",
-                        WM_OP_INVOKE_DEFAULT,
-                        ICON_SORT_DESC,
-                        0,
-                        0,
-                        UI_UNIT_X,
-                        UI_UNIT_Y,
-                        NULL);
-    UI_but_operator_ptr_get(but);
-    RNA_enum_set(but->opptr, "type", 1);
+    /* Menu. */
+    uiDefIconMenuBut(
+        block, ui_template_palette_menu, NULL, ICON_SORTSIZE, 0, 0, UI_UNIT_X, UI_UNIT_Y, "");
   }
 
   col = uiLayoutColumn(layout, true);
@@ -6926,6 +6919,7 @@ static char *progress_tooltip_func(bContext *UNUSED(C), void *argN, const char *
 
 void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 {
+  Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   ScrArea *sa = CTX_wm_area(C);
   uiBlock *block;
@@ -6939,7 +6933,7 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 
   Scene *scene;
   /* another scene can be rendering too, for example via compositor */
-  for (scene = CTX_data_main(C)->scenes.first; scene; scene = scene->id.next) {
+  for (scene = bmain->scenes.first; scene; scene = scene->id.next) {
     if (WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY)) {
       handle_event = B_STOPOTHER;
       icon = ICON_NONE;

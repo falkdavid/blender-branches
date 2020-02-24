@@ -58,6 +58,11 @@
 
 CCL_NAMESPACE_BEGIN
 
+static_assert(Object::MAX_MOTION_STEPS <= RTC_MAX_TIME_STEP_COUNT,
+              "Object and Embree max motion steps inconsistent");
+static_assert(Object::MAX_MOTION_STEPS == Geometry::MAX_MOTION_STEPS,
+              "Object and Geometry max motion steps inconsistent");
+
 #  define IS_HAIR(x) (x & 1)
 
 /* This gets called by Embree at every valid ray/object intersection.
@@ -557,7 +562,10 @@ void BVHEmbree::add_instance(Object *ob, int i)
     instance_bvh->top_level = this;
   }
 
-  const size_t num_motion_steps = ob->use_motion() ? ob->motion.size() : 1;
+  const size_t num_object_motion_steps = ob->use_motion() ? ob->motion.size() : 1;
+  const size_t num_motion_steps = min(num_object_motion_steps, RTC_MAX_TIME_STEP_COUNT);
+  assert(num_object_motion_steps <= RTC_MAX_TIME_STEP_COUNT);
+
   RTCGeometry geom_id = rtcNewGeometry(rtc_shared_device, RTC_GEOMETRY_TYPE_INSTANCE);
   rtcSetGeometryInstancedScene(geom_id, instance_bvh->scene);
   rtcSetGeometryTimeStepCount(geom_id, num_motion_steps);
@@ -600,17 +608,16 @@ void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, int i)
 {
   size_t prim_offset = pack.prim_index.size();
   const Attribute *attr_mP = NULL;
-  size_t num_motion_steps = 1;
+  size_t num_geometry_motion_steps = 1;
   if (mesh->has_motion_blur()) {
     attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
     if (attr_mP) {
-      num_motion_steps = mesh->motion_steps;
-      if (num_motion_steps > RTC_MAX_TIME_STEP_COUNT) {
-        assert(0);
-        num_motion_steps = RTC_MAX_TIME_STEP_COUNT;
-      }
+      num_geometry_motion_steps = mesh->motion_steps;
     }
   }
+
+  const size_t num_motion_steps = min(num_geometry_motion_steps, RTC_MAX_TIME_STEP_COUNT);
+  assert(num_geometry_motion_steps <= RTC_MAX_TIME_STEP_COUNT);
 
   const size_t num_triangles = mesh->num_triangles();
   RTCGeometry geom_id = rtcNewGeometry(rtc_shared_device, RTC_GEOMETRY_TYPE_TRIANGLE);
@@ -720,6 +727,11 @@ void BVHEmbree::update_curve_vertex_buffer(RTCGeometry geom_id, const Hair *hair
     num_keys += c.num_keys;
   }
 
+  /* Catmull-Rom splines need extra CVs at the beginning and end of each curve. */
+  if (use_curves) {
+    num_keys += num_curves * 2;
+  }
+
   /* Copy the CV data to Embree */
   const int t_mid = (num_motion_steps - 1) / 2;
   const float *curve_radius = &hair->curve_radius[0];
@@ -735,37 +747,23 @@ void BVHEmbree::update_curve_vertex_buffer(RTCGeometry geom_id, const Hair *hair
 
     float4 *rtc_verts = (float4 *)rtcSetNewGeometryBuffer(
         geom_id, RTC_BUFFER_TYPE_VERTEX, t, RTC_FORMAT_FLOAT4, sizeof(float) * 4, num_keys);
-    float4 *rtc_tangents = NULL;
-    if (use_curves) {
-      rtc_tangents = (float4 *)rtcSetNewGeometryBuffer(
-          geom_id, RTC_BUFFER_TYPE_TANGENT, t, RTC_FORMAT_FLOAT4, sizeof(float) * 4, num_keys);
-      assert(rtc_tangents);
-    }
+
     assert(rtc_verts);
     if (rtc_verts) {
-      if (use_curves && rtc_tangents) {
+      if (use_curves) {
         const size_t num_curves = hair->num_curves();
         for (size_t j = 0; j < num_curves; ++j) {
           Hair::Curve c = hair->get_curve(j);
           int fk = c.first_key;
-          rtc_verts[0] = float3_to_float4(verts[fk]);
-          rtc_verts[0].w = curve_radius[fk];
-          rtc_tangents[0] = float3_to_float4(verts[fk + 1] - verts[fk]);
-          rtc_tangents[0].w = curve_radius[fk + 1] - curve_radius[fk];
-          ++fk;
           int k = 1;
-          for (; k < c.num_segments(); ++k, ++fk) {
+          for (; k < c.num_keys + 1; ++k, ++fk) {
             rtc_verts[k] = float3_to_float4(verts[fk]);
             rtc_verts[k].w = curve_radius[fk];
-            rtc_tangents[k] = float3_to_float4((verts[fk + 1] - verts[fk - 1]) * 0.5f);
-            rtc_tangents[k].w = (curve_radius[fk + 1] - curve_radius[fk - 1]) * 0.5f;
           }
-          rtc_verts[k] = float3_to_float4(verts[fk]);
-          rtc_verts[k].w = curve_radius[fk];
-          rtc_tangents[k] = float3_to_float4(verts[fk] - verts[fk - 1]);
-          rtc_tangents[k].w = curve_radius[fk] - curve_radius[fk - 1];
-          rtc_verts += c.num_keys;
-          rtc_tangents += c.num_keys;
+          /* Duplicate Embree's Catmull-Rom spline CVs at the start and end of each curve. */
+          rtc_verts[0] = rtc_verts[1];
+          rtc_verts[k] = rtc_verts[k - 1];
+          rtc_verts += c.num_keys + 2;
         }
       }
       else {
@@ -782,13 +780,16 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
 {
   size_t prim_offset = pack.prim_index.size();
   const Attribute *attr_mP = NULL;
-  size_t num_motion_steps = 1;
+  size_t num_geometry_motion_steps = 1;
   if (hair->has_motion_blur()) {
     attr_mP = hair->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
     if (attr_mP) {
-      num_motion_steps = hair->motion_steps;
+      num_geometry_motion_steps = hair->motion_steps;
     }
   }
+
+  const size_t num_motion_steps = min(num_geometry_motion_steps, RTC_MAX_TIME_STEP_COUNT);
+  assert(num_geometry_motion_steps <= RTC_MAX_TIME_STEP_COUNT);
 
   const size_t num_curves = hair->num_curves();
   size_t num_segments = 0;
@@ -810,8 +811,8 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
 
   enum RTCGeometryType type = (!use_curves) ?
                                   RTC_GEOMETRY_TYPE_FLAT_LINEAR_CURVE :
-                                  (use_ribbons ? RTC_GEOMETRY_TYPE_FLAT_HERMITE_CURVE :
-                                                 RTC_GEOMETRY_TYPE_ROUND_HERMITE_CURVE);
+                                  (use_ribbons ? RTC_GEOMETRY_TYPE_FLAT_CATMULL_ROM_CURVE :
+                                                 RTC_GEOMETRY_TYPE_ROUND_CATMULL_ROM_CURVE);
 
   RTCGeometry geom_id = rtcNewGeometry(rtc_shared_device, type);
   rtcSetGeometryTessellationRate(geom_id, curve_subdivisions);
@@ -822,6 +823,10 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
     Hair::Curve c = hair->get_curve(j);
     for (size_t k = 0; k < c.num_segments(); ++k) {
       rtc_indices[rtc_index] = c.first_key + k;
+      if (use_curves) {
+        /* Room for extra CVs at Catmull-Rom splines. */
+        rtc_indices[rtc_index] += j * 2;
+      }
       /* Cycles specific data. */
       pack.prim_object[prim_object_size + rtc_index] = i;
       pack.prim_type[prim_type_size + rtc_index] = (PRIMITIVE_PACK_SEGMENT(

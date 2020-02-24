@@ -153,6 +153,8 @@ typedef struct tGPDprimitive {
   struct Scene *scene;
   /** current active gp object */
   struct Object *ob;
+  /** current evaluated gp object */
+  struct Object *ob_eval;
   /** area where painting originated */
   struct ScrArea *sa;
   /** region where painting originated */
@@ -164,7 +166,7 @@ typedef struct tGPDprimitive {
   /** current GP datablock */
   struct bGPdata *gpd;
   /** current material */
-  struct Material *mat;
+  struct Material *material;
   /** current brush */
   struct Brush *brush;
 

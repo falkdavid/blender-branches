@@ -164,6 +164,11 @@ static const EnumPropertyItem rna_enum_time_mode_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
+static const EnumPropertyItem gpencil_subdivision_type_items[] = {
+    {GP_SUBDIV_CATMULL, "CATMULL_CLARK", 0, "Catmull-Clark", ""},
+    {GP_SUBDIV_SIMPLE, "SIMPLE", 0, "Simple", ""},
+    {0, NULL, 0, NULL, NULL},
+};
 #endif
 
 #ifdef RNA_RUNTIME
@@ -397,7 +402,7 @@ static void rna_def_modifier_gpencilnoise(BlenderRNA *brna)
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_NoiseGpencilModifier_vgname_set");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
   RNA_def_property_range(prop, 0, 30.0);
   RNA_def_property_ui_text(prop, "Factor", "Amount of noise to apply");
@@ -518,7 +523,7 @@ static void rna_def_modifier_gpencilsmooth(BlenderRNA *brna)
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SmoothGpencilModifier_vgname_set");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
   RNA_def_property_range(prop, 0, 2);
   RNA_def_property_ui_text(prop, "Factor", "Amount of smooth to apply");
@@ -619,9 +624,10 @@ static void rna_def_modifier_gpencilsubdiv(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Level", "Number of subdivisions");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "simple", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_SUBDIV_SIMPLE);
-  RNA_def_property_ui_text(prop, "Simple", "The modifier only add control points");
+  prop = RNA_def_property(srna, "subdivision_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "type");
+  RNA_def_property_enum_items(prop, gpencil_subdivision_type_items);
+  RNA_def_property_ui_text(prop, "Subdivision Type", "Select type of subdivision algorithm");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   prop = RNA_def_property(srna, "pass_index", PROP_INT, PROP_NONE);
@@ -672,7 +678,7 @@ static void rna_def_modifier_gpencilsimplify(BlenderRNA *brna)
        "ADAPTIVE",
        ICON_IPO_EASE_IN_OUT,
        "Adaptive",
-       "Use a RDP algorithm to simplify the stroke"},
+       "Use a Ramer-Douglas-Peucker algorithm to simplify the stroke preserving main shape"},
       {GP_SIMPLIFY_SAMPLE,
        "SAMPLE",
        ICON_IPO_EASE_IN_OUT,
@@ -701,7 +707,7 @@ static void rna_def_modifier_gpencilsimplify(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Material", "Material name");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
   RNA_def_property_range(prop, 0, 100.0);
   RNA_def_property_ui_range(prop, 0, 100.0, 1.0f, 3);
@@ -966,9 +972,9 @@ static void rna_def_modifier_gpenciltint(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Color", "Color used for tinting");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
-  RNA_def_property_ui_range(prop, 0, 2.0, 0.1, 3);
+  RNA_def_property_ui_range(prop, 0, 2.0, 0.1, 2);
   RNA_def_property_ui_text(prop, "Factor", "Factor for mixing color");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
@@ -1196,10 +1202,10 @@ static void rna_def_modifier_gpencilopacity(BlenderRNA *brna)
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_OpacityGpencilModifier_vgname_set");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
-  RNA_def_property_ui_range(prop, 0, 2.0, 0.1, 3);
-  RNA_def_property_ui_text(prop, "Factor", "Factor of Opacity");
+  RNA_def_property_ui_range(prop, 0, 2.0, 0.1, 2);
+  RNA_def_property_ui_text(prop, "Opacity Factor", "Factor of Opacity");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   prop = RNA_def_property(srna, "pass_index", PROP_INT, PROP_NONE);
@@ -2031,11 +2037,6 @@ static void rna_def_modifier_gpencilvertexcolor(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Inverse Pass", "Inverse filter");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  prop = RNA_def_property(srna, "use_decay_color", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_VERTEXCOL_DECAY_COLOR);
-  RNA_def_property_ui_text(prop, "Decay", "The tinting decrease with the distance");
-  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
-
   prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
   RNA_def_property_range(prop, 0.0f, 1.0f);
@@ -2044,8 +2045,8 @@ static void rna_def_modifier_gpencilvertexcolor(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "radius", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_float_sdna(prop, NULL, "radius");
-  RNA_def_property_range(prop, 0, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0, 100, 100, 2);
+  RNA_def_property_range(prop, 1e-6f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 1, 3);
   RNA_def_property_ui_text(prop, "Radius", "Defines the maximum distance of the effect");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 

@@ -103,8 +103,6 @@ struct bGPdata *ED_annotation_data_get_active_direct(struct ID *screen_id,
 bool ED_gpencil_data_owner_is_annotation(struct PointerRNA *owner_ptr);
 
 /* 3D View */
-struct bGPdata *ED_gpencil_data_get_active_v3d(struct ViewLayer *view_layer, struct View3D *v3d);
-
 bool ED_gpencil_has_keyframe_v3d(struct Scene *scene, struct Object *ob, int cfra);
 
 /* ----------- Stroke Editing Utilities ---------------- */
@@ -280,7 +278,7 @@ struct tGPspoint *ED_gpencil_sbuffer_ensure(struct tGPspoint *buffer_array,
                                             int *buffer_size,
                                             int *buffer_used,
                                             const bool clear);
-void ED_gpencil_sbuffer_update_eval(struct Depsgraph *depsgraph, struct Object *ob);
+void ED_gpencil_sbuffer_update_eval(struct bGPdata *gpd, struct Object *ob_eval);
 
 /* Tag all scene grease pencil object to update. */
 void ED_gpencil_tag_scene_gpencil(struct Scene *scene);
@@ -295,7 +293,8 @@ void ED_gpencil_point_vertex_color_set(struct ToolSettings *ts,
 void ED_gpencil_sbuffer_vertex_color_set(struct Depsgraph *depsgraph,
                                          struct Object *ob,
                                          struct ToolSettings *ts,
-                                         struct Brush *brush);
+                                         struct Brush *brush,
+                                         struct Material *material);
 
 bool ED_gpencil_stroke_check_collision(struct GP_SpaceConversion *gsc,
                                        struct bGPDstroke *gps,

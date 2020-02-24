@@ -169,8 +169,29 @@ void BKE_brush_init_gpencil_settings(Brush *brush)
 /* add a new gp-brush */
 Brush *BKE_brush_add_gpencil(Main *bmain, ToolSettings *ts, const char *name, eObjectMode mode)
 {
+  Paint *paint = NULL;
   Brush *brush;
-  Paint *paint = &ts->gp_paint->paint;
+  switch (mode) {
+    case OB_MODE_PAINT_GPENCIL: {
+      paint = &ts->gp_paint->paint;
+      break;
+    }
+    case OB_MODE_SCULPT_GPENCIL: {
+      paint = &ts->gp_sculptpaint->paint;
+      break;
+    }
+    case OB_MODE_WEIGHT_GPENCIL: {
+      paint = &ts->gp_weightpaint->paint;
+      break;
+    }
+    case OB_MODE_VERTEX_GPENCIL: {
+      paint = &ts->gp_vertexpaint->paint;
+      break;
+    }
+    default:
+      paint = &ts->gp_paint->paint;
+  }
+
   brush = BKE_brush_add(bmain, name, mode);
 
   BKE_paint_brush_set(paint, brush);
@@ -1379,12 +1400,12 @@ void BKE_brush_sculpt_reset(Brush *br)
     case SCULPT_TOOL_FILL:
     case SCULPT_TOOL_SCRAPE:
     case SCULPT_TOOL_MULTIPLANE_SCRAPE:
-      br->add_col[0] = 1.0f;
-      br->add_col[1] = 0.05f;
-      br->add_col[2] = 0.01f;
-      br->sub_col[0] = 1.0f;
-      br->sub_col[1] = 0.05f;
-      br->sub_col[2] = 0.01f;
+      br->add_col[0] = 0.877f;
+      br->add_col[1] = 0.142f;
+      br->add_col[2] = 0.117f;
+      br->sub_col[0] = 0.877f;
+      br->sub_col[1] = 0.142f;
+      br->sub_col[2] = 0.117f;
       break;
 
     case SCULPT_TOOL_PINCH:
@@ -1395,6 +1416,7 @@ void BKE_brush_sculpt_reset(Brush *br)
     case SCULPT_TOOL_ROTATE:
     case SCULPT_TOOL_ELASTIC_DEFORM:
     case SCULPT_TOOL_POSE:
+    case SCULPT_TOOL_SLIDE_RELAX:
       br->add_col[0] = 1.0f;
       br->add_col[1] = 0.95f;
       br->add_col[2] = 0.005f;

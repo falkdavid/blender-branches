@@ -754,6 +754,54 @@ static int palettecolor_compare_svh(const void *a1, const void *a2)
   return 0;
 }
 
+static int palettecolor_compare_vhs(const void *a1, const void *a2)
+{
+  const tPaletteColorHSV *ps1 = a1, *ps2 = a2;
+
+  /* Value. */
+  if (1.0f - ps1->v > 1.0f - ps2->v) {
+    return 1;
+  }
+  else if (1.0f - ps1->v < 1.0f - ps2->v) {
+    return -1;
+  }
+
+  /* Hue */
+  if (ps1->h > ps2->h) {
+    return 1;
+  }
+  else if (ps1->h < ps2->h) {
+    return -1;
+  }
+
+  /* Saturation. */
+  if (ps1->s > ps2->s) {
+    return 1;
+  }
+  else if (ps1->s < ps2->s) {
+    return -1;
+  }
+
+  return 0;
+}
+
+static int palettecolor_compare_luminance(const void *a1, const void *a2)
+{
+  const tPaletteColorHSV *ps1 = a1, *ps2 = a2;
+
+  float lumi1 = (ps1->rgb[0] + ps1->rgb[1] + ps1->rgb[2]) / 3.0f;
+  float lumi2 = (ps2->rgb[0] + ps2->rgb[1] + ps2->rgb[2]) / 3.0f;
+
+  if (lumi1 > lumi2) {
+    return -1;
+  }
+  else if (lumi1 < lumi2) {
+    return 1;
+  }
+
+  return 0;
+}
+
 void BKE_palette_sort_hsv(tPaletteColorHSV *color_array, const int totcol)
 {
   /* Sort by Hue , Saturation and Value. */
@@ -766,7 +814,19 @@ void BKE_palette_sort_svh(tPaletteColorHSV *color_array, const int totcol)
   qsort(color_array, totcol, sizeof(tPaletteColorHSV), palettecolor_compare_svh);
 }
 
-bool BKE_palette_from_hash(Main *bmain, GHash *color_table, const char *name)
+void BKE_palette_sort_vhs(tPaletteColorHSV *color_array, const int totcol)
+{
+  /* Sort by Saturation, Value and Hue. */
+  qsort(color_array, totcol, sizeof(tPaletteColorHSV), palettecolor_compare_vhs);
+}
+
+void BKE_palette_sort_luminance(tPaletteColorHSV *color_array, const int totcol)
+{
+  /* Sort by Luminance (calculated with the average, enough for sorting). */
+  qsort(color_array, totcol, sizeof(tPaletteColorHSV), palettecolor_compare_luminance);
+}
+
+bool BKE_palette_from_hash(Main *bmain, GHash *color_table, const char *name, const bool linear)
 {
   tPaletteColorHSV *color_array = NULL;
   tPaletteColorHSV *col_elm = NULL;
@@ -809,6 +869,9 @@ bool BKE_palette_from_hash(Main *bmain, GHash *color_table, const char *name)
         PaletteColor *palcol = BKE_palette_color_add(palette);
         if (palcol) {
           copy_v3_v3(palcol->rgb, col_elm->rgb);
+          if (linear) {
+            linearrgb_to_srgb_v3_v3(palcol->rgb, palcol->rgb);
+          }
         }
       }
       done = true;

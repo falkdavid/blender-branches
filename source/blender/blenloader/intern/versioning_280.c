@@ -895,6 +895,10 @@ static void do_versions_local_collection_bits_set(LayerCollection *layer_collect
 
 static void do_version_curvemapping_flag_extend_extrapolate(CurveMapping *cumap)
 {
+  if (cumap == NULL) {
+    return;
+  }
+
 #define CUMA_EXTEND_EXTRAPOLATE_OLD 1
   for (int curve_map_index = 0; curve_map_index < 4; curve_map_index++) {
     CurveMap *cuma = &cumap->cm[curve_map_index];
@@ -1605,11 +1609,12 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
       BKE_paint_ensure_from_paintmode(scene, PAINT_MODE_WEIGHT_GPENCIL);
 
       /* Set default Draw brush. */
-      Paint *paint = &ts->gp_paint->paint;
-      BKE_paint_brush_set(paint, brush);
-      /* Enable cursor by default. */
-      paint->flags |= PAINT_SHOW_BRUSH;
-
+      if (brush != NULL) {
+        Paint *paint = &ts->gp_paint->paint;
+        BKE_paint_brush_set(paint, brush);
+        /* Enable cursor by default. */
+        paint->flags |= PAINT_SHOW_BRUSH;
+      }
       /* Ensure Palette by default. */
       BKE_gpencil_palette_ensure(bmain, scene);
     }
@@ -4472,9 +4477,18 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
         LISTBASE_FOREACH (GpencilModifierData *, md, &ob->greasepencil_modifiers) {
           const GpencilModifierTypeInfo *mti = BKE_gpencil_modifierType_getInfo(md->type);
           switch (mti->type) {
-            case eGpencilModifierTypeType_Gpencil: {
+            case eGpencilModifierType_Tint: {
               TintGpencilModifierData *mmd = (TintGpencilModifierData *)md;
               srgb_to_linearrgb_v3_v3(mmd->rgb, mmd->rgb);
+              break;
+            }
+            case eGpencilModifierType_Subdiv: {
+              const short simple = (1 << 0);
+              SubdivGpencilModifierData *mmd = (SubdivGpencilModifierData *)md;
+              if (mmd->flag & simple) {
+                mmd->flag &= ~simple;
+                mmd->type = GP_SUBDIV_SIMPLE;
+              }
               break;
             }
             default:

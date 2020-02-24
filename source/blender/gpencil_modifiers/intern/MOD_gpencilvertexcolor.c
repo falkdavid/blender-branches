@@ -41,11 +41,12 @@
 #include "BKE_deform.h"
 #include "BKE_gpencil.h"
 #include "BKE_gpencil_modifier.h"
-#include "BKE_modifier.h"
-#include "BKE_lib_query.h"
-#include "BKE_scene.h"
-#include "BKE_main.h"
 #include "BKE_layer.h"
+#include "BKE_lib_query.h"
+#include "BKE_main.h"
+#include "BKE_material.h"
+#include "BKE_modifier.h"
+#include "BKE_scene.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -95,77 +96,6 @@ static void copyData(const GpencilModifierData *md, GpencilModifierData *target)
   }
 }
 
-static void gpencil_parent_location(const Depsgraph *depsgraph,
-                                    Object *ob,
-                                    bGPDlayer *gpl,
-                                    float diff_mat[4][4])
-{
-  Object *ob_eval = depsgraph != NULL ? DEG_get_evaluated_object(depsgraph, ob) : ob;
-  Object *obparent = gpl->parent;
-  Object *obparent_eval = depsgraph != NULL ? DEG_get_evaluated_object(depsgraph, obparent) :
-                                              obparent;
-
-  /* if not layer parented, try with object parented */
-  if (obparent_eval == NULL) {
-    if (ob_eval != NULL) {
-      copy_m4_m4(diff_mat, ob_eval->obmat);
-      return;
-    }
-    unit_m4(diff_mat);
-    return;
-  }
-  else {
-    if ((gpl->partype == PAROBJECT) || (gpl->partype == PARSKEL)) {
-      mul_m4_m4m4(diff_mat, obparent_eval->obmat, gpl->inverse);
-      add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
-      return;
-    }
-    else if (gpl->partype == PARBONE) {
-      bPoseChannel *pchan = BKE_pose_channel_find_name(obparent_eval->pose, gpl->parsubstr);
-      if (pchan) {
-        float tmp_mat[4][4];
-        mul_m4_m4m4(tmp_mat, obparent_eval->obmat, pchan->pose_mat);
-        mul_m4_m4m4(diff_mat, tmp_mat, gpl->inverse);
-        add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
-      }
-      else {
-        /* if bone not found use object (armature) */
-        mul_m4_m4m4(diff_mat, obparent_eval->obmat, gpl->inverse);
-        add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
-      }
-      return;
-    }
-    else {
-      unit_m4(diff_mat); /* not defined type */
-    }
-  }
-}
-
-/* Check if a point is inside a ellipsoid. */
-static bool gpencil_check_inside_ellipsoide(float co[3],
-                                            float radius[3],
-                                            float obmat[4][4],
-                                            float inv_mat[4][4])
-{
-  float fpt[3];
-
-  /* Translate to Ellipsoid space. */
-  sub_v3_v3v3(fpt, co, obmat[3]);
-
-  /* Rotate point to ellipsoid rotation. */
-  mul_mat3_m4_v3(inv_mat, fpt);
-
-  /* Standard equation of an ellipsoid. */
-  float r = ((fpt[0] / radius[0]) * (fpt[0] / radius[0])) +
-            ((fpt[1] / radius[1]) * (fpt[1] / radius[1])) +
-            ((fpt[2] / radius[2]) * (fpt[2] / radius[2]));
-
-  if (r < 1.0f) {
-    return true;
-  }
-  return false;
-}
-
 /* deform stroke */
 static void deformStroke(GpencilModifierData *md,
                          Depsgraph *depsgraph,
@@ -195,42 +125,38 @@ static void deformStroke(GpencilModifierData *md,
                                       mmd->flag & GP_HOOK_INVERT_MATERIAL)) {
     return;
   }
+  MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
 
-  float target_scale = mat4_to_scale(mmd->object->obmat);
-  float radius_sqr = (mmd->radius * mmd->radius) * target_scale;
   float coba_res[4];
-  float mat[4][4];
-
-  gpencil_parent_location(depsgraph, ob, gpl, mat);
-
-  /* Radius and matrix for Ellipsoid. */
-  float radius[3];
-  float inv_mat[4][4];
-  mul_v3_v3fl(radius, mmd->object->scale, mmd->radius);
-  /* Clamp to avoid division by zero. */
-  CLAMP3_MIN(radius, 0.0001f);
-
-  invert_m4_m4(inv_mat, mmd->object->obmat);
+  float matrix[4][4];
+  mul_m4_m4m4(matrix, mmd->object->imat, ob->obmat);
 
   /* loop points and apply deform */
-  bool doit = false;
+  bool fill_done = false;
   for (int i = 0; i < gps->totpoints; i++) {
     bGPDspoint *pt = &gps->points[i];
     MDeformVert *dvert = gps->dvert != NULL ? &gps->dvert[i] : NULL;
 
-    /* Calc world position of point. */
-    float pt_loc[3];
-    mul_v3_m4v3(pt_loc, mat, &pt->x);
-    float dist_sqr = len_squared_v3v3(pt_loc, mmd->object->loc);
-
-    if (!gpencil_check_inside_ellipsoide(pt_loc, radius, mmd->object->obmat, inv_mat)) {
-      continue;
-    }
-
-    if (!doit) {
+    if (!fill_done) {
       /* Apply to fill. */
       if (mmd->mode != GPPAINT_MODE_STROKE) {
-        BKE_colorband_evaluate(mmd->colorband, 1.0f, coba_res);
+
+        /* If not using Vertex Color, use the material color. */
+        if ((gp_style != NULL) && (gps->vert_color_fill[3] == 0.0f) &&
+            (gp_style->fill_rgba[3] > 0.0f)) {
+          copy_v4_v4(gps->vert_color_fill, gp_style->fill_rgba);
+          gps->vert_color_fill[3] = 1.0f;
+        }
+
+        float center[3];
+        add_v3_v3v3(center, gps->boundbox_min, gps->boundbox_max);
+        mul_v3_fl(center, 0.5f);
+        float pt_loc[3];
+        mul_v3_m4v3(pt_loc, matrix, &pt->x);
+        float dist = len_v3(pt_loc);
+        float mix_factor = clamp_f(dist / mmd->radius, 0.0f, 1.0f);
+
+        BKE_colorband_evaluate(mmd->colorband, mix_factor, coba_res);
         interp_v3_v3v3(gps->vert_color_fill, gps->vert_color_fill, coba_res, mmd->factor);
         gps->vert_color_fill[3] = mmd->factor;
         /* If no stroke, cancel loop. */
@@ -239,7 +165,7 @@ static void deformStroke(GpencilModifierData *md,
         }
       }
 
-      doit = true;
+      fill_done = true;
     }
 
     /* Verify vertex group. */
@@ -249,16 +175,23 @@ static void deformStroke(GpencilModifierData *md,
       if (weight < 0.0f) {
         continue;
       }
+
+      /* Calc world position of point. */
+      float pt_loc[3];
+      mul_v3_m4v3(pt_loc, matrix, &pt->x);
+      float dist = len_v3(pt_loc);
+
+      /* If not using Vertex Color, use the material color. */
+      if ((gp_style != NULL) && (pt->vert_color[3] == 0.0f) && (gp_style->stroke_rgba[3] > 0.0f)) {
+        copy_v4_v4(pt->vert_color, gp_style->stroke_rgba);
+        pt->vert_color[3] = 1.0f;
+      }
+
       /* Calc the factor using the distance and get mix color. */
-      float mix_factor = dist_sqr / radius_sqr;
+      float mix_factor = clamp_f(dist / mmd->radius, 0.0f, 1.0f);
       BKE_colorband_evaluate(mmd->colorband, mix_factor, coba_res);
 
-      interp_v3_v3v3(pt->vert_color, pt->vert_color, coba_res, mmd->factor * weight);
-      pt->vert_color[3] = mmd->factor;
-      /* Apply Decay. */
-      if (mmd->flag & GP_VERTEXCOL_DECAY_COLOR) {
-        pt->vert_color[3] *= (1.0f - mix_factor);
-      }
+      interp_v3_v3v3(pt->vert_color, pt->vert_color, coba_res, mmd->factor * weight * coba_res[3]);
     }
   }
 }

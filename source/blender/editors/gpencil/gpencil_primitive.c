@@ -123,7 +123,8 @@ static void gp_session_validatebuffer(tGPDprimitive *p)
   gpd->runtime.sbuffer_sflag |= GP_STROKE_3DSPACE;
 
   /* Set vertex colors for buffer. */
-  ED_gpencil_sbuffer_vertex_color_set(p->depsgraph, p->ob, p->scene->toolsettings, p->brush);
+  ED_gpencil_sbuffer_vertex_color_set(
+      p->depsgraph, p->ob, p->scene->toolsettings, p->brush, p->material);
 
   if (ELEM(p->type, GP_STROKE_BOX, GP_STROKE_CIRCLE)) {
     gpd->runtime.sbuffer_sflag |= GP_STROKE_CYCLIC;
@@ -136,9 +137,9 @@ static void gp_init_colors(tGPDprimitive *p)
   Brush *brush = p->brush;
 
   /* use brush material */
-  p->mat = BKE_gpencil_object_material_ensure_from_active_input_brush(p->bmain, p->ob, brush);
+  p->material = BKE_gpencil_object_material_ensure_from_active_input_brush(p->bmain, p->ob, brush);
 
-  gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, p->mat);
+  gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, p->material);
   gpd->runtime.sbuffer_brush = brush;
 }
 
@@ -1040,7 +1041,7 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
   BKE_gpencil_stroke_geometry_update(gps);
 
   /* Update evaluated data. */
-  ED_gpencil_sbuffer_update_eval(tgpi->depsgraph, tgpi->ob);
+  ED_gpencil_sbuffer_update_eval(tgpi->gpd, tgpi->ob_eval);
 
   MEM_SAFE_FREE(depth_arr);
 
@@ -1133,13 +1134,14 @@ static void gpencil_primitive_init(bContext *C, wmOperator *op)
 
   /* set current scene and window info */
   tgpi->bmain = CTX_data_main(C);
+  tgpi->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   tgpi->scene = scene;
   tgpi->ob = CTX_data_active_object(C);
+  tgpi->ob_eval = (Object *)DEG_get_evaluated_object(tgpi->depsgraph, tgpi->ob);
   tgpi->sa = CTX_wm_area(C);
   tgpi->ar = CTX_wm_region(C);
   tgpi->rv3d = tgpi->ar->regiondata;
   tgpi->v3d = tgpi->sa->spacedata.first;
-  tgpi->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   tgpi->win = CTX_wm_window(C);
 
   /* save original type */
@@ -1170,7 +1172,7 @@ static void gpencil_primitive_init(bContext *C, wmOperator *op)
   tgpi->gpd->runtime.tot_cp_points = 0;
 
   /* getcolor info */
-  tgpi->mat = BKE_gpencil_object_material_ensure_from_active_input_toolsettings(
+  tgpi->material = BKE_gpencil_object_material_ensure_from_active_input_toolsettings(
       bmain, tgpi->ob, ts);
 
   /* set parameters */
