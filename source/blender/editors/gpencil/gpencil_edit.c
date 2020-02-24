@@ -4919,6 +4919,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
+          BKE_gpencil_stroke_resolve_intersections(rv3d, perimeter_stroke);
 
           /* add to frame */
           BLI_addhead(&gpf->strokes, perimeter_stroke);
@@ -5018,6 +5019,52 @@ void GPENCIL_OT_stroke_difference(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = gp_stroke_difference_exec;
+  ot->poll = gp_active_layer_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* ********** Clip stroke ********** */
+
+static int gp_stroke_clip_exec(bContext *C)
+{
+  Object *ob = CTX_data_active_object(C);
+  bGPdata *gpd = (bGPdata *)ob->data;
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
+
+  /* sanity checks */
+  if (ELEM(NULL, gpd)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  bool changed = false;
+  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+    if (gps->flag & GP_STROKE_SELECT) {
+      changed = (bool)BKE_gpencil_stroke_resolve_intersections(rv3d, gps);
+    }
+  }
+  GP_EDITABLE_STROKES_END(gpstroke_iter);
+
+  /* notifiers */
+  if (changed) {
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+    return OPERATOR_FINISHED;
+  }
+  return OPERATOR_CANCELLED;
+}
+
+
+void GPENCIL_OT_clip_stroke(wmOperatorType *ot)
+{
+  ot->name = "Clip Stroke";
+  ot->idname = "GPENCIL_OT_clip_stroke";
+  ot->description = "Find the self intersection points of a stroke";
+
+  /* api callbacks */
+  ot->exec = gp_stroke_clip_exec;
   ot->poll = gp_active_layer_poll;
 
   /* flags */
