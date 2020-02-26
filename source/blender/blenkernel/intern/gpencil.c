@@ -4448,16 +4448,33 @@ void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
 /* Stroke clipping */
 
 /**
- * A subchain is defined as a set of consecutive vertices having all the same type,
- * where the type of a vertex can be convex or concave depending on whether it is 
- * left or right to the line that connects the vertex before and after.
+ * A curve subchain is defined as a set of consecutive vertices having all the 
+ * same type, where the type of a vertex can be convex or concave depending on 
+ * whether it is left or right to the line that connects the vertex before and after.
  */
-typedef struct tSubchain {
-  struct tSubchain *next, *prev;
-  int num_points;
+typedef struct tCurveSubchain {
+  struct tCurveSubchain *next, *prev;
   int idx_start, idx_end;
   float mer_start, mer_end, mer_size;
-} tSubchain;
+} tCurveSubchain;
+
+typedef struct tMonochainPoint {
+  struct tMonochainPoint *next, *prev;
+  float x, y, z;
+  int idx;
+} tMonochainPoint;
+
+typedef struct tMonochain {
+  struct tMonochain *next, *prev;
+  struct tMonochainPoint *first, *last, *front;
+  int num_points;
+  int idx_start, idx_end;
+} tMonochain;
+
+typedef struct tActiveChainList {
+  struct tMonochain *first, *last;
+  int num_points;
+} tActiveChainList;
 
 /* Helper: check if point p is to the left of the line from prev to next */
 static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
@@ -4476,7 +4493,7 @@ static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
  * the sweeping direction results in a minimum amount of extremes and
  * therefor monotone chains for the specific subchain.
  **/
-static void calc_subchain_mer(float *points, tSubchain *chain)
+static void calc_subchain_mer(float *points, tCurveSubchain *chain)
 {
   float v1[2];
   float v2[2];
@@ -4488,9 +4505,28 @@ static void calc_subchain_mer(float *points, tSubchain *chain)
   ortho_v2_v2(nv1, v1);
   ortho_v2_v2(nv2, v2);
 
-  chain->mer_start = atan2f(nv1[1], nv1[0]);
-  chain->mer_end = atan2f(nv2[1], nv2[0]);
-  chain->mer_size = angle_v2v2(nv1, nv2);
+  float angle1 = atan2f(nv1[1], nv1[0]);
+  float angle2 = atan2f(nv2[1], nv2[0]);
+  printf("angle1: %f\n", angle1);
+  printf("angle2: %f\n", angle2);
+  float diff;
+  if (angle1 >= 0.0f) {
+    diff = angle2 + (M_PI - angle1);
+  }
+  else {
+    diff = angle2 - (M_PI + angle1);
+  }
+
+  printf("diff: %f\n", diff);
+  if ((diff >= 0.0f && diff < M_PI) || diff < -M_PI) {
+    chain->mer_start = angle2;
+    chain->mer_end = angle1;
+  }
+  else {
+    chain->mer_start = angle1;
+    chain->mer_end = angle2;
+  }
+  chain->mer_size = angle_v2v2(nv1, nv2);;
 }
 
 static float *project_stroke_points_mat(const bGPDstroke *gps, const float proj_mat[4][4])
@@ -4522,17 +4558,17 @@ static int get_stroke_subchainlist(ListBase *list, float *points, int num_points
     return 0;
   }
 
-  tSubchain *first_chain = MEM_callocN(sizeof(tSubchain), __func__);
+  tCurveSubchain *first_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
   BLI_addtail(list, first_chain);
 
-  /* get the type of the first three points */
+  /* get the type for the first three points */
   float *prev = &points[0];
   float *p = &points[3];
   float *next = &points[6];
   int prev_type = stroke_point_is_convex(prev, next, p);
   
   int i, idx_start = 0, num_chains = 1;
-  tSubchain *current = first_chain;
+  tCurveSubchain *current = first_chain;
   for (i = 2; i < num_points - 1; i++) {
     float *prev = &points[(i-1)*3];
     float *next = &points[(i+1)*3];
@@ -4541,13 +4577,12 @@ static int get_stroke_subchainlist(ListBase *list, float *points, int num_points
     int type = stroke_point_is_convex(prev, next, p);
     if ((type == 1 && prev_type == -1) ||
         (type == -1 && prev_type == 1)) { //type has swtiched 
-      tSubchain *next_chain = MEM_callocN(sizeof(tSubchain), __func__);
-      next_chain->idx_start = i*3;
+      tCurveSubchain *next_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
+      next_chain->idx_start = (i-1)*3;
       BLI_addtail(list, next_chain);
       num_chains++;
 
       current->idx_end = i*3;
-      current->num_points = i - idx_start + 1;
       calc_subchain_mer(points, current);
 
       current = next_chain;
@@ -4556,27 +4591,26 @@ static int get_stroke_subchainlist(ListBase *list, float *points, int num_points
     prev_type = type;
   }
 
-  current->idx_end = i*3;
-  current->num_points = i - idx_start  + 1;
+  current->idx_end = (i+1)*3;
   calc_subchain_mer(points, current);
 
   return num_chains;
 }
 
-static int tcmp_mer_start(tSubchain *a, tSubchain *b) 
+static int tcmp_mer_start(tCurveSubchain *a, tCurveSubchain *b) 
 {
   return a->mer_start > b->mer_start;
 }
 
-static int tcmp_mer_end(tSubchain *a, tSubchain *b) 
+static int tcmp_mer_end(tCurveSubchain *a, tCurveSubchain *b) 
 {
   return a->mer_end > b->mer_end;
 }
 
 static void split_overflowing_subchain_mer(ListBase *chain_list) {
-  LISTBASE_FOREACH(tSubchain *, curr, chain_list) {
+  LISTBASE_FOREACH(tCurveSubchain *, curr, chain_list) {
     if (curr->mer_start > 0.0f && (curr->mer_start + curr->mer_size) > M_PI) {
-      tSubchain *split_chain = MEM_callocN(sizeof(tSubchain), __func__);
+      tCurveSubchain *split_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
       BLI_insertlinkafter(chain_list, curr, split_chain);
       split_chain->mer_start = -(float)M_PI;
       split_chain->mer_end = curr->mer_end;
@@ -4592,6 +4626,7 @@ static void split_overflowing_subchain_mer(ListBase *chain_list) {
 
 static float get_optimal_sweep_angle(ListBase *chain_list)
 {
+  /* split the angle ranges over the pi rad mark into two ranges */
   split_overflowing_subchain_mer(chain_list);
 
   ListBase start_list = {NULL, NULL};
@@ -4603,12 +4638,12 @@ static float get_optimal_sweep_angle(ListBase *chain_list)
   BLI_listbase_sort(&end_list, tcmp_mer_end);
 
   int num_operlapp = 1, max_num_overlapp = 1;
-  tSubchain *curr_start = ((tSubchain *)start_list.first)->next;
-  tSubchain *curr_end = end_list.first;
+  tCurveSubchain *curr_start = ((tCurveSubchain *)start_list.first)->next;
+  tCurveSubchain *curr_end = end_list.first;
   float start_angle = curr_end->mer_start;
   float end_angle = curr_end->mer_end;
-  while (curr_start != NULL && curr_end != NULL) {
 
+  while (curr_start != NULL && curr_end != NULL) {
     if (curr_start->mer_start <= curr_end->mer_end) {
       num_operlapp++;
       if (num_operlapp > max_num_overlapp) {
@@ -4625,11 +4660,36 @@ static float get_optimal_sweep_angle(ListBase *chain_list)
   }
 
   /* Take the median value for the sweep angle */
-  float angle = start_angle + fabsf(end_angle - start_angle) / 2.0f;
-  return angle >= 0.0f ? angle + (float)M_PI_2: angle + (float)M_PI + (float)M_PI_2;
+  float angle = fabsf(start_angle + fabsf(end_angle - start_angle) / 2.0f);
+  return angle;
 }
 
-int BKE_gpencil_stroke_resolve_intersections(const RegionView3D *rv3d, bGPDstroke *gps)
+static void get_monotone_chains(ListBase *monotone_chain_list, float* points, int num_points)
+{
+  int prev_dir = signum_i(points[0] - points[3]);
+  int start_idx = 0;
+  for (int i = 0; i < num_points - 1; i++) {
+    float curr_x = points[i*3];
+    float next_x = points[(i+1)*3];
+
+    int dir = signum_i(next_x - curr_x);
+    if (dir != 0 && prev_dir != 0 && dir != prev_dir) { // direction switched
+
+    }
+    else {
+      
+    }
+
+    prev_dir = dir;
+  }
+}
+
+float *BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, float sweep_angle)
+{
+
+}
+
+int BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstroke *gps)
 {
   /* Get subchains */
   ListBase chain_list = {NULL, NULL};
@@ -4639,12 +4699,6 @@ int BKE_gpencil_stroke_resolve_intersections(const RegionView3D *rv3d, bGPDstrok
   if ((num_chains = get_stroke_subchainlist(&chain_list, points, gps->totpoints)) == 0) {
     MEM_SAFE_FREE(points);
     return 0;
-  }
-
-  printf("Got %d subchains!\n", num_chains);
-  LISTBASE_FOREACH(tSubchain *, curr, &chain_list) {
-    printf("Subchain: %d -> %d (%d) from %f to %f (%f)\n", curr->idx_start, curr->idx_end, curr->num_points,
-                                                           curr->mer_start, curr->mer_end, curr->mer_size);
   }
 
   float sweep_angle = get_optimal_sweep_angle(&chain_list);

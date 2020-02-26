@@ -5042,7 +5042,7 @@ static int gp_stroke_clip_exec(bContext *C)
   bool changed = false;
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
     if (gps->flag & GP_STROKE_SELECT) {
-      changed = (bool)BKE_gpencil_stroke_resolve_intersections(rv3d, gps);
+      changed = (bool)BKE_gpencil_stroke_resolve_self_overlapp(rv3d, gps);
     }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
