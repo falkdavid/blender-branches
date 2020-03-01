@@ -4919,7 +4919,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
-          BKE_gpencil_stroke_resolve_intersections(rv3d, perimeter_stroke);
 
           /* add to frame */
           BLI_addhead(&gpf->strokes, perimeter_stroke);

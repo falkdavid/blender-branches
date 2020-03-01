@@ -4466,25 +4466,21 @@ typedef struct tMonochainPoint {
 
 typedef struct tMonochain {
   struct tMonochain *next, *prev;
-  struct tMonochainPoint *first, *last, *front;
+  ListBase points;
   int num_points;
-  int idx_start, idx_end;
+  struct tMonochainPoint *front;
+  int dir, idx_start, idx_end;
 } tMonochain;
-
-typedef struct tActiveChainList {
-  struct tMonochain *first, *last;
-  int num_points;
-} tActiveChainList;
 
 /* Helper: check if point p is to the left of the line from prev to next */
 static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
 {
   float a = ((next[0] - p[0])*(p[1] - prev[1]) - (next[1] - p[1])*(p[0] - prev[0]));
   if (a > 0.0f) {
-    return 1; 
+    return 1;
   }
   else if (a < 0.0f) {
-    return -1; 
+    return -1;
   }
   return 0; // point is on the line
 }
@@ -4507,8 +4503,6 @@ static void calc_subchain_mer(float *points, tCurveSubchain *chain)
 
   float angle1 = atan2f(nv1[1], nv1[0]);
   float angle2 = atan2f(nv2[1], nv2[0]);
-  printf("angle1: %f\n", angle1);
-  printf("angle2: %f\n", angle2);
   float diff;
   if (angle1 >= 0.0f) {
     diff = angle2 + (M_PI - angle1);
@@ -4517,7 +4511,6 @@ static void calc_subchain_mer(float *points, tCurveSubchain *chain)
     diff = angle2 - (M_PI + angle1);
   }
 
-  printf("diff: %f\n", diff);
   if ((diff >= 0.0f && diff < M_PI) || diff < -M_PI) {
     chain->mer_start = angle2;
     chain->mer_end = angle1;
@@ -4554,7 +4547,7 @@ static void rotate_stroke_points_by_angle(float *points, int num_points, float a
 
 static int get_stroke_subchainlist(ListBase *list, float *points, int num_points)
 {
-  if (num_points < 4) {
+  if (num_points < 3) {
     return 0;
   }
 
@@ -4664,29 +4657,99 @@ static float get_optimal_sweep_angle(ListBase *chain_list)
   return angle;
 }
 
-static void get_monotone_chains(ListBase *monotone_chain_list, float* points, int num_points)
+static bool isect_aabb_aabb_v2(const float min1[2],
+                               const float max1[2],
+                               const float min2[2],
+                               const float max2[2])
 {
-  int prev_dir = signum_i(points[0] - points[3]);
-  int start_idx = 0;
-  for (int i = 0; i < num_points - 1; i++) {
+  return (min1[0] < max2[0] && min1[1] < max2[1] && min2[0] < max1[0] && min2[1] < max1[1]);
+}
+
+static void free_monochains(ListBase *monochain_list)
+{
+  LISTBASE_FOREACH(tMonochain *, curr, monochain_list) {
+    BLI_freelistN(&curr->points);
+  }
+}
+
+/**
+ * Helper: make a list of all the monochains in points and return the number 
+ * of monochains found.
+ **/
+static int get_monochains(ListBase *monochain_list, float* points, int num_points)
+{
+  printf("get_monochains\n\n");
+  int num_monochains = 0;
+  int prev_dir = signum_i(points[3] - points[0]);
+  /* cannot start with vertical direction, so force to one */
+  prev_dir = prev_dir == 0 ? 1 : prev_dir;
+
+  tMonochain *curr_chain = MEM_callocN(sizeof(tMonochain), __func__);
+  curr_chain->idx_start = 0;
+  curr_chain->dir = prev_dir;
+  BLI_addtail(monochain_list, curr_chain);
+  num_monochains++;
+
+  tMonochainPoint *first_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
+  first_pt->idx = 0;
+  copy_v3_v3(&first_pt->x, &points[0]);
+  BLI_addtail(&curr_chain->points, first_pt);
+  curr_chain->num_points++;
+
+  for (int i = 1; i < num_points - 1; i++) {
+    tMonochainPoint *new_point = MEM_callocN(sizeof(tMonochainPoint), __func__);
+    new_point->idx = i*3;
+    copy_v3_v3(&new_point->x, &points[i*3]);
+    BLI_addtail(&curr_chain->points, new_point);
+    curr_chain->num_points++;
+
     float curr_x = points[i*3];
     float next_x = points[(i+1)*3];
-
     int dir = signum_i(next_x - curr_x);
     if (dir != 0 && prev_dir != 0 && dir != prev_dir) { // direction switched
+      tMonochain *new_chain = MEM_callocN(sizeof(tMonochain), __func__);
+      new_chain->idx_start = i*3;
+      new_chain->dir = dir;
+      BLI_addtail(monochain_list, new_chain);
+      num_monochains++;
 
-    }
-    else {
-      
+      tMonochainPoint *first_point = MEM_dupallocN(new_point);
+      BLI_addtail(&new_chain->points, first_point);
+      new_chain->num_points++;
+
+      curr_chain->idx_end = i*3;
+      curr_chain = new_chain;
     }
 
     prev_dir = dir;
   }
+
+  tMonochainPoint *last_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
+  last_pt->idx = (num_points - 1)*3;
+  copy_v3_v3(&last_pt->x, &points[(num_points - 1)*3]);
+  BLI_addtail(&curr_chain->points, last_pt);
+  curr_chain->num_points++;
+
+  curr_chain->idx_end = (num_points - 1)*3;
+
+  return num_monochains;
 }
 
-float *BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, float sweep_angle)
+void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, float sweep_angle)
 {
+  ListBase monochains = {NULL, NULL};
+  float *rot_points = MEM_dupallocN(points);
+  rotate_stroke_points_by_angle(rot_points, num_points, sweep_angle);
+  
+  int num_monochains = get_monochains(&monochains, rot_points, num_points);
+  printf("Found %d monochains!\n", num_monochains);
+  LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
+    printf("Monochain from %d to %d (%d)!\n", curr->idx_start, curr->idx_end, curr->num_points);
+  }
 
+  // free temp data
+  free_monochains(&monochains);
+  MEM_freeN(rot_points);
 }
 
 int BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstroke *gps)
@@ -4703,6 +4766,8 @@ int BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstrok
 
   float sweep_angle = get_optimal_sweep_angle(&chain_list);
   printf("Optimal angle: %f\n", sweep_angle);
+
+  BKE_gpencil_stroke_find_intersections_ex(points, num_points, sweep_angle);
 
   rotate_stroke_points_by_angle(points, num_points, sweep_angle);
   float vec_tmp[4];
