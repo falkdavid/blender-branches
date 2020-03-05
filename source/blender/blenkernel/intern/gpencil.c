@@ -36,6 +36,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_polyfill_2d.h"
 #include "BLI_string_utils.h"
+#include "BLI_heap.h"
 
 #include "BLT_translation.h"
 
@@ -4470,6 +4471,7 @@ typedef struct tMonochain {
   int num_points;
   struct tMonochainPoint *front;
   int dir, idx_start, idx_end;
+  float min[2], max[2];
 } tMonochain;
 
 /* Helper: check if point p is to the left of the line from prev to next */
@@ -4519,7 +4521,7 @@ static void calc_subchain_mer(float *points, tCurveSubchain *chain)
     chain->mer_start = angle1;
     chain->mer_end = angle2;
   }
-  chain->mer_size = angle_v2v2(nv1, nv2);;
+  chain->mer_size = angle_v2v2(nv1, nv2);
 }
 
 static float *project_stroke_points_mat(const bGPDstroke *gps, const float proj_mat[4][4])
@@ -4619,7 +4621,7 @@ static void split_overflowing_subchain_mer(ListBase *chain_list) {
 
 static float get_optimal_sweep_angle(ListBase *chain_list)
 {
-  /* split the angle ranges over the pi rad mark into two ranges */
+  /* split the angle ranges over the pi radians mark into two ranges */
   split_overflowing_subchain_mer(chain_list);
 
   ListBase start_list = {NULL, NULL};
@@ -4627,6 +4629,7 @@ static float get_optimal_sweep_angle(ListBase *chain_list)
   BLI_duplicatelist(&start_list, chain_list);
   BLI_duplicatelist(&end_list, chain_list);
 
+  /* TODO: Use qsort here, listbase_sort uses insertion sort */
   BLI_listbase_sort(&start_list, tcmp_mer_start);
   BLI_listbase_sort(&end_list, tcmp_mer_end);
 
@@ -4636,6 +4639,7 @@ static float get_optimal_sweep_angle(ListBase *chain_list)
   float start_angle = curr_end->mer_start;
   float end_angle = curr_end->mer_end;
 
+  /* find the maximum number of angle overlapps */
   while (curr_start != NULL && curr_end != NULL) {
     if (curr_start->mer_start <= curr_end->mer_end) {
       num_operlapp++;
@@ -4694,14 +4698,30 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
   first_pt->idx = 0;
   copy_v3_v3(&first_pt->x, &points[0]);
   BLI_addtail(&curr_chain->points, first_pt);
+  curr_chain->min[1] = curr_chain->max[1] = first_pt->y;
   curr_chain->num_points++;
 
   for (int i = 1; i < num_points - 1; i++) {
     tMonochainPoint *new_point = MEM_callocN(sizeof(tMonochainPoint), __func__);
     new_point->idx = i*3;
     copy_v3_v3(&new_point->x, &points[i*3]);
-    BLI_addtail(&curr_chain->points, new_point);
+
+    /* insert point so that monochain points are ordered in x direction */
+    if (curr_chain->dir == 1) {
+      BLI_addtail(&curr_chain->points, new_point);
+    }
+    else {
+      BLI_addhead(&curr_chain->points, new_point);
+    }
     curr_chain->num_points++;
+
+    /* update y value of aabb of current chain */
+    if (new_point->y < curr_chain->min[1]) {
+      curr_chain->min[1] = new_point->y;
+    }
+    else if (new_point->y > curr_chain->max[1]) {
+      curr_chain->max[1] = new_point->y;
+    }
 
     float curr_x = points[i*3];
     float next_x = points[(i+1)*3];
@@ -4715,9 +4735,12 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
 
       tMonochainPoint *first_point = MEM_dupallocN(new_point);
       BLI_addtail(&new_chain->points, first_point);
+      new_chain->min[1] = new_chain->max[1] = first_point->y;
       new_chain->num_points++;
 
       curr_chain->idx_end = i*3;
+      curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
+      curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
       curr_chain = new_chain;
     }
 
@@ -4727,10 +4750,24 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
   tMonochainPoint *last_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
   last_pt->idx = (num_points - 1)*3;
   copy_v3_v3(&last_pt->x, &points[(num_points - 1)*3]);
-  BLI_addtail(&curr_chain->points, last_pt);
+  if (curr_chain->dir == 1) {
+    BLI_addtail(&curr_chain->points, last_pt);
+  }
+  else {
+    BLI_addhead(&curr_chain->points, last_pt);
+  }
   curr_chain->num_points++;
 
+  if (last_pt->y < curr_chain->min[1]) {
+    curr_chain->min[1] = last_pt->y;
+  }
+  else if (last_pt->y > curr_chain->max[1]) {
+    curr_chain->max[1] = last_pt->y;
+  }
+
   curr_chain->idx_end = (num_points - 1)*3;
+  curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
+  curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
 
   return num_monochains;
 }
@@ -4747,7 +4784,31 @@ void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, flo
     printf("Monochain from %d to %d (%d)!\n", curr->idx_start, curr->idx_end, curr->num_points);
   }
 
+  /* ACL = active chain list; set all monochains as active */
+  Heap *acl = BLI_heap_new_ex(num_monochains);
+  LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
+    curr->front = (tMonochainPoint *)curr->points.first;
+    BLI_heap_insert(acl, curr->min[0], curr);
+  }
+
+  /* while there is at least one active chain */
+  while(!BLI_heap_is_empty(acl)) {
+    HeapNode *acl_top = BLI_heap_top(acl);
+    tMonochain *active_chain = (tMonochain *)BLI_heap_node_ptr(acl_top);
+
+    /* advance front vertex of active chain */ 
+    active_chain->front = active_chain->front->next;
+
+    if (active_chain->front != NULL) {
+      BLI_heap_insert_or_update(acl, &acl_top, active_chain->front->x, active_chain);
+    }
+    else {
+      BLI_heap_remove(acl, acl_top);
+    }
+  }
+
   // free temp data
+  BLI_heap_free(acl, NULL);
   free_monochains(&monochains);
   MEM_freeN(rot_points);
 }
