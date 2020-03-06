@@ -37,36 +37,54 @@
 
 /* ********************************************** */
 
-/* Data Types and Type Defines  */
+/* Data structs*/
 
 /* Node data */
 typedef struct WAVLT_Node {
+  /* pointers for tree structure */
   struct WAVLT_Node *left, *right;
   struct WAVLT_Node *parent;
-
+  /* pointers to successor and predecessor */
+  struct WAVLT_Node *succ, *pred;
+  /* Size of the subtree including the node */
+  size_t size;
   /* The rank is an approximation of the distance 
    * to the farthest leaf descendant */
   int rank;
+  /* pointer to the data */
+  void *data;
 } WAVLT_Node;
 
 /* WAVL Tree data */
 typedef struct WAVLT_Tree {
-  /* Root Node */
-  void *root;
-
-  /* Number of nodes in the tree */
-  size_t size;
-
+  /* root node */
+  struct WAVLT_Node *root;
   /* pointers to min and max node */
-  void *min_node, *max_node;
+  struct WAVLT_Node *min_node, *max_node;
 } WAVLT_Tree;
+
+/* ********************************************** */
+/* Callbacks */
+
+/**
+ * Callback function that returns -1, 0, 1 depending on
+ * whether the data in WAVLT_Node A is less than, equal,
+ * or greater than the data in WAVLT_Node B.
+ */
+typedef short (*WAVLT_comparator_FP)(void *data_a, void *data_b);
 
 /* ********************************************** */
 /* Public API */
 
 struct WAVLT_Tree *BLI_wavlTree_new(void);
+void BLI_wavlTree_free(struct WAVLT_Tree *tree);
 
+bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
 size_t BLI_wavlTree_size(const struct WAVLT_Tree *tree);
+
+struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
+
+void BLI_wavlTree_insert_or_update(struct WAVLT_Tree *tree, void *data);
 
 /* ********************************************** */
 
