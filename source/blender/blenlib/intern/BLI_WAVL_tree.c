@@ -159,7 +159,7 @@ WAVLT_Node *BLI_wavlTree_search(const WAVLT_Tree *tree, WAVLT_comparator_FP cmp,
   return NULL;
 }
 
-void BLI_wavlTree_insert(WAVLT_Tree *tree, void *data)
+void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
 {
   /* if tree is empty, make root */
   if (tree->root == NULL) {
