@@ -44,6 +44,44 @@ static short cmp_sample_data(void *data_a, void *data_b)
   }
 }
 
+static int tree_height(WAVLT_Node *root)
+{
+  if (root != NULL) {
+    return tree_height(root->left) + tree_height(root->right) + 1;
+  }
+  return 0;
+}
+
+static void debug_print_tree_layer(WAVLT_Node *root, int level)
+{
+  if (root == NULL) {
+    std::cout << "    ";
+    return;
+  }
+  if (level == 1) {
+    std::cout << ((SampleData *)(root->data))->my_data << "  ";
+  }
+  else if (level > 1) {
+    debug_print_tree_layer(root->left, level - 1);
+    debug_print_tree_layer(root->right, level - 1);
+  }
+}
+
+static void debug_print_tree(WAVLT_Tree *tree)
+{
+  if (tree->root == NULL) {
+    return;
+  }
+  std::cout << "Tree: \n";
+  int h = tree_height(tree->root);
+  for (int i = 1; i < h; i++) {
+    debug_print_tree_layer(tree->root, i);
+    std::cout << "\n";
+  }
+}
+
+/* ************************************************************************ */
+
 TEST(wavlTree, newTree) 
 {
   WAVLT_Tree *tree;
@@ -57,6 +95,7 @@ TEST(wavlTree, freeEmptyTree)
   WAVLT_Tree *tree;
   tree = BLI_wavlTree_new();
   BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
 }
 
 TEST(wavlTree, insertSingle) 
@@ -69,8 +108,153 @@ TEST(wavlTree, insertSingle)
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(1, BLI_wavlTree_size(tree));
   EXPECT_EQ(0, cmp_sample_data(s1, tree->root->data));
-  EXPECT_EQ(0, cmp_sample_data(s1, tree->min_node->data));
-  EXPECT_EQ(0, cmp_sample_data(s1, tree->max_node->data));
+  EXPECT_EQ(0, cmp_sample_data(s1, BLI_wavlTree_min(tree)));
+  EXPECT_EQ(0, cmp_sample_data(s1, BLI_wavlTree_max(tree)));
 
   BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, insertSame) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(10);
+  /* inserting elem with same key is not allowed */
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2); // this should just return
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(1, BLI_wavlTree_size(tree));
+  EXPECT_EQ(0, cmp_sample_data(s1, tree->root->data));
+  EXPECT_EQ(0, cmp_sample_data(s1, BLI_wavlTree_min(tree)));
+  EXPECT_EQ(0, cmp_sample_data(s1, BLI_wavlTree_max(tree)));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, twoInsertLeft) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(5);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(2, BLI_wavlTree_size(tree));
+  EXPECT_EQ(0, cmp_sample_data(s2, BLI_wavlTree_min(tree)));
+  EXPECT_EQ(0, cmp_sample_data(s1, BLI_wavlTree_max(tree)));
+
+  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+
+  EXPECT_TRUE(s1n != NULL);
+  EXPECT_TRUE(s2n != NULL);
+
+  EXPECT_EQ(0, cmp_sample_data(s1n->data, s1));
+  EXPECT_EQ(0, cmp_sample_data(s2n->data, s2));
+
+  EXPECT_EQ(tree->root, s1n);
+  EXPECT_EQ(s1n->left, s2n);
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, twoInsertRight) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(15);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(2, BLI_wavlTree_size(tree));
+  EXPECT_EQ(0, cmp_sample_data(s1, BLI_wavlTree_min(tree)));
+  EXPECT_EQ(0, cmp_sample_data(s2, BLI_wavlTree_max(tree)));
+
+  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+
+  EXPECT_TRUE(s1n != NULL);
+  EXPECT_TRUE(s2n != NULL);
+
+  EXPECT_EQ(0, cmp_sample_data(s1n->data, s1));
+  EXPECT_EQ(0, cmp_sample_data(s2n->data, s2));
+
+  EXPECT_EQ(tree->root, s1n);
+  EXPECT_EQ(s1n->right, s2n);
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, leftRotate) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(15);
+  SampleData *s3 = create_sample_node(25);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s3);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(3, BLI_wavlTree_size(tree));
+
+  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+
+  debug_print_tree(tree);
+
+  EXPECT_EQ(tree->root, s2n);
+  EXPECT_EQ(s2n->left, s1n);
+  EXPECT_EQ(s2n->right, s3n);
+
+  WAVLTREE_INORDER(SampleData *, curr, tree) {
+    std::cout << "data: " << curr->my_data << "\n";
+  }
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, rightRotate) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(5);
+  SampleData *s3 = create_sample_node(3);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s3);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(3, BLI_wavlTree_size(tree));
+
+  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+
+  debug_print_tree(tree);
+
+  EXPECT_EQ(tree->root, s2n);
+  EXPECT_EQ(s2n->left, s3n);
+  EXPECT_EQ(s2n->right, s1n);
+
+  WAVLTREE_INORDER(SampleData *, curr, tree) {
+    std::cout << "data: " << curr->my_data << "\n";
+  }
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
 }

@@ -92,8 +92,16 @@ bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
 size_t BLI_wavlTree_size(const struct WAVLT_Tree *tree);
 
 struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
+void *BLI_wavlTree_min(struct WAVLT_Tree *tree);
+void *BLI_wavlTree_max(struct WAVLT_Tree *tree);
 
 void BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+
+/* Macro for in-order walk over the tree (uses DLL) */
+#define WAVLTREE_INORDER(type, var, tree) \
+  type var = (type)((tree)->min_node->data); \
+  for (WAVLT_Node *_curr = (tree)->min_node; _curr != NULL; \
+  _curr = _curr->succ, var = (_curr != NULL) ? (type)(_curr->data) : NULL)
 
 /* ********************************************** */
 
