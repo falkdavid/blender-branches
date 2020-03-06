@@ -109,6 +109,11 @@ void BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void 
   for (WAVLT_Node *_curr = (tree)->min_node; _curr != NULL; \
   _curr = _curr->succ, var = (_curr != NULL) ? (type)(_curr->data) : NULL)
 
+#define WAVLTREE_REVERSE_INORDER(type, var, tree) \
+  type var = (type)((tree)->max_node->data); \
+  for (WAVLT_Node *_curr = (tree)->max_node; _curr != NULL; \
+  _curr = _curr->pred, var = (_curr != NULL) ? (type)(_curr->data) : NULL)
+
 /* ********************************************** */
 
 #ifdef __cplusplus
