@@ -24,6 +24,10 @@
  * \ingroup bli
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* WAVL Tree Implementation:
  *
  * WAVL-trees (or weak AVL-trees) are a hybrid of RB-trees and AVL-trees.
@@ -73,19 +77,28 @@ typedef struct WAVLT_Tree {
  */
 typedef short (*WAVLT_comparator_FP)(void *data_a, void *data_b);
 
+/**
+ * Callback function that frees the data of a node.
+ */
+typedef void (*WAVLT_free_data_FP)(void *data);
+
 /* ********************************************** */
 /* Public API */
 
 struct WAVLT_Tree *BLI_wavlTree_new(void);
-void BLI_wavlTree_free(struct WAVLT_Tree *tree);
+void BLI_wavlTree_free(struct WAVLT_Tree *tree, WAVLT_free_data_FP free_data);
 
 bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
 size_t BLI_wavlTree_size(const struct WAVLT_Tree *tree);
 
 struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
 
-void BLI_wavlTree_insert_or_update(struct WAVLT_Tree *tree, void *data);
+void BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
 
 /* ********************************************** */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __BLI_WAVLTREE_H__ */

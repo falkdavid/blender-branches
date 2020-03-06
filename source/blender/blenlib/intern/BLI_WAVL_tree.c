@@ -53,7 +53,7 @@ static WAVLT_Node *new_wavl_node_with_data(void *data)
   new_node->rank = 0;
   new_node->data = data;
 
-  return data;
+  return new_node;
 }
 
 /* Helper: performs a right rotation on the given node */
@@ -108,6 +108,42 @@ BLI_INLINE void promote(WAVLT_Node *node)
   node->rank++;
 }
 
+/* Helper: check if the node is of type r,l */
+BLI_INLINE bool check_node_type(int r, int l, WAVLT_Node *node)
+{
+  /* if a child is NULL (external) it's rank is -1 */
+  int r_diff = node->right != NULL ? node->rank - node->right->rank : node->rank + 1;
+  int l_diff = node->left != NULL ? node->rank - node->left->rank : node->rank + 1;
+  if ((r == r_diff) && (l = l_diff)) {
+    return true;
+  }
+  return false;
+}
+
+BLI_INLINE void update_size(WAVLT_Node *node)
+{
+  size_t new_size = 1;
+  if (node->left != NULL) {
+    new_size += node->left->size;
+  }
+  if (node->right != NULL) {
+    new_size += node->right->size;
+  }
+  node->size = new_size;
+}
+
+static void wavlTree_rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
+{
+  WAVLT_Node *current = node;
+  /* repeat case 1: simple promotion */
+  while ((current != NULL) &&
+        ((check_node_type(0, 1, current) || check_node_type(1, 0, current)))) {
+    promote(current);
+    update_size(current);
+    current = current->parent;
+  }
+}
+
 /** \} */
 
 /** \name Public WAVl-tree API
@@ -116,16 +152,30 @@ BLI_INLINE void promote(WAVLT_Node *node)
 WAVLT_Tree *BLI_wavlTree_new()
 {
   WAVLT_Tree *new_tree = MEM_mallocN(sizeof(WAVLT_Tree), __func__);
-  WAVLT_Node *external_node = MEM_mallocN(sizeof(WAVLT_Node), __func__);
   new_tree->root = new_tree->min_node = new_tree->max_node = NULL;
 
   return new_tree;
 }
 
-void BLI_wavlTree_free(WAVLT_Tree *tree)
+void BLI_wavlTree_free(WAVLT_Tree *tree, WAVLT_free_data_FP free_data)
 {
   if (tree == NULL) {
     return;
+  }
+
+  WAVLT_Node *succ;
+  if (free_data != NULL) {
+    for (WAVLT_Node *curr = tree->min_node; curr != NULL; curr = succ) {
+      succ = curr->succ;
+      free_data(curr->data);
+      MEM_freeN(curr);
+    }
+  }
+  else {
+    for (WAVLT_Node *curr = tree->min_node; curr != NULL; curr = succ) {
+      succ = curr->succ;
+      MEM_freeN(curr);
+    }
   }
 
   MEM_freeN(tree);
@@ -165,15 +215,17 @@ void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
   if (tree->root == NULL) {
     WAVLT_Node *new_node = new_wavl_node_with_data(data);
     tree->root = new_node;
+    tree->min_node = new_node;
     tree->max_node = new_node;
-    tree->max_node = new_node;
+    return;
   }
 
+  /* search for the leaf node to insert */
   bool insert_left;
   WAVLT_Node *current = tree->root;
   while (current != NULL) {
     /* compare data */
-    short c = cmp(current->data, data);
+    short c = cmp(data, current->data);
     /* node already exists */
     if (c == 0) {
       return;
@@ -199,13 +251,35 @@ void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
   /* create a new node to insert */
   WAVLT_Node *new_node = new_wavl_node_with_data(data);
   if (insert_left) {
+    /* update successor and predecessor */
+    WAVLT_Node *curr_pred = current->pred;
+    if (curr_pred != NULL) {
+      curr_pred->succ = new_node;
+    }
+    current->pred = new_node;
+    new_node->pred = curr_pred;
+    new_node->succ = current;
+
+    /* if insert before min, update min */
     if (tree->min_node == current) {
       tree->min_node = new_node;
     }
   }
   else {
+    /* update successor and predecessor */
+    WAVLT_Node *curr_succ = current->succ;
+    if (curr_succ != NULL) {
+      curr_succ->pred = new_node;
+    }
+    current->succ = new_node;
+    new_node->succ = curr_succ;
+    new_node->pred = current;
+
+    /* if insert after max, update max */
     if (tree->max_node == current) {
       tree->max_node = new_node;
     }
   }
+
+  wavlTree_rebalance_insert(tree, current);
 }
