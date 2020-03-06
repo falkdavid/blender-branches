@@ -124,6 +124,8 @@ typedef struct IDTypeInfo {
 /* ********** Declaration of each IDTypeInfo. ********** */
 
 /* Those are defined in the respective BKE files. */
+extern IDTypeInfo IDType_ID_SCE;
+extern IDTypeInfo IDType_ID_LI;
 extern IDTypeInfo IDType_ID_OB;
 
 /* ********** Helpers/Utils API. ********** */

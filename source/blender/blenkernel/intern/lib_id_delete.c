@@ -137,13 +137,13 @@ void BKE_libblock_free_datablock(ID *id, const int UNUSED(flag))
   const short type = GS(id->name);
   switch (type) {
     case ID_SCE:
-      BKE_scene_free_ex((Scene *)id, false);
+      BLI_assert(0);
       break;
     case ID_LI:
-      BKE_library_free((Library *)id);
+      BLI_assert(0);
       break;
     case ID_OB:
-      BKE_object_free((Object *)id);
+      BLI_assert(0);
       break;
     case ID_ME:
       BKE_mesh_free((Mesh *)id);
