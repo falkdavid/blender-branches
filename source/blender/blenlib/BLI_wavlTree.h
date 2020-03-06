@@ -48,14 +48,16 @@ typedef struct WAVLT_Node {
   /* pointers for tree structure */
   struct WAVLT_Node *left, *right;
   struct WAVLT_Node *parent;
-  /* pointers to successor and predecessor */
+  /* pointers to successor and predecessor 
+   * for quick access */
   struct WAVLT_Node *succ, *pred;
   /* Size of the subtree including the node */
   size_t size;
   /* The rank is an approximation of the distance 
-   * to the farthest leaf descendant */
+   * to the farthest leaf descendant.
+   * (used internally to balance the BST) */
   int rank;
-  /* pointer to the data */
+  /* pointer to the data in the node */
   void *data;
 } WAVLT_Node;
 
@@ -63,7 +65,8 @@ typedef struct WAVLT_Node {
 typedef struct WAVLT_Tree {
   /* root node */
   struct WAVLT_Node *root;
-  /* pointers to min and max node */
+  /* pointers to min and max node 
+   * for quick access */
   struct WAVLT_Node *min_node, *max_node;
 } WAVLT_Tree;
 
@@ -92,12 +95,15 @@ bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
 size_t BLI_wavlTree_size(const struct WAVLT_Tree *tree);
 
 struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
-void *BLI_wavlTree_min(struct WAVLT_Tree *tree);
-void *BLI_wavlTree_max(struct WAVLT_Tree *tree);
+void *BLI_wavlTree_search_data(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
+struct WAVLT_Node *BLI_wavlTree_min(struct WAVLT_Tree *tree);
+struct WAVLT_Node *BLI_wavlTree_max(struct WAVLT_Tree *tree);
+void *BLI_wavlTree_min_data(struct WAVLT_Tree *tree);
+void *BLI_wavlTree_max_data(struct WAVLT_Tree *tree);
 
 void BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
 
-/* Macro for in-order walk over the tree (uses DLL) */
+/* Macro for in-order walk over the tree (uses predecessor-successor DLL) */
 #define WAVLTREE_INORDER(type, var, tree) \
   type var = (type)((tree)->min_node->data); \
   for (WAVLT_Node *_curr = (tree)->min_node; _curr != NULL; \
