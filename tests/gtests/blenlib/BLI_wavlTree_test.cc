@@ -12,6 +12,9 @@ extern "C" {
 #include "BLI_rand.h"
 };
 
+/* ************************************************************************ */
+/* HELPER FUNCTIONS */
+
 typedef struct SampleData {
   int my_data;
 } SampleData;
@@ -80,7 +83,22 @@ static void debug_print_tree(WAVLT_Tree *tree)
   }
 }
 
+static bool tree_ordered(WAVLT_Tree *tree)
+{
+  int min = ((SampleData *)BLI_wavlTree_min(tree))->my_data;
+  WAVLTREE_INORDER(SampleData *, curr, tree) {
+    if (curr->my_data < min) {
+      return false;
+    }
+    else {
+      min = curr->my_data;
+    }
+  }
+  return true;
+}
+
 /* ************************************************************************ */
+/* TEST CASES */
 
 TEST(wavlTree, newTree) 
 {
@@ -161,6 +179,8 @@ TEST(wavlTree, twoInsertLeft)
   EXPECT_EQ(tree->root, s1n);
   EXPECT_EQ(s1n->left, s2n);
 
+  EXPECT_TRUE(tree_ordered(tree));
+
   BLI_wavlTree_free(tree, free_sample_data);
   EXPECT_TRUE(BLI_wavlTree_empty(tree));
 }
@@ -191,6 +211,8 @@ TEST(wavlTree, twoInsertRight)
   EXPECT_EQ(tree->root, s1n);
   EXPECT_EQ(s1n->right, s2n);
 
+  EXPECT_TRUE(tree_ordered(tree));
+
   BLI_wavlTree_free(tree, free_sample_data);
   EXPECT_TRUE(BLI_wavlTree_empty(tree));
 }
@@ -213,15 +235,17 @@ TEST(wavlTree, leftRotate)
   WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
   WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
 
-  debug_print_tree(tree);
+  //debug_print_tree(tree);
 
   EXPECT_EQ(tree->root, s2n);
   EXPECT_EQ(s2n->left, s1n);
   EXPECT_EQ(s2n->right, s3n);
 
-  WAVLTREE_INORDER(SampleData *, curr, tree) {
-    std::cout << "data: " << curr->my_data << "\n";
-  }
+  EXPECT_EQ(s2n->size, 3);
+  EXPECT_EQ(s1n->size, 1);
+  EXPECT_EQ(s3n->size, 1);
+
+  EXPECT_TRUE(tree_ordered(tree));
 
   BLI_wavlTree_free(tree, free_sample_data);
   EXPECT_TRUE(BLI_wavlTree_empty(tree));
@@ -245,15 +269,85 @@ TEST(wavlTree, rightRotate)
   WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
   WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
 
-  debug_print_tree(tree);
+  //debug_print_tree(tree);
 
   EXPECT_EQ(tree->root, s2n);
   EXPECT_EQ(s2n->left, s3n);
   EXPECT_EQ(s2n->right, s1n);
 
-  WAVLTREE_INORDER(SampleData *, curr, tree) {
-    std::cout << "data: " << curr->my_data << "\n";
-  }
+  EXPECT_EQ(s2n->size, 3);
+  EXPECT_EQ(s1n->size, 1);
+  EXPECT_EQ(s3n->size, 1);
+
+  EXPECT_TRUE(tree_ordered(tree));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, doubleLeftRotate) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(5);
+  SampleData *s3 = create_sample_node(7);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s3);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(3, BLI_wavlTree_size(tree));
+
+  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+
+  //debug_print_tree(tree);
+
+  EXPECT_EQ(tree->root, s3n);
+  EXPECT_EQ(s3n->left, s2n);
+  EXPECT_EQ(s3n->right, s1n);
+
+  EXPECT_EQ(s3n->size, 3);
+  EXPECT_EQ(s1n->size, 1);
+  EXPECT_EQ(s2n->size, 1);
+
+  EXPECT_TRUE(tree_ordered(tree));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, doubleRightRotate) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(3);
+  SampleData *s2 = create_sample_node(10);
+  SampleData *s3 = create_sample_node(7);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s3);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(3, BLI_wavlTree_size(tree));
+
+  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+
+  //debug_print_tree(tree);
+
+  EXPECT_EQ(tree->root, s3n);
+  EXPECT_EQ(s3n->left, s1n);
+  EXPECT_EQ(s3n->right, s2n);
+
+  EXPECT_EQ(s3n->size, 3);
+  EXPECT_EQ(s1n->size, 1);
+  EXPECT_EQ(s2n->size, 1);
+
+  EXPECT_TRUE(tree_ordered(tree));
 
   BLI_wavlTree_free(tree, free_sample_data);
   EXPECT_TRUE(BLI_wavlTree_empty(tree));

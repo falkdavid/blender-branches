@@ -106,6 +106,10 @@ static void right_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
   x->right = node;
   node->parent = x;
   x->parent = p;
+  
+  if (p != NULL) {
+    p->right = x;
+  }
 
   if (node == tree->root) {
     tree->root = x;
@@ -130,6 +134,10 @@ static void left_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
   x->left = node;
   node->parent = x;
   x->parent = p;
+
+  if (p != NULL) {
+    p->left = x;
+  }
 
   if (node == tree->root) {
     tree->root = x;
@@ -163,7 +171,11 @@ static void wavlTree_rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
     }
     /* double rotate */
     else if (check_node_type(2, 1, node->left)) {
-
+      left_rotate(tree, node->left);
+      right_rotate(tree, node);
+      demote(node);
+      demote(node->parent->left);
+      promote(node->parent);
     }
   }
   else if (check_node_type(2, 0, node)){
@@ -174,7 +186,11 @@ static void wavlTree_rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
     }
     /* double rotate */
     else if (check_node_type(1, 2, node->right)) {
-
+      right_rotate(tree, node->right);
+      left_rotate(tree, node);
+      demote(node);
+      demote(node->parent->right);
+      promote(node->parent);
     }
   }
 
