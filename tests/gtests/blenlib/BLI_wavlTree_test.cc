@@ -354,3 +354,78 @@ TEST(wavlTree, doubleRightRotate)
   BLI_wavlTree_free(tree, free_sample_data);
   EXPECT_TRUE(BLI_wavlTree_empty(tree));
 }
+
+TEST(wavlTree, deleteRoot1) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
+
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(0, BLI_wavlTree_size(tree));
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, deleteRoot2) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(15);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(1, BLI_wavlTree_size(tree));
+  EXPECT_EQ(s2, tree->root->data);
+  EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
+  EXPECT_EQ(s2, BLI_wavlTree_max_data(tree));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, deleteRoot3) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(5);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(1, BLI_wavlTree_size(tree));
+  EXPECT_EQ(s2, tree->root->data);
+  EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
+  EXPECT_EQ(s2, BLI_wavlTree_max_data(tree));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}
+
+TEST(wavlTree, deleteRoot4) 
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(10);
+  SampleData *s2 = create_sample_node(5);
+  SampleData *s3 = create_sample_node(16);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s3);
+  BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(2, BLI_wavlTree_size(tree));
+  EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
+  EXPECT_EQ(s3, BLI_wavlTree_max_data(tree));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+}

@@ -32,11 +32,6 @@
 /** \name Internal Functions
  * \{ */
 
-BLI_INLINE bool binary(WAVLT_Node *node) 
-{
-  return (node->left != NULL) && (node->right != NULL);
-}
-
 BLI_INLINE bool unary(WAVLT_Node *node) 
 {
   return (node->left != NULL) ^ (node->right != NULL);
@@ -57,17 +52,40 @@ BLI_INLINE void promote(WAVLT_Node *node)
   node->rank++;
 }
 
-/* Helper: check if the node is of type l,r */
-BLI_INLINE bool check_node_type(int l, int r, WAVLT_Node *node)
+/* Helper: check if the node is an i-child (rank diff with parent is i) */
+BLI_INLINE bool is_i_child(int i, WAVLT_Node *node)
 {
-  /* if a child is NULL (external) it's rank is -1 */
+  int diff = (node->parent != NULL) ? node->parent->rank - node->rank : -1;
+  if (diff == i) {
+    return true;
+  }
+  return false;
+}
+
+/* Helper: check if the node is of type l,r (rank diff of l/r-child is l/r) */
+BLI_INLINE bool is_type(int l, int r, WAVLT_Node *node)
+{
+  /* note: if a child is NULL (external) it's rank is -1 
+   * so the diff is node->rank - (-1) = node->rank + 1*/
   int l_diff = (node->left != NULL) ? node->rank - node->left->rank : node->rank + 1;
   int r_diff = (node->right != NULL) ? node->rank - node->right->rank : node->rank + 1;
-  //printf("l_diff: %d, r_diff: %d\n", r_diff, l_diff);
   if ((l == l_diff) && (r == r_diff)) {
     return true;
   }
   return false;
+}
+
+BLI_INLINE WAVLT_Node *sibling(WAVLT_Node *node)
+{
+  if (node->parent != NULL) {
+    if (node->parent->left == node) {
+      return node->parent->right;
+    }
+    else {
+      return node->parent->left;
+    }
+  }
+  return NULL;
 }
 
 BLI_INLINE void update_size(WAVLT_Node *node)
@@ -84,7 +102,7 @@ BLI_INLINE void update_size(WAVLT_Node *node)
 
 static WAVLT_Node *new_wavl_node_with_data(void *data)
 {
-  WAVLT_Node *new_node = MEM_callocN(sizeof(WAVLT_Node), __func__);
+  WAVLT_Node *new_node = MEM_mallocN(sizeof(WAVLT_Node), __func__);
   new_node->parent = new_node->left = new_node->right = NULL;
   new_node->succ = new_node->pred = NULL;
   new_node->size = 1;
@@ -94,7 +112,19 @@ static WAVLT_Node *new_wavl_node_with_data(void *data)
   return new_node;
 }
 
-/* Helper: performs a right rotation on the given node */
+static void free_wavl_node(WAVLT_Node *node, WAVLT_free_data_FP free_data)
+{
+  if (node == NULL) {
+    return;
+  }
+
+  if (free_data != NULL) {
+    free_data(node->data);
+  }
+  MEM_freeN(node);
+}
+
+/* Helper: performs a right rotation on the child of the given node */
 static void right_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
 {
   if (node->left == NULL) {
@@ -122,7 +152,7 @@ static void right_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
   update_size(x);
 }
 
-/* Helper: performs a left rotation on the given node */
+/* Helper: performs a left rotation on the child of the given node */
 static void left_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
 {
   if (node->right == NULL) {
@@ -150,7 +180,9 @@ static void left_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
   update_size(x);
 }
 
-static bool insert_node_left(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data, WAVLT_Node **insert)
+/* Helper: Find the closest node to 'data' using the WAVLT_comparator_FP function. 
+ * Return wether to insert it to the left or to the right of this node. */
+static bool check_insert_node_left(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data, WAVLT_Node **insert)
 {
   /* search for the leaf node to insert */
   bool insert_left;
@@ -160,7 +192,7 @@ static bool insert_node_left(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *da
     short c = cmp(data, current->data);
     /* node already exists */
     if (c == 0) {
-      return;
+      return false;
     }
     else if (c == -1) {
       /* insert to the left of current */
@@ -184,13 +216,15 @@ static bool insert_node_left(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *da
   return insert_left;
 }
 
+/* Helper: Rebalance the tree after a insertion. The WAVLT_Node 'node' is
+ * the parent of the inserted node */
 static void rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
 {
   if (node == NULL) {
     return;
   }
   /* repeat case 1: simple promotion */
-  while (check_node_type(0, 1, node) || check_node_type(1, 0, node)) {
+  while (is_type(0, 1, node) || is_type(1, 0, node)) {
     promote(node);
     update_size(node);
     if (node->parent == NULL) {
@@ -200,14 +234,14 @@ static void rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
   }
 
   /* case 2: tree rotations */
-  if (check_node_type(0, 2, node)) {
+  if (is_type(0, 2, node)) {
     /* rotate right */
-    if (check_node_type(1, 2, node->left)) {
+    if (is_type(1, 2, node->left)) {
       right_rotate(tree, node);
       demote(node);
     }
     /* double rotate */
-    else if (check_node_type(2, 1, node->left)) {
+    else if (is_type(2, 1, node->left)) {
       left_rotate(tree, node->left);
       right_rotate(tree, node);
       demote(node);
@@ -215,19 +249,192 @@ static void rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
       promote(node->parent);
     }
   }
-  else if (check_node_type(2, 0, node)){
+  else if (is_type(2, 0, node)){
     /* rotate left */
-    if (check_node_type(2, 1, node->right)) {
+    if (is_type(2, 1, node->right)) {
       left_rotate(tree, node);
       demote(node);
     }
     /* double rotate */
-    else if (check_node_type(1, 2, node->right)) {
+    else if (is_type(1, 2, node->right)) {
       right_rotate(tree, node->right);
       left_rotate(tree, node);
       demote(node);
       demote(node->parent->right);
       promote(node->parent);
+    }
+  }
+
+  /* propagate the new size to the top */
+  while (node != NULL) {
+    update_size(node);
+    node = node->parent;
+  }
+}
+
+/* Helper: delete leaf node and return node from where to rebalance the tree, if it exists */
+static WAVLT_Node *delete_leaf_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
+{
+  if (tree->root == node) {
+    tree->root = NULL;
+    free_wavl_node(node, free_data);
+    return NULL;
+  }
+
+  /* update parent */
+  WAVLT_Node *parent = node->parent;
+  if (parent->left == node) {
+    parent->left = NULL;
+  }
+  else {
+    parent->right = NULL;
+  }
+
+  /* update successor and predecessor */
+  if (node->pred != NULL) {
+    node->pred->succ = node->succ;
+  }
+  if (node->succ != NULL) {
+    node->succ->pred = node->pred;
+  }
+
+  free_wavl_node(node, free_data);
+  return parent;
+}
+
+/* Helper: delete unary node and return node from where to rebalance the tree, if it exists */
+static WAVLT_Node *delete_unary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
+{
+  WAVLT_Node *child = (node->left != NULL) ? node->left : node->right;
+  if (tree->root == node) {
+    tree->root = child;
+    child->parent = NULL;
+    free_wavl_node(node, free_data);
+    return NULL;
+  }
+
+  /* update parent */
+  WAVLT_Node *parent = node->parent;
+  if (parent->left == node) {
+    parent->left = child;
+  }
+  else {
+    parent->right = child;
+  }
+
+  /* update successor and predecessor */
+  if (node->pred != NULL) {
+    node->pred->succ = node->succ;
+  }
+  if (node->succ != NULL) {
+    node->succ->pred = node->pred;
+  }
+
+  free_wavl_node(node, free_data);
+  return parent;
+}
+
+/* Helper: delete binary node and return node from where to rebalance the tree, if it exists */
+static WAVLT_Node *delete_binary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
+{
+  /* note that node->pred and node->succ can never be NULL because node is binary */
+  bool replace_is_leaf = true;
+  WAVLT_Node *replace_node = node->pred;
+  if(!leaf(node->pred) && leaf(node->succ)) {
+    replace_node = node->succ;
+  }
+  else {
+    replace_is_leaf = false;
+  }
+
+  /* replace node data */
+  free_data(node->data);
+  node->data = replace_node->data;
+
+  /* update successor and predecessor */
+  node->pred->succ = node->succ;
+  node->succ->pred = node->pred;
+  
+  /* replace_node must be leaf or unary */
+  WAVLT_Node *parent_node = NULL;
+  if (replace_is_leaf) {
+    parent_node = delete_leaf_node(tree, free_data, replace_node);
+  }
+  else {
+    parent_node = delete_unary_node(tree, free_data, replace_node);
+  }
+
+  return parent_node;
+}
+
+/* Helper: Rebalance the tree after a deletion. 'node' is leaf or unary */
+static void rebalance_delete(WAVLT_Tree *tree, WAVLT_Node *node)
+{
+  if (node == NULL) {
+    return;
+  }
+  /* case 1: node is leaf and type 2,2 */
+  if (leaf(node) && is_type(2, 2, node)) {
+    demote(node);
+    update_size(node);
+  }
+
+  /* case 2: node is 3-child */
+  if (is_i_child(3, node)) {
+    WAVLT_Node *sib = sibling(node);
+    while(is_i_child(3, node) && (is_i_child(2, sib) || is_type(2, 2, sib))) {
+      if (!is_i_child(2, sib)) {
+        demote(sib);
+        update_size(sib);
+      }
+      demote(node->parent);
+      update_size(node->parent);
+      node = node->parent;
+      sib = sibling(node);
+    }
+
+    /* case 3: rotations */
+    if (is_type(1, 3, node)) {
+      /* rotate right */
+      if(is_i_child(1, node->left->left)) {
+        promote(node->left);
+        demote(node);
+        right_rotate(tree, node->left);
+        if (leaf(node)) {
+          demote(node);
+        }
+      }
+      /* double rotate */
+      else if (is_i_child(2, node->left->left)) {
+        promote(node->left->right);
+        promote(node->left->right);
+        demote(node->left);
+        demote(node);
+        demote(node);
+        left_rotate(tree, node->left);
+        right_rotate(tree, node->left);
+      }
+    }
+    else if (is_type(3, 1, node)){
+      /* rotate left */
+      if(is_i_child(1, node->right->right)) {
+        promote(node->right);
+        demote(node);
+        left_rotate(tree, node->right);
+        if (leaf(node)) {
+          demote(node);
+        }
+      }
+      /* double rotate */
+      else if (is_i_child(2, node->right->right)) {
+        promote(node->right->left);
+        promote(node->right->left);
+        demote(node->right);
+        demote(node);
+        demote(node);
+        right_rotate(tree, node->right);
+        left_rotate(tree, node->right);
+      }
     }
   }
 
@@ -255,7 +462,7 @@ WAVLT_Tree *BLI_wavlTree_new()
 }
 
 /**
- * Frees the tree. If a WAVLT_free_data_FP function is provided (not NULL),
+ * Frees the tree. If the WAVLT_free_data_FP function is not NULL,
  * it will free all of the data in the tree using this function for each
  * element.
  */
@@ -325,44 +532,22 @@ WAVLT_Node *BLI_wavlTree_search(const WAVLT_Tree *tree, WAVLT_comparator_FP cmp,
   return NULL;
 }
 
-/**
- * Searches for a particular data node (search_data) using the WAVLT_comparator_FP function.
- * Returns the data inside the node if it was found, NULL otherwise.
- */
-void *BLI_wavlTree_search_data(const WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data)
-{
-  WAVLT_Node *current = tree->root;
-  while (current != NULL) {
-    short c = cmp(search_data, current->data);
-    if (c == 0) {
-      return current->data;
-    }
-    else if (c == -1) {
-      current = current->left;
-    }
-    else {
-      current = current->right;
-    }
-  }
-  return NULL;
-}
-
-WAVLT_Node *BLI_wavlTree_min(WAVLT_Tree *tree)
+WAVLT_Node *BLI_wavlTree_min(const WAVLT_Tree *tree)
 {
   return tree->min_node;
 }
 
-WAVLT_Node *BLI_wavlTree_max(WAVLT_Tree *tree)
+WAVLT_Node *BLI_wavlTree_max(const WAVLT_Tree *tree)
 {
   return tree->max_node;
 }
 
-void *BLI_wavlTree_min_data(WAVLT_Tree *tree)
+void *BLI_wavlTree_min_data(const WAVLT_Tree *tree)
 {
   return tree->min_node->data;
 }
 
-void *BLI_wavlTree_max_data(WAVLT_Tree *tree)
+void *BLI_wavlTree_max_data(const WAVLT_Tree *tree)
 {
   return tree->max_node->data;
 }
@@ -384,10 +569,32 @@ void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
     return;
   }
 
-  WAVLT_Node *insert_node = NULL;
-  bool insert_left = insert_node_left(tree, cmp, data, &insert_node);
-  if (insert_node == NULL) {
-    return;
+  /* search for the leaf node to insert */
+  bool insert_left;
+  WAVLT_Node *insert_node = tree->root;
+  while (insert_node != NULL) {
+    /* compare data */
+    short c = cmp(data, insert_node->data);
+    /* node already exists */
+    if (c == 0) {
+      return;
+    }
+    else if (c == -1) {
+      /* insert to the left of insert_node */
+      if (insert_node->left == NULL) {
+        insert_left = true;
+        break;
+      }
+      insert_node = insert_node->left;
+    }
+    else {
+      /* insert to the right of insert_node */
+      if (insert_node->right == NULL) {
+        insert_left = false;
+        break;
+      }
+      insert_node = insert_node->right;
+    }
   }
 
   /* create a new node to insert */
@@ -434,4 +641,62 @@ void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
   rebalance_insert(tree, insert_node);
 }
 
+void BLI_wavlTree_update_node(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_Node *node)
+{
+  if (node == NULL) {
+    return;
+  }
+  /* save pointer to data */
+  void *data = node->data;
+  /* delete node, but don't free data */
+  BLI_wavlTree_delete_node(tree, NULL, node);
+  BLI_wavlTree_insert(tree, cmp, data);
+}
+
+void BLI_wavlTree_update(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
+{
+  WAVLT_Node *update_node = BLI_wavlTree_search(tree, cmp, data);
+  if (update_node == NULL) {
+    return;
+  }
+  /* don't free data as it was updated */
+  BLI_wavlTree_delete_node(tree, NULL, update_node);
+  BLI_wavlTree_insert(tree, cmp, data);
+}
+
+void BLI_wavlTree_delete_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
+{
+  /* update min and max nodes */
+  if (tree->min_node == node) {
+    tree->min_node = node->succ;
+  }
+  else if (tree->max_node == node) {
+    tree->max_node = node->pred;
+  }
+
+  WAVLT_Node *parent = NULL;
+  if (leaf(node)) {
+    parent = delete_leaf_node(tree, free_data, node);
+  }
+  else if (unary(node)) {
+    parent = delete_unary_node(tree, free_data, node);
+  }
+  else {
+    parent = delete_binary_node(tree, free_data, node);
+  }
+  
+  /* rebalance the tree if there exists a parent node */
+  if (parent != NULL) {
+    rebalance_delete(tree, parent);
+  }
+}
+
+void BLI_wavlTree_delete(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_free_data_FP free_data, void *data)
+{
+  WAVLT_Node *delete_node = BLI_wavlTree_search(tree, cmp, data);
+  if (delete_node == NULL) {
+    return;
+  }
+  BLI_wavlTree_delete_node(tree, free_data, delete_node);
+}
 /** \} */
