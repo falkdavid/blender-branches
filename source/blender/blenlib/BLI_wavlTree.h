@@ -52,7 +52,7 @@ typedef struct WAVLT_Node {
    * for quick access */
   struct WAVLT_Node *succ, *pred;
   /* Size of the subtree including the node */
-  size_t size;
+  uint size;
   /* The rank is an approximation of the distance 
    * to the farthest leaf descendant.
    * (used internally to balance the BST) */
@@ -92,7 +92,7 @@ struct WAVLT_Tree *BLI_wavlTree_new(void);
 void BLI_wavlTree_free(struct WAVLT_Tree *tree, WAVLT_free_data_FP free_data);
 
 bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
-size_t BLI_wavlTree_size(const struct WAVLT_Tree *tree);
+uint BLI_wavlTree_size(const struct WAVLT_Tree *tree);
 
 struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
 struct WAVLT_Node *BLI_wavlTree_min(const struct WAVLT_Tree *tree);

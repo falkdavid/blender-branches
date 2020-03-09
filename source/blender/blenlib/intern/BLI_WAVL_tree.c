@@ -90,7 +90,7 @@ BLI_INLINE WAVLT_Node *sibling(WAVLT_Node *node)
 
 BLI_INLINE void update_size(WAVLT_Node *node)
 {
-  size_t new_size = 1;
+  uint new_size = 1;
   if (node->left != NULL) {
     new_size += node->left->size;
   }
@@ -502,7 +502,7 @@ bool BLI_wavlTree_empty(const WAVLT_Tree *tree)
 /**
  * Returns the number of nodes contained in the tree.
  */
-size_t BLI_wavlTree_size(const WAVLT_Tree *tree)
+uint BLI_wavlTree_size(const WAVLT_Tree *tree)
 {
   if (tree != NULL) {
     return (tree->root != NULL) ? tree->root->size : 0;
@@ -560,14 +560,18 @@ void *BLI_wavlTree_max_data(const WAVLT_Tree *tree)
  */
 void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
 {
+  WAVLT_Node *new_wavl_node = NULL;
   /* if tree is empty, make root */
   if (tree->root == NULL) {
-    WAVLT_Node *new_node = new_wavl_node_with_data(data);
-    tree->root = new_node;
-    tree->min_node = new_node;
-    tree->max_node = new_node;
+    new_wavl_node = new_wavl_node_with_data(data);
+    tree->root = new_wavl_node;
+    tree->min_node = new_wavl_node;
+    tree->max_node = new_wavl_node;
     return;
   }
+
+  /* create a new node to insert */
+  new_wavl_node = new_wavl_node_with_data(data);
 
   /* search for the leaf node to insert */
   bool insert_left;
@@ -597,44 +601,42 @@ void BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
     }
   }
 
-  /* create a new node to insert */
-  WAVLT_Node *new_node = new_wavl_node_with_data(data);
   if (insert_left) {
     /* update tree links */
-    insert_node->left = new_node;
-    new_node->parent = insert_node;
+    insert_node->left = new_wavl_node;
+    new_wavl_node->parent = insert_node;
 
     /* update successor and predecessor */
     WAVLT_Node *curr_pred = insert_node->pred;
     if (curr_pred != NULL) {
-      curr_pred->succ = new_node;
+      curr_pred->succ = new_wavl_node;
     }
-    insert_node->pred = new_node;
-    new_node->pred = curr_pred;
-    new_node->succ = insert_node;
+    insert_node->pred = new_wavl_node;
+    new_wavl_node->pred = curr_pred;
+    new_wavl_node->succ = insert_node;
 
     /* if insert before min, update min */
     if (tree->min_node == insert_node) {
-      tree->min_node = new_node;
+      tree->min_node = new_wavl_node;
     }
   }
   else {
     /* update tree links */
-    insert_node->right = new_node;
-    new_node->parent = insert_node;
+    insert_node->right = new_wavl_node;
+    new_wavl_node->parent = insert_node;
 
     /* update successor and predecessor */
     WAVLT_Node *curr_succ = insert_node->succ;
     if (curr_succ != NULL) {
-      curr_succ->pred = new_node;
+      curr_succ->pred = new_wavl_node;
     }
-    insert_node->succ = new_node;
-    new_node->succ = curr_succ;
-    new_node->pred = insert_node;
+    insert_node->succ = new_wavl_node;
+    new_wavl_node->succ = curr_succ;
+    new_wavl_node->pred = insert_node;
 
     /* if insert after max, update max */
     if (tree->max_node == insert_node) {
-      tree->max_node = new_node;
+      tree->max_node = new_wavl_node;
     }
   }
 

@@ -21,9 +21,9 @@ typedef struct SampleData {
 
 static SampleData *create_sample_node(int data)
 {
-  SampleData *new_data = (SampleData *)MEM_callocN(sizeof(SampleData), __func__);
-  new_data->my_data = data;
-  return new_data;
+  SampleData *sample_data = (SampleData *)MEM_callocN(sizeof(SampleData), __func__);
+  sample_data->my_data = data;
+  return sample_data;
 }
 
 static void free_sample_data(void *data)
@@ -413,11 +413,11 @@ TEST(wavlTree, deleteRoot4)
 {
   WAVLT_Tree *tree;
   tree = BLI_wavlTree_new();
-  SampleData *s1 = create_sample_node(10);
-  SampleData *s2 = create_sample_node(5);
-  SampleData *s3 = create_sample_node(16);
-  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+  SampleData *s1 = create_sample_node(3);
+  SampleData *s2 = create_sample_node(10);
+  SampleData *s3 = create_sample_node(7);
   BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
   BLI_wavlTree_insert(tree, cmp_sample_data, s3);
   BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
 
