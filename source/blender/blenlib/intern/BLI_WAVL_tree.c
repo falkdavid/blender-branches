@@ -124,6 +124,23 @@ static void free_wavl_node(WAVLT_Node *node, WAVLT_free_data_FP free_data)
   MEM_freeN(node);
 }
 
+/* returns true if the deletion of the given node does 
+ * not violate the rank rule, otherwise false */
+static bool is_optimal_for_deletion(WAVLT_Node *node)
+{
+  if (leaf(node)) {
+    if (is_i_child(1, node) && unary(node->parent)) {
+      return false;
+    }
+  }
+  else {
+    if (is_i_child(2, node)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /* Helper: performs a right rotation on the child of the given node */
 static void right_rotate(WAVLT_Tree *tree, WAVLT_Node *node)
 {
@@ -276,19 +293,27 @@ static void rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
 /* Helper: delete leaf node and return node from where to rebalance the tree, if it exists */
 static WAVLT_Node *delete_leaf_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
 {
+  WAVLT_Node *parent = NULL;
   if (tree->root == node) {
     tree->root = NULL;
-    free_wavl_node(node, free_data);
-    return NULL;
-  }
-
-  /* update parent */
-  WAVLT_Node *parent = node->parent;
-  if (parent->left == node) {
-    parent->left = NULL;
   }
   else {
-    parent->right = NULL;
+      /* update parent */
+    parent = node->parent;
+    if (parent->left == node) {
+      parent->left = NULL;
+    }
+    else {
+      parent->right = NULL;
+    }
+  }
+
+  /* update min and max nodes */
+  if (tree->min_node == node) {
+    tree->min_node = node->succ;
+  }
+  else if (tree->max_node == node) {
+    tree->max_node = node->pred;
   }
 
   /* update successor and predecessor */
@@ -306,21 +331,31 @@ static WAVLT_Node *delete_leaf_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_da
 /* Helper: delete unary node and return node from where to rebalance the tree, if it exists */
 static WAVLT_Node *delete_unary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
 {
-  WAVLT_Node *child = (node->left != NULL) ? node->left : node->right;
+  WAVLT_Node *parent = NULL;
+  WAVLT_Node *child = (node->left != NULL) ? node->left : node->right; //note: this cannot be null, as node is unary
   if (tree->root == node) {
     tree->root = child;
     child->parent = NULL;
-    free_wavl_node(node, free_data);
-    return NULL;
-  }
-
-  /* update parent */
-  WAVLT_Node *parent = node->parent;
-  if (parent->left == node) {
-    parent->left = child;
   }
   else {
-    parent->right = child;
+    /* update parent */
+    parent = node->parent;
+    if (parent->left == node) {
+      parent->left = child;
+    }
+    else {
+      parent->right = child;
+    }
+
+    child->parent = parent;
+  }
+
+  /* update min and max nodes */
+  if (tree->min_node == node) {
+    tree->min_node = node->succ;
+  }
+  else if (tree->max_node == node) {
+    tree->max_node = node->pred;
   }
 
   /* update successor and predecessor */
@@ -339,30 +374,26 @@ static WAVLT_Node *delete_unary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_d
 static WAVLT_Node *delete_binary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
 {
   /* note that node->pred and node->succ can never be NULL because node is binary */
-  bool replace_is_leaf = true;
-  WAVLT_Node *replace_node = node->pred;
-  if(!leaf(node->pred) && leaf(node->succ)) {
-    replace_node = node->succ;
+  WAVLT_Node *replace_node = NULL;
+  if(is_optimal_for_deletion(node->pred)) {
+    replace_node = node->pred;
   }
   else {
-    replace_is_leaf = false;
+    replace_node = node->succ;
   }
 
   /* replace node data */
   free_data(node->data);
   node->data = replace_node->data;
-
-  /* update successor and predecessor */
-  node->pred->succ = node->succ;
-  node->succ->pred = node->pred;
   
   /* replace_node must be leaf or unary */
   WAVLT_Node *parent_node = NULL;
-  if (replace_is_leaf) {
-    parent_node = delete_leaf_node(tree, free_data, replace_node);
+  if (leaf(replace_node)) {
+    /* dont free data as it is used by 'node' now. */
+    parent_node = delete_leaf_node(tree, NULL, replace_node);
   }
   else {
-    parent_node = delete_unary_node(tree, free_data, replace_node);
+    parent_node = delete_unary_node(tree, NULL, replace_node);
   }
 
   return parent_node;
@@ -669,14 +700,6 @@ void BLI_wavlTree_update(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
 
 void BLI_wavlTree_delete_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
 {
-  /* update min and max nodes */
-  if (tree->min_node == node) {
-    tree->min_node = node->succ;
-  }
-  else if (tree->max_node == node) {
-    tree->max_node = node->pred;
-  }
-
   WAVLT_Node *parent = NULL;
   if (leaf(node)) {
     parent = delete_leaf_node(tree, free_data, node);
