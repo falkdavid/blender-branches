@@ -488,7 +488,6 @@ void BLI_wavlTree_free(WAVLT_Tree *tree, WAVLT_free_data_FP free_data)
   }
 
   MEM_freeN(tree);
-  tree->root = tree->min_node = tree->max_node = NULL;
 }
 
 /**
