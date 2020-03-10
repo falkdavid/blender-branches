@@ -266,9 +266,10 @@ static void rebalance_insert(WAVLT_Tree *tree, WAVLT_Node *node)
   }
 
   /* propagate the new size to the top */
-  while (node != NULL) {
-    update_size(node);
-    node = node->parent;
+  WAVLT_Node *p = node;
+  while (p != NULL) {
+    update_size(p);
+    p = p->parent;
   }
 }
 
@@ -439,9 +440,10 @@ static void rebalance_delete(WAVLT_Tree *tree, WAVLT_Node *node)
   }
 
   /* propagate the new size to the top */
-  while (node != NULL) {
-    update_size(node);
-    node = node->parent;
+  WAVLT_Node *p = node;
+  while (p != NULL) {
+    update_size(p);
+    p = p->parent;
   }
 }
 
