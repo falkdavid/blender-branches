@@ -75,9 +75,10 @@ static void debug_print_tree(WAVLT_Tree *tree)
   if (tree->root == NULL) {
     return;
   }
-  std::cout << "Tree: \n";
   int h = tree_height(tree->root);
-  for (int i = 1; i < h; i++) {
+  std::cout << "Tree (h=" << h << "): \n";
+  
+  for (int i = 1; i < h+1; i++) {
     debug_print_tree_layer(tree->root, i);
     std::cout << "\n";
   }
@@ -369,11 +370,15 @@ TEST(wavlTree, deleteRoot2)
   BLI_wavlTree_insert(tree, cmp_sample_data, s2);
   BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
 
+  //debug_print_tree(tree);
+
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(1, BLI_wavlTree_size(tree));
   EXPECT_EQ(s2, tree->root->data);
   EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
   EXPECT_EQ(s2, BLI_wavlTree_max_data(tree));
+  EXPECT_EQ(NULL, tree->root->pred);
+  EXPECT_EQ(NULL, tree->root->succ);
 
   BLI_wavlTree_free(tree, free_sample_data);
 }
@@ -388,11 +393,15 @@ TEST(wavlTree, deleteRoot3)
   BLI_wavlTree_insert(tree, cmp_sample_data, s2);
   BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, s1);
 
+  //debug_print_tree(tree);
+
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(1, BLI_wavlTree_size(tree));
   EXPECT_EQ(s2, tree->root->data);
   EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
   EXPECT_EQ(s2, BLI_wavlTree_max_data(tree));
+  EXPECT_EQ(NULL, tree->root->pred);
+  EXPECT_EQ(NULL, tree->root->succ);
 
   BLI_wavlTree_free(tree, free_sample_data);
 }
