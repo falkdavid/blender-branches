@@ -32,7 +32,8 @@ extern "C" {
  *
  * WAVL-trees (or weak AVL-trees) are a hybrid of RB-trees and AVL-trees.
  * They where first introduced in the paper "Rank-balanced trees" by 
- * Haeupler, Bernhard; Sen, Siddhartha; Tarjan, Robert E. (2015).
+ * Haeupler, Bernhard; Sen, Siddhartha; Tarjan, Robert E. (2015)
+ * http://sidsen.azurewebsites.net//papers/rb-trees-talg.pdf.
  * The main advantage of AVL-trees over RB-trees is that they are more
  * balanced. RB-trees however use a constant amount of tree rotations
  * when deleting a node, compared to a (worst case) logarithmic 
@@ -95,18 +96,23 @@ bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
 uint BLI_wavlTree_size(const struct WAVLT_Tree *tree);
 
 struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
+struct WAVLT_Node *BLI_wavlTree_successor_ex(const struct WAVLT_Node *node);
+struct WAVLT_Node *BLI_wavlTree_successor(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+struct WAVLT_Node *BLI_wavlTree_predecessor_ex(const struct WAVLT_Node *node);
+struct WAVLT_Node *BLI_wavlTree_predecessor(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
 struct WAVLT_Node *BLI_wavlTree_min(const struct WAVLT_Tree *tree);
 struct WAVLT_Node *BLI_wavlTree_max(const struct WAVLT_Tree *tree);
 void *BLI_wavlTree_min_data(const struct WAVLT_Tree *tree);
 void *BLI_wavlTree_max_data(const struct WAVLT_Tree *tree);
 
-void BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+struct WAVLT_Node *BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
 void BLI_wavlTree_update_node(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, struct WAVLT_Node *node);
 void BLI_wavlTree_update(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
 void BLI_wavlTree_delete_node(struct WAVLT_Tree *tree, WAVLT_free_data_FP free_data, struct WAVLT_Node *node);
 void BLI_wavlTree_delete(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_free_data_FP free_data, void *data);
 
-/* Macro for in-order walk over the tree (uses predecessor-successor DLL) */
+/* Macro for in-order walk over the the data in the tree (uses predecessor-successor DLL).
+ * The type should be that of the data in a node */
 #define WAVLTREE_INORDER(type, var, tree) \
   type var = (type)((tree)->min_node->data); \
   for (WAVLT_Node *_curr = (tree)->min_node; _curr != NULL; \
