@@ -2,6 +2,7 @@
 
 #include "testing/testing.h"
 #include <string.h>
+#include <math.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -110,6 +111,17 @@ static bool tree_ordered(WAVLT_Tree *tree)
     }
   }
   return true;
+}
+
+static bool check_height_rule(WAVLT_Tree *tree)
+{
+  int num_nodes = BLI_wavlTree_size(tree);
+  int h = tree_height(tree->root);
+  // WAVL trees height should be less than log_(golden ratio)(n)
+  // This can be simplified
+  int limit = (int)ceil(2.078087f * log(num_nodes));
+  std::cout << "Height: " << h << ", nodes: " << num_nodes << ", limit: " << limit << "\n";
+  return h < limit;
 }
 
 static bool check_rank_rule(WAVLT_Tree *tree)
@@ -437,7 +449,7 @@ static void insert_array_into_tree(WAVLT_Tree *tree, int *array, int length)
     int elem = array[i];
     SampleData *s = create_sample_node(elem);
     BLI_wavlTree_insert(tree, cmp_sample_data, s);
-    debug_print_tree(tree);
+    //debug_print_tree(tree);
   }
 }
 
@@ -472,6 +484,7 @@ static void random_insert_helper(int num_items, int rng_seed)
 
   EXPECT_TRUE(tree_ordered(tree));
   EXPECT_TRUE(check_rank_rule(tree));
+  EXPECT_TRUE(check_height_rule(tree));
 
   BLI_wavlTree_free(tree, NULL);
   free_sample_range(range, num_items);
@@ -485,6 +498,11 @@ TEST(wavlTree, insert20)
 TEST(wavlTree, insert100)
 {
   random_insert_helper(100, 4567);
+}
+
+TEST(wavlTree, insert10000)
+{
+  random_insert_helper(10000, 7890);
 }
 
 TEST(wavlTree, deleteRoot1) 
@@ -583,4 +601,40 @@ TEST(wavlTree, deleteRoot5)
   EXPECT_TRUE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(0, BLI_wavlTree_size(tree));
   BLI_wavlTree_free(tree, free_sample_data);
+}
+
+static void random_delete_helper(int num_items, int rng_seed)
+{
+  WAVLT_Tree *tree = BLI_wavlTree_new();
+  SampleData **range = create_sample_range(num_items);
+  for (int i = 0; i < num_items; i++) {
+    SampleData *data = range[i];
+    BLI_wavlTree_insert(tree, cmp_sample_data, data);
+  }
+  BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
+  for (int i = 0; i < num_items; i++) {
+    SampleData *data = range[i];
+    BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, data);
+  }
+  
+  EXPECT_EQ(0, BLI_wavlTree_size(tree));
+  EXPECT_TRUE(BLI_wavlTree_empty(tree));
+
+  BLI_wavlTree_free(tree, NULL);
+  free_sample_range(range, num_items);
+}
+
+TEST(wavlTree, delete10)
+{
+  random_delete_helper(10, 1234);
+}
+
+TEST(wavlTree, delete100)
+{
+  random_delete_helper(100, 4567);
+}
+
+TEST(wavlTree, delete10000)
+{
+  random_delete_helper(10000, 7890);
 }
