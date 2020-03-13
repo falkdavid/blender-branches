@@ -443,7 +443,7 @@ void BKE_gpencil_brush_preset_set(Main *bmain, Brush *brush, const short type)
       brush->gpencil_settings->active_smooth = ACTIVE_SMOOTH;
       brush->gpencil_settings->draw_angle = 0.0f;
       brush->gpencil_settings->draw_angle_factor = 0.0f;
-      brush->gpencil_settings->hardeness = 0.211f;
+      brush->gpencil_settings->hardeness = 0.9f;
       copy_v2_fl(brush->gpencil_settings->aspect_ratio, 1.0f);
 
       brush->gpencil_tool = GPAINT_TOOL_DRAW;
@@ -1303,6 +1303,7 @@ void BKE_brush_sculpt_reset(Brush *br)
       br->spacing = 3;
       br->autosmooth_factor = 0.25f;
       br->normal_radius_factor = 0.75f;
+      br->hardness = 0.65f;
       break;
     case SCULPT_TOOL_CLAY_THUMB:
       br->alpha = 0.5f;

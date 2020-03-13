@@ -4018,6 +4018,16 @@ void rna_def_view_layer_common(StructRNA *srna, const bool scene)
     RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   }
 
+  prop = RNA_def_property(srna, "use_volumes", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_VOLUMES);
+  RNA_def_property_ui_text(prop, "Volumes", "Render volumes in this Layer");
+  if (scene) {
+    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+  }
+  else {
+    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  }
+
   /* passes */
   prop = RNA_def_property(srna, "use_pass_combined", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "passflag", SCE_PASS_COMBINED);
@@ -5712,14 +5722,14 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Resolution %", "Percentage scale for render resolution");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_SceneSequencer_update");
 
-  prop = RNA_def_property(srna, "tile_x", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "tile_x", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "tilex");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_range(prop, 8, 65536);
   RNA_def_property_ui_text(prop, "Tile X", "Horizontal tile size to use while rendering");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-  prop = RNA_def_property(srna, "tile_y", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "tile_y", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "tiley");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_range(prop, 8, 65536);
