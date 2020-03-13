@@ -465,21 +465,27 @@ static void random_insert_helper(int num_items, int rng_seed)
   BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
   for (int i = 0; i < num_items; i++) {
     SampleData *data = range[i];
-    std::cout << "Insert: " << data->my_data << "\n";
+    //std::cout << "Insert: " << data->my_data << "\n";
     BLI_wavlTree_insert(tree, cmp_sample_data, data);
-    debug_print_tree(tree);
+    //debug_print_tree(tree);
   }
 
   EXPECT_TRUE(tree_ordered(tree));
+  EXPECT_TRUE(check_rank_rule(tree));
 
   BLI_wavlTree_free(tree, NULL);
   free_sample_range(range, num_items);
 }
 
-// TEST(wavlTree, insert20)
-// {
-//   random_insert_helper(20, 4567);
-// }
+TEST(wavlTree, insert20)
+{
+  random_insert_helper(20, 1234);
+}
+
+TEST(wavlTree, insert100)
+{
+  random_insert_helper(100, 4567);
+}
 
 TEST(wavlTree, deleteRoot1) 
 {
