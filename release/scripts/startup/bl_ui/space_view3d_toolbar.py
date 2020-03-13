@@ -874,6 +874,7 @@ class VIEW3D_PT_sculpt_voxel_remesh(Panel, View3DPaintPanel):
         col.prop(mesh, "use_remesh_smooth_normals")
         col.prop(mesh, "use_remesh_preserve_volume")
         col.prop(mesh, "use_remesh_preserve_paint_mask")
+        col.prop(mesh, "use_remesh_preserve_sculpt_face_sets")
         col.operator("object.voxel_remesh", text="Remesh")
 
 
@@ -2045,7 +2046,7 @@ class VIEW3D_PT_tools_grease_pencil_vertex_paint_settings(Panel, View3DPanel, Gr
 
 class VIEW3D_PT_tools_grease_pencil_brush_vertex_color(View3DPanel, Panel):
     bl_context = ".greasepencil_vertex"
-    bl_label = "Vertex Color"
+    bl_label = "Color"
     bl_category = "Tool"
 
     @classmethod
@@ -2074,9 +2075,6 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_color(View3DPanel, Panel):
 
         col = layout.column()
 
-        col.prop(gp_settings, "vertex_mode", text="Mode")
-
-        col.prop(brush, "color", text="")
         col.template_color_picker(brush, "color", value_slider=True)
 
         sub_row = col.row(align=True)
@@ -2084,6 +2082,8 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_color(View3DPanel, Panel):
         sub_row.prop(brush, "secondary_color", text="")
 
         sub_row.operator("gpencil.tint_flip", icon='FILE_REFRESH', text="")
+
+        col.prop(gp_settings, "vertex_mode", text="Mode")
 
 
 class VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff(GreasePencilBrushFalloff, Panel, View3DPaintPanel):
@@ -2100,7 +2100,7 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff(GreasePencilBrushFallof
 
 class VIEW3D_PT_tools_grease_pencil_brush_vertex_palette(View3DPanel, Panel):
     bl_context = ".greasepencil_vertex"
-    bl_label = "Color Palette"
+    bl_label = "Palette"
     bl_category = "Tool"
     bl_parent_id = 'VIEW3D_PT_tools_grease_pencil_brush_vertex_color'
 
@@ -2125,7 +2125,6 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_palette(View3DPanel, Panel):
         layout.use_property_decorate = False
         ts = context.tool_settings
         settings = ts.gpencil_vertex_paint
-        brush = settings.brush
 
         col = layout.column()
 
@@ -2137,7 +2136,7 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_palette(View3DPanel, Panel):
 
 class VIEW3D_PT_tools_grease_pencil_brush_mixcolor(View3DPanel, Panel):
     bl_context = ".greasepencil_paint"
-    bl_label = "Vertex Color"
+    bl_label = "Color"
     bl_category = "Tool"
     bl_options = {'DEFAULT_CLOSED'}
 
@@ -2160,45 +2159,24 @@ class VIEW3D_PT_tools_grease_pencil_brush_mixcolor(View3DPanel, Panel):
         if brush.gpencil_tool not in {'DRAW', 'FILL'}:
             return False
 
-        gp_settings = brush.gpencil_settings
-        ma = None
-        if gp_settings.use_material_pin is False:
-            if ob.active_material_index >= 0:
-                ma = ob.material_slots[ob.active_material_index].material
-            else:
-                ma = gp_settings.material
-
         return True
-
-    def draw_header(self, context):
-        ts = context.tool_settings
-        settings = ts.gpencil_paint
-        brush = settings.brush
-
-        if brush.gpencil_tool != 'TINT':
-            self.layout.prop(settings, "use_vertex_color", text="",
-                             toggle=False)
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
         ts = context.tool_settings
         settings = ts.gpencil_paint
         brush = settings.brush
         gp_settings = brush.gpencil_settings
 
+        if brush.gpencil_tool != 'TINT':
+            row = layout.row()
+            row.prop(settings, "color_mode", expand=True)
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
         col = layout.column()
-        col.enabled = settings.use_vertex_color or brush.gpencil_tool == 'TINT'
+        col.enabled = settings.color_mode == 'VERTEXCOLOR' or brush.gpencil_tool == 'TINT'
 
-        if brush.gpencil_tool in {'DRAW', 'FILL'}:
-            col.prop(gp_settings, "vertex_mode", text="Mode")
-            col.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
-
-        if brush.gpencil_tool == 'TINT':
-            col.prop(gp_settings, "vertex_mode", text="Mode")
-
-        col.prop(brush, "color", text="")
         col.template_color_picker(brush, "color", value_slider=True)
 
         sub_row = col.row(align=True)
@@ -2207,10 +2185,17 @@ class VIEW3D_PT_tools_grease_pencil_brush_mixcolor(View3DPanel, Panel):
 
         sub_row.operator("gpencil.tint_flip", icon='FILE_REFRESH', text="")
 
+        if brush.gpencil_tool in {'DRAW', 'FILL'}:
+            col.prop(gp_settings, "vertex_mode", text="Mode")
+            col.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
+
+        if brush.gpencil_tool == 'TINT':
+            col.prop(gp_settings, "vertex_mode", text="Mode")
+
 
 class VIEW3D_PT_tools_grease_pencil_brush_mix_palette(View3DPanel, Panel):
     bl_context = ".greasepencil_paint"
-    bl_label = "Color Palette"
+    bl_label = "Palette"
     bl_category = "Tool"
     bl_parent_id = 'VIEW3D_PT_tools_grease_pencil_brush_mixcolor'
     bl_options = {'DEFAULT_CLOSED'}
@@ -2231,13 +2216,6 @@ class VIEW3D_PT_tools_grease_pencil_brush_mix_palette(View3DPanel, Panel):
         if brush.gpencil_tool not in {'DRAW', 'FILL'}:
             return False
 
-        gp_settings = brush.gpencil_settings
-        if gp_settings.use_material_pin is False:
-            if ob.active_material_index >= 0:
-                ma = ob.material_slots[ob.active_material_index].material
-            else:
-                ma = gp_settings.material
-
         return True
 
     def draw(self, context):
@@ -2249,7 +2227,7 @@ class VIEW3D_PT_tools_grease_pencil_brush_mix_palette(View3DPanel, Panel):
         brush = settings.brush
 
         col = layout.column()
-        col.enabled = settings.use_vertex_color or brush.gpencil_tool == 'TINT'
+        col.enabled = settings.color_mode == 'VERTEXCOLOR' or brush.gpencil_tool == 'TINT'
 
         row = col.row(align=True)
         row.template_ID(settings, "palette", new="palette.new")
@@ -2310,7 +2288,7 @@ classes = (
     VIEW3D_PT_tools_curveedit_options_stroke,
     VIEW3D_PT_tools_armatureedit_options,
     VIEW3D_PT_tools_posemode_options,
-    
+
     VIEW3D_PT_slots_projectpaint,
     VIEW3D_PT_tools_brush_select,
     VIEW3D_PT_tools_brush_settings,
@@ -2350,7 +2328,7 @@ classes = (
 
     VIEW3D_PT_tools_imagepaint_symmetry,
     VIEW3D_PT_tools_imagepaint_options,
-    
+
     VIEW3D_PT_tools_imagepaint_options_external,
     VIEW3D_MT_tools_projectpaint_stencil,
 

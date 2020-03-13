@@ -25,6 +25,8 @@
 #ifndef __DRW_RENDER_H__
 #define __DRW_RENDER_H__
 
+#include "DRW_engine_types.h"
+
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
@@ -61,8 +63,6 @@
 
 #include "DEG_depsgraph.h"
 
-struct DefaultFramebufferList;
-struct DefaultTextureList;
 struct GPUBatch;
 struct GPUFrameBuffer;
 struct GPUMaterial;
@@ -132,25 +132,6 @@ typedef struct DrawEngineType {
                           struct RenderLayer *layer,
                           const struct rcti *rect);
 } DrawEngineType;
-
-#ifndef __DRW_ENGINE_H__
-/* Buffer and textures used by the viewport by default */
-typedef struct DefaultFramebufferList {
-  struct GPUFrameBuffer *default_fb;
-  struct GPUFrameBuffer *overlay_fb;
-  struct GPUFrameBuffer *in_front_fb;
-  struct GPUFrameBuffer *color_only_fb;
-  struct GPUFrameBuffer *depth_only_fb;
-  struct GPUFrameBuffer *overlay_only_fb;
-} DefaultFramebufferList;
-
-typedef struct DefaultTextureList {
-  struct GPUTexture *color;
-  struct GPUTexture *color_overlay;
-  struct GPUTexture *depth;
-  struct GPUTexture *depth_in_front;
-} DefaultTextureList;
-#endif
 
 /* Textures */
 typedef enum {
@@ -230,16 +211,17 @@ struct GPUShader *DRW_shader_create_fullscreen(const char *frag, const char *def
 struct GPUShader *DRW_shader_create_3d_depth_only(eGPUShaderConfig slot);
 struct GPUMaterial *DRW_shader_find_from_world(struct World *wo,
                                                const void *engine_type,
-                                               int options,
+                                               const int options,
                                                bool deferred);
 struct GPUMaterial *DRW_shader_find_from_material(struct Material *ma,
                                                   const void *engine_type,
-                                                  int options,
+                                                  const int options,
                                                   bool deferred);
 struct GPUMaterial *DRW_shader_create_from_world(struct Scene *scene,
                                                  struct World *wo,
                                                  const void *engine_type,
-                                                 int options,
+                                                 const int options,
+                                                 const bool is_volume_shader,
                                                  const char *vert,
                                                  const char *geom,
                                                  const char *frag_lib,
@@ -248,7 +230,8 @@ struct GPUMaterial *DRW_shader_create_from_world(struct Scene *scene,
 struct GPUMaterial *DRW_shader_create_from_material(struct Scene *scene,
                                                     struct Material *ma,
                                                     const void *engine_type,
-                                                    int options,
+                                                    const int options,
+                                                    const bool is_volume_shader,
                                                     const char *vert,
                                                     const char *geom,
                                                     const char *frag_lib,
@@ -426,7 +409,7 @@ void DRW_shgroup_state_disable(DRWShadingGroup *shgroup, DRWState state);
 /* Reminders:
  * - (compare_mask & reference) is what is tested against (compare_mask & stencil_value)
  *   stencil_value being the value stored in the stencil buffer.
- * - (writemask & reference) is what gets written if the test condition is fullfiled.
+ * - (write-mask & reference) is what gets written if the test condition is fulfilled.
  **/
 void DRW_shgroup_stencil_set(DRWShadingGroup *shgroup,
                              uint write_mask,
@@ -665,7 +648,7 @@ bool DRW_state_draw_background(void);
 /* Avoid too many lookups while drawing */
 typedef struct DRWContextState {
 
-  struct ARegion *ar;        /* 'CTX_wm_region(C)' */
+  struct ARegion *region;    /* 'CTX_wm_region(C)' */
   struct RegionView3D *rv3d; /* 'CTX_wm_region_view3d(C)' */
   struct View3D *v3d;        /* 'CTX_wm_view3d(C)' */
 

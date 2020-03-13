@@ -296,6 +296,16 @@ void BlenderSync::sync_integrator()
   integrator->sample_all_lights_indirect = get_boolean(cscene, "sample_all_lights_indirect");
   integrator->light_sampling_threshold = get_float(cscene, "light_sampling_threshold");
 
+  if (RNA_boolean_get(&cscene, "use_adaptive_sampling")) {
+    integrator->sampling_pattern = SAMPLING_PATTERN_PMJ;
+    integrator->adaptive_min_samples = get_int(cscene, "adaptive_min_samples");
+    integrator->adaptive_threshold = get_float(cscene, "adaptive_threshold");
+  }
+  else {
+    integrator->adaptive_min_samples = INT_MAX;
+    integrator->adaptive_threshold = 0.0f;
+  }
+
   int diffuse_samples = get_int(cscene, "diffuse_samples");
   int glossy_samples = get_int(cscene, "glossy_samples");
   int transmission_samples = get_int(cscene, "transmission_samples");
@@ -312,6 +322,8 @@ void BlenderSync::sync_integrator()
     integrator->mesh_light_samples = mesh_light_samples * mesh_light_samples;
     integrator->subsurface_samples = subsurface_samples * subsurface_samples;
     integrator->volume_samples = volume_samples * volume_samples;
+    integrator->adaptive_min_samples = min(
+        integrator->adaptive_min_samples * integrator->adaptive_min_samples, INT_MAX);
   }
   else {
     integrator->diffuse_samples = diffuse_samples;
@@ -393,6 +405,7 @@ void BlenderSync::sync_view_layer(BL::SpaceView3D & /*b_v3d*/, BL::ViewLayer &b_
   view_layer.use_background_ao = b_view_layer.use_ao();
   view_layer.use_surfaces = b_view_layer.use_solid();
   view_layer.use_hair = b_view_layer.use_strand();
+  view_layer.use_volumes = b_view_layer.use_volumes();
 
   /* Material override. */
   view_layer.material_override = b_view_layer.material_override();
@@ -461,19 +474,16 @@ PassType BlenderSync::get_pass_type(BL::RenderPass &b_pass)
   MAP_PASS("DiffDir", PASS_DIFFUSE_DIRECT);
   MAP_PASS("GlossDir", PASS_GLOSSY_DIRECT);
   MAP_PASS("TransDir", PASS_TRANSMISSION_DIRECT);
-  MAP_PASS("SubsurfaceDir", PASS_SUBSURFACE_DIRECT);
   MAP_PASS("VolumeDir", PASS_VOLUME_DIRECT);
 
   MAP_PASS("DiffInd", PASS_DIFFUSE_INDIRECT);
   MAP_PASS("GlossInd", PASS_GLOSSY_INDIRECT);
   MAP_PASS("TransInd", PASS_TRANSMISSION_INDIRECT);
-  MAP_PASS("SubsurfaceInd", PASS_SUBSURFACE_INDIRECT);
   MAP_PASS("VolumeInd", PASS_VOLUME_INDIRECT);
 
   MAP_PASS("DiffCol", PASS_DIFFUSE_COLOR);
   MAP_PASS("GlossCol", PASS_GLOSSY_COLOR);
   MAP_PASS("TransCol", PASS_TRANSMISSION_COLOR);
-  MAP_PASS("SubsurfaceCol", PASS_SUBSURFACE_COLOR);
 
   MAP_PASS("Emit", PASS_EMISSION);
   MAP_PASS("Env", PASS_BACKGROUND);
@@ -487,6 +497,8 @@ PassType BlenderSync::get_pass_type(BL::RenderPass &b_pass)
   MAP_PASS("Debug Ray Bounces", PASS_RAY_BOUNCES);
 #endif
   MAP_PASS("Debug Render Time", PASS_RENDER_TIME);
+  MAP_PASS("AdaptiveAuxBuffer", PASS_ADAPTIVE_AUX_BUFFER);
+  MAP_PASS("Debug Sample Count", PASS_SAMPLE_COUNT);
   if (string_startswith(name, cryptomatte_prefix)) {
     return PASS_CRYPTOMATTE;
   }
@@ -522,7 +534,9 @@ int BlenderSync::get_denoising_pass(BL::RenderPass &b_pass)
   return -1;
 }
 
-vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_view_layer)
+vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay,
+                                             BL::ViewLayer &b_view_layer,
+                                             bool adaptive_sampling)
 {
   vector<Pass> passes;
 
@@ -556,8 +570,6 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLa
       MAP_OPTION("denoising_glossy_indirect", DENOISING_CLEAN_GLOSSY_IND);
       MAP_OPTION("denoising_transmission_direct", DENOISING_CLEAN_TRANSMISSION_DIR);
       MAP_OPTION("denoising_transmission_indirect", DENOISING_CLEAN_TRANSMISSION_IND);
-      MAP_OPTION("denoising_subsurface_direct", DENOISING_CLEAN_SUBSURFACE_DIR);
-      MAP_OPTION("denoising_subsurface_indirect", DENOISING_CLEAN_SUBSURFACE_IND);
 #undef MAP_OPTION
     }
     b_engine.add_pass("Noisy Image", 4, "RGBA", b_view_layer.name().c_str());
@@ -599,6 +611,10 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLa
   if (get_boolean(crp, "pass_debug_render_time")) {
     b_engine.add_pass("Debug Render Time", 1, "X", b_view_layer.name().c_str());
     Pass::add(PASS_RENDER_TIME, passes, "Debug Render Time");
+  }
+  if (get_boolean(crp, "pass_debug_sample_count")) {
+    b_engine.add_pass("Debug Sample Count", 1, "X", b_view_layer.name().c_str());
+    Pass::add(PASS_SAMPLE_COUNT, passes, "Debug Sample Count");
   }
   if (get_boolean(crp, "use_pass_volume_direct")) {
     b_engine.add_pass("VolumeDir", 3, "RGB", b_view_layer.name().c_str());
@@ -644,6 +660,13 @@ vector<Pass> BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLa
   if (get_boolean(crp, "pass_crypto_accurate") && scene->film->cryptomatte_passes != CRYPT_NONE) {
     scene->film->cryptomatte_passes = (CryptomatteType)(scene->film->cryptomatte_passes |
                                                         CRYPT_ACCURATE);
+  }
+
+  if (adaptive_sampling) {
+    Pass::add(PASS_ADAPTIVE_AUX_BUFFER, passes);
+    if (!get_boolean(crp, "pass_debug_sample_count")) {
+      Pass::add(PASS_SAMPLE_COUNT, passes);
+    }
   }
 
   RNA_BEGIN (&crp, b_aov, "aovs") {
@@ -837,6 +860,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
   /* other parameters */
   params.start_resolution = get_int(cscene, "preview_start_resolution");
+  params.denoising_start_sample = get_int(cscene, "preview_denoising_start_sample");
   params.pixel_size = b_engine.get_preview_pixel_size(b_scene);
 
   /* other parameters */
@@ -883,6 +907,8 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
   params.use_profiling = params.device.has_profiling && !b_engine.is_preview() && background &&
                          BlenderSession::print_render_stats;
+
+  params.adaptive_sampling = RNA_boolean_get(&cscene, "use_adaptive_sampling");
 
   return params;
 }

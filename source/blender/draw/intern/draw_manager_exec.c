@@ -402,7 +402,7 @@ static void drw_stencil_state_set(uint write_mask, uint reference, uint compare_
   /* Reminders:
    * - (compare_mask & reference) is what is tested against (compare_mask & stencil_value)
    *   stencil_value being the value stored in the stencil buffer.
-   * - (writemask & reference) is what gets written if the test condition is fullfiled.
+   * - (write-mask & reference) is what gets written if the test condition is fulfilled.
    **/
   glStencilMask(write_mask);
 
@@ -492,7 +492,7 @@ static bool draw_culling_sphere_test(const BoundSphere *frustum_bsphere,
   /* Do a rough test first: Sphere VS Sphere intersect. */
   float center_dist_sq = len_squared_v3v3(bsphere->center, frustum_bsphere->center);
   float radius_sum = bsphere->radius + frustum_bsphere->radius;
-  if (center_dist_sq > SQUARE(radius_sum)) {
+  if (center_dist_sq > square_f(radius_sum)) {
     return false;
   }
   /* TODO we could test against the inscribed sphere of the frustum to early out positively. */
@@ -1345,7 +1345,7 @@ static void draw_shgroup(DRWShadingGroup *shgroup, DRWState pass_state)
           break;
         case DRW_CMD_DRAW:
           if (!USE_BATCHING || state.obmats_loc == -1 || (G.f & G_FLAG_PICKSEL) ||
-              cmd->draw.batch->inst) {
+              cmd->draw.batch->inst[0]) {
             draw_call_single_do(
                 shgroup, &state, cmd->draw.batch, cmd->draw.handle, 0, 0, 0, 0, true);
           }

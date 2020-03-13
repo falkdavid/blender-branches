@@ -98,7 +98,7 @@ typedef struct tGP_BrushVertexpaintData {
   Scene *scene;
   Object *object;
 
-  ARegion *ar;
+  ARegion *region;
 
   /* Current GPencil datablock */
   bGPdata *gpd;
@@ -629,6 +629,8 @@ static bool brush_smear_apply(tGP_BrushVertexpaintData *gso,
   Brush *brush = gso->brush;
   tGP_Grid *grid = NULL;
   int average_idx[2];
+  ARRAY_SET_ITEMS(average_idx, 0, 0);
+
   bool changed = false;
 
   /* Need some movement, so first input is not done. */
@@ -749,7 +751,7 @@ static bool gp_vertexpaint_brush_init(bContext *C, wmOperator *op)
   gso->scene = scene;
   gso->object = ob;
 
-  gso->ar = CTX_wm_region(C);
+  gso->region = CTX_wm_region(C);
 
   /* Save mask. */
   gso->mask = ts->gpencil_selectmode_vertex;
@@ -770,8 +772,6 @@ static bool gp_vertexpaint_brush_init(bContext *C, wmOperator *op)
   /* Update header. */
   gp_vertexpaint_brush_header_set(C);
 
-  /* Setup cursor drawing. */
-  ED_gpencil_toggle_brush_cursor(C, true, NULL);
   return true;
 }
 
@@ -779,9 +779,8 @@ static void gp_vertexpaint_brush_exit(bContext *C, wmOperator *op)
 {
   tGP_BrushVertexpaintData *gso = op->customdata;
 
-  /* Disable cursor and headerprints. */
+  /* Disable headerprints. */
   ED_workspace_status_text(C, NULL);
-  ED_gpencil_toggle_brush_cursor(C, false, NULL);
 
   /* Disable temp invert flag. */
   gso->brush->flag &= ~GP_VERTEX_FLAG_TMP_INVERT;
@@ -1100,10 +1099,9 @@ static bool gp_vertexpaint_brush_apply_to_layers(bContext *C, tGP_BrushVertexpai
       LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
         /* Always do active frame; Otherwise, only include selected frames */
         if ((gpf == gpl->actframe) || (gpf->flag & GP_FRAME_SELECT)) {
-          /* compute multiframe falloff factor */
+          /* Compute multi-frame falloff factor. */
           if (gso->use_multiframe_falloff) {
-            /* Faloff depends on distance to active frame (relative to the overall frame range)
-             */
+            /* Falloff depends on distance to active frame (relative to the overall frame range) */
             gso->mf_falloff = BKE_gpencil_multiframe_falloff_calc(
                 gpf, gpl->actframe->framenum, f_init, f_end, ts->gp_sculpt.cur_falloff);
           }
@@ -1259,14 +1257,14 @@ static int gp_vertexpaint_brush_invoke(bContext *C, wmOperator *op, const wmEven
 
   /* start drawing immediately? */
   if (is_modal == false) {
-    ARegion *ar = CTX_wm_region(C);
+    ARegion *region = CTX_wm_region(C);
 
     /* apply first dab... */
     gso->is_painting = true;
     gp_vertexpaint_brush_apply_event(C, op, event);
 
     /* redraw view with feedback */
-    ED_region_tag_redraw(ar);
+    ED_region_tag_redraw(region);
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -1376,8 +1374,7 @@ static int gp_vertexpaint_brush_modal(bContext *C, wmOperator *op, const wmEvent
 
   /* Redraw region? */
   if (redraw_region) {
-    ARegion *ar = CTX_wm_region(C);
-    ED_region_tag_redraw(ar);
+    ED_region_tag_redraw(CTX_wm_region(C));
   }
 
   /* Redraw toolsettings (brush settings)? */

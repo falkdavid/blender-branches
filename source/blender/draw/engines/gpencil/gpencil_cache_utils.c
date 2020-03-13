@@ -61,7 +61,7 @@ GPENCIL_tObject *gpencil_object_cache_add(GPENCIL_PrivateData *pd, Object *ob)
   /* TODO: This does not work quite well if you use
    * strokes not aligned with the object axes. Maybe we could try to
    * compute the minimum axis of all strokes. But this would be more
-   * computationaly heavy and should go into the GPData evaluation. */
+   * computationally heavy and should go into the GPData evaluation. */
   BoundBox *bbox = BKE_object_boundbox_get(ob);
   /* Convert bbox to matrix */
   float mat[4][4], size[3], center[3];
@@ -219,8 +219,9 @@ static void gpencil_layer_final_tint_and_alpha_get(const GPENCIL_PrivateData *pd
     copy_v4_fl4(r_tint, UNPACK3(onion_col_custom), 1.0f);
 
     *r_alpha = use_onion_fade ? (1.0f / abs(gpf->runtime.onion_id)) : 0.5f;
-    *r_alpha += (gpd->onion_factor * 2.0f - 1.0f);
-    *r_alpha = clamp_f(*r_alpha, 0.01f, 1.0f);
+    *r_alpha *= gpd->onion_factor;
+    *r_alpha = (gpd->onion_factor > 0.0f) ? clamp_f(*r_alpha, 0.1f, 1.0f) :
+                                            clamp_f(*r_alpha, 0.01f, 1.0f);
   }
   else {
     copy_v4_v4(r_tint, gpl->tintcolor);
@@ -364,7 +365,7 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
     struct GPUShader *sh = GPENCIL_shader_geometry_get();
     DRWShadingGroup *grp = tgp_layer->base_shgrp = DRW_shgroup_create(sh, tgp_layer->geom_ps);
 
-    DRW_shgroup_uniform_texture(grp, "gpSceneDepthTexture", depth_tex);
+    DRW_shgroup_uniform_texture_persistent(grp, "gpSceneDepthTexture", depth_tex);
     DRW_shgroup_uniform_texture_ref(grp, "gpMaskTexture", mask_tex);
     DRW_shgroup_uniform_vec3_copy(grp, "gpNormal", tgp_ob->plane_normal);
     DRW_shgroup_uniform_bool_copy(grp, "strokeOrder3d", tgp_ob->is_drawmode3d);

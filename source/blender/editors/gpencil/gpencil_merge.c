@@ -180,17 +180,14 @@ static void gpencil_get_elements_len(bContext *C, int *totstrokes, int *totpoint
 
 static void gpencil_dissolve_points(bContext *C)
 {
-  bGPDstroke *gps, *gpsn;
-
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
     bGPDframe *gpf = gpl->actframe;
     if (gpf == NULL) {
       continue;
     }
 
-    for (gps = gpf->strokes.first; gps; gps = gpsn) {
-      gpsn = gps->next;
-      gp_stroke_delete_tagged_points(gpf, gps, gpsn, GP_SPOINT_TAG, false, 0);
+    LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
+      gp_stroke_delete_tagged_points(gpf, gps, gps->next, GP_SPOINT_TAG, false, 0);
     }
   }
   CTX_DATA_END;
@@ -595,7 +592,7 @@ static int gp_stroke_merge_material_exec(bContext *C, wmOperator *op)
   /* Review materials. */
   GHash *mat_table = BLI_ghash_int_new(__func__);
 
-  short *totcol = BKE_object_material_num(ob);
+  short *totcol = BKE_object_material_len_p(ob);
   if (totcol == 0) {
     return OPERATOR_CANCELLED;
   }

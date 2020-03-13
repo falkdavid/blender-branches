@@ -673,7 +673,7 @@ typedef struct WaveModifierData {
 
 /* WaveModifierData.flag */
 enum {
-  /* And what bout (1 << 0) flag? ;) */
+  MOD_WAVE_INVERT_VGROUP = (1 << 0),
   MOD_WAVE_X = (1 << 1),
   MOD_WAVE_Y = (1 << 2),
   MOD_WAVE_CYCL = (1 << 3),
@@ -1684,10 +1684,10 @@ typedef struct CorrectiveSmoothDeltaCache {
 
   /* Value of settings when creating the cache.
    * These are used to check if the cache should be recomputed. */
-  float lambda;
+  float lambda, scale;
   short repeat, flag;
   char smooth_type, rest_source;
-  char _pad[2];
+  char _pad[6];
 } CorrectiveSmoothDeltaCache;
 
 typedef struct CorrectiveSmoothModifierData {
@@ -1700,10 +1700,10 @@ typedef struct CorrectiveSmoothModifierData {
   /* note: -1 is used to bind */
   unsigned int bind_coords_num;
 
-  float lambda;
+  float lambda, scale;
   short repeat, flag;
   char smooth_type, rest_source;
-  char _pad[2];
+  char _pad[6];
 
   /** MAX_VGROUP_NAME. */
   char defgrp_name[64];

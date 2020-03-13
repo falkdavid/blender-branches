@@ -24,6 +24,10 @@
  * \ingroup bke
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct BMFace;
 struct BMesh;
 struct Brush;
@@ -61,6 +65,7 @@ struct bToolRef;
 
 enum eOverlayFlags;
 
+#include "BLI_utildefines.h"
 #include "DNA_object_enums.h"
 
 extern const char PAINT_CURSOR_SCULPT[3];
@@ -130,15 +135,8 @@ void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag);
 void BKE_paint_set_overlay_override(enum eOverlayFlags flag);
 
 /* palettes */
-void BKE_palette_init(struct Palette *palette);
-void BKE_palette_free(struct Palette *palette);
 struct Palette *BKE_palette_add(struct Main *bmain, const char *name);
-void BKE_palette_copy_data(struct Main *bmain,
-                           struct Palette *palette_dst,
-                           const struct Palette *palette_src,
-                           const int flag);
 struct Palette *BKE_palette_copy(struct Main *bmain, const struct Palette *palette);
-void BKE_palette_make_local(struct Main *bmain, struct Palette *palette, const bool lib_local);
 struct PaletteColor *BKE_palette_color_add(struct Palette *palette);
 bool BKE_palette_is_empty(const struct Palette *palette);
 void BKE_palette_color_remove(struct Palette *palette, struct PaletteColor *color);
@@ -155,13 +153,7 @@ bool BKE_palette_from_hash(struct Main *bmain,
 
 /* paint curves */
 struct PaintCurve *BKE_paint_curve_add(struct Main *bmain, const char *name);
-void BKE_paint_curve_free(struct PaintCurve *pc);
-void BKE_paint_curve_copy_data(struct Main *bmain,
-                               struct PaintCurve *pc_dst,
-                               const struct PaintCurve *pc_src,
-                               const int flag);
 struct PaintCurve *BKE_paint_curve_copy(struct Main *bmain, const struct PaintCurve *pc);
-void BKE_paint_curve_make_local(struct Main *bmain, struct PaintCurve *pc, const bool lib_local);
 
 bool BKE_paint_ensure(struct ToolSettings *ts, struct Paint **r_paint);
 void BKE_paint_init(struct Main *bmain, struct Scene *sce, ePaintMode mode, const char col[3]);
@@ -229,6 +221,8 @@ void BKE_paint_toolslots_brush_update(struct Paint *paint);
 void BKE_paint_toolslots_brush_validate(struct Main *bmain, struct Paint *paint);
 struct Brush *BKE_paint_toolslots_brush_get(struct Paint *paint, int slot_index);
 
+#define SCULPT_FACE_SET_NONE 0
+
 /* Used for both vertex color and weight paint */
 struct SculptVertexPaintGeomMap {
   int *vert_map_mem;
@@ -260,6 +254,31 @@ typedef struct SculptPoseIKChain {
   int tot_segments;
 } SculptPoseIKChain;
 
+/* Cloth Brush */
+
+typedef struct SculptClothLengthConstraint {
+  int v1;
+  int v2;
+
+  float length;
+} SculptClothLengthConstraint;
+
+typedef struct SculptClothSimulation {
+  SculptClothLengthConstraint *length_constraints;
+  int tot_length_constraints;
+  int capacity_length_constraints;
+  float *length_constraint_tweak;
+
+  float mass;
+  float damping;
+
+  float (*acceleration)[3];
+  float (*pos)[3];
+  float (*init_pos)[3];
+  float (*prev_pos)[3];
+
+} SculptClothSimulation;
+
 /* Session data (mode-specific) */
 
 typedef struct SculptSession {
@@ -276,6 +295,9 @@ typedef struct SculptSession {
   struct MeshElemMap *pmap;
   int *pmap_mem;
 
+  /* Mesh Face Sets */
+  int *face_sets;
+
   /* BMesh for dynamic topology sculpting */
   struct BMesh *bm;
   int cd_vert_node_offset;
@@ -290,6 +312,7 @@ typedef struct SculptSession {
   /* PBVH acceleration structure */
   struct PBVH *pbvh;
   bool show_mask;
+  bool show_face_sets;
 
   /* Painting on deformed mesh */
   bool deform_modifiers_active; /* object is deformed with some modifiers */
@@ -313,6 +336,7 @@ typedef struct SculptSession {
   float cursor_radius;
   float cursor_location[3];
   float cursor_normal[3];
+  float cursor_sampled_normal[3];
   float cursor_view_normal[3];
 
   /* TODO(jbakker): Replace rv3d adn v3d with ViewContext */
@@ -397,4 +421,9 @@ enum {
   SCULPT_MASK_LAYER_CALC_VERT = (1 << 0),
   SCULPT_MASK_LAYER_CALC_LOOP = (1 << 1),
 };
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -494,13 +494,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         layout.prop(md, "iterations")
 
-        row = layout.row()
-        row.active = not is_bind
-        row.label(text="Anchors Vertex Group:")
-
-        row = layout.row()
+        row = layout.row(align=True)
         row.enabled = not is_bind
-        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        row.prop_search(md, "vertex_group", ob, "vertex_groups")
         row.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
 
         layout.separator()
@@ -1221,7 +1217,9 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.separator()
 
         layout.prop(md, "start_position_object")
-        layout.prop_search(md, "vertex_group", ob, "vertex_groups")
+        row = layout.row(align=True)
+        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        row.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
         split = layout.split(factor=0.33)
         col = split.column()
         col.label(text="Texture")
@@ -1679,7 +1677,7 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
 
         layout.prop(md, "factor", text="Factor")
         layout.prop(md, "iterations")
-
+        layout.prop(md, "scale")
         row = layout.row()
         row.prop(md, "smooth_type")
 
@@ -1748,7 +1746,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
     # ...to avoid lengthy if statements
     # so each type must have a function here.
 
-    def gpencil_masking(self, layout, ob, md, use_vertex):
+    def gpencil_masking(self, layout, ob, md, use_vertex, use_curve=False):
         gpd = ob.data
         layout.separator()
         layout.label(text="Influence Filters:")
@@ -1788,52 +1786,60 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
             row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
             row.prop(md, "invert_vertex", text="", icon='ARROW_LEFTRIGHT')
 
+        if use_curve:
+            col = layout.column()
+            col.separator()
+            col.prop(md, "use_custom_curve")
+            if md.use_custom_curve:
+                col.template_curve_mapping(md, "curve")
+
     def GP_NOISE(self, layout, ob, md):
         split = layout.split()
 
         col = split.column()
         row = col.row(align=True)
-        row.prop(md, "factor")
+        row.prop(md, "factor", text="Position")
+        row = col.row(align=True)
+        row.prop(md, "factor_strength", text="Strength")
+        row = col.row(align=True)
+        row.prop(md, "factor_thickness", text="Thickness")
+        row = col.row(align=True)
+        row.prop(md, "factor_uvs", text="UV")
+
+        col.separator()
+        row = col.row(align=True)
         row.prop(md, "random", text="", icon='TIME', toggle=True)
-        row = col.row()
-        row.enabled = md.random
-        row.prop(md, "step")
-        row = col.row()
-        row.enabled = md.random
-        row.prop(md, "seed")
-        col.prop(md, "full_stroke")
-        col.prop(md, "move_extreme")
 
-        row = layout.row(align=True)
-        row.label(text="Affect:")
-        row = layout.row(align=True)
-        row.prop(md, "use_edit_position", text="Position", icon='MESH_DATA', toggle=True)
-        row.prop(md, "use_edit_strength", text="Strength", icon='COLOR', toggle=True)
-        row.prop(md, "use_edit_thickness", text="Thickness", icon='LINE_DATA', toggle=True)
-        row.prop(md, "use_edit_uv", text="UV", icon='MOD_UVPROJECT', toggle=True)
+        subrow = row.row(align=True)
+        subrow.enabled = md.random
+        subrow.prop(md, "step")
+        subrow.prop(md, "seed")
 
-        self.gpencil_masking(layout, ob, md, True)
+        col.separator()
+        col.prop(md, "noise_scale")
+
+        self.gpencil_masking(layout, ob, md, True, True)
 
     def GP_SMOOTH(self, layout, ob, md):
         col = layout.column()
         col.prop(md, "factor")
-        col.prop(md, "step")
+        col.prop(md, "step", text="Repeat")
 
         col.label(text="Affect:")
         row = col.row(align=True)
-        row.prop(md, "use_edit_position", text="Position", icon='MESH_DATA', toggle=True)
-        row.prop(md, "use_edit_strength", text="Strength", icon='COLOR', toggle=True)
-        row.prop(md, "use_edit_thickness", text="Thickness", icon='LINE_DATA', toggle=True)
-        row.prop(md, "use_edit_uv", text="UV", icon='MOD_UVPROJECT', toggle=True)
+        row.prop(md, "use_edit_position", text="Position", toggle=True)
+        row.prop(md, "use_edit_strength", text="Strength", toggle=True)
+        row.prop(md, "use_edit_thickness", text="Thickness", toggle=True)
+        row.prop(md, "use_edit_uv", text="UV", toggle=True)
 
-        self.gpencil_masking(layout, ob, md, True)
+        self.gpencil_masking(layout, ob, md, True, True)
 
     def GP_SUBDIV(self, layout, ob, md):
         layout.row().prop(md, "subdivision_type", expand=True)
         split = layout.split()
         col = split.column()
         row = col.row(align=True)
-        row.prop(md, "level")
+        row.prop(md, "level", text="Subdivisions")
 
         self.gpencil_masking(layout, ob, md, False)
 
@@ -1860,23 +1866,16 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         self.gpencil_masking(layout, ob, md, False)
 
     def GP_THICK(self, layout, ob, md):
-        split = layout.split()
-
-        col = split.column()
-        row = col.row(align=True)
-        row.prop(md, "thickness", text="Thickness Factor")
+        col = layout.column()
 
         col.prop(md, "normalize_thickness")
 
-        if not md.normalize_thickness:
-            split = layout.split()
-            col = split.column()
-            col.prop(md, "use_custom_curve")
+        if md.normalize_thickness:
+            col.prop(md, "thickness")
+        else:
+            col.prop(md, "thickness_factor")
 
-            if md.use_custom_curve:
-                col.template_curve_mapping(md, "curve")
-
-        self.gpencil_masking(layout, ob, md, True)
+        self.gpencil_masking(layout, ob, md, True, True)
 
     def GP_TINT(self, layout, ob, md):
         split = layout.split()
@@ -1888,7 +1887,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         row = layout.row()
         row.prop(md, "modify_color")
 
-        self.gpencil_masking(layout, ob, md, False)
+        self.gpencil_masking(layout, ob, md, False, True)
 
     def GP_TIME(self, layout, ob, md):
         gpd = ob.data
@@ -1945,23 +1944,22 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         row = layout.row()
         row.prop(md, "modify_color")
 
-        self.gpencil_masking(layout, ob, md, False)
+        self.gpencil_masking(layout, ob, md, False, True)
 
     def GP_OPACITY(self, layout, ob, md):
         split = layout.split()
 
         col = split.column()
-        col.prop(md, "factor")
-        col.prop(md, "modify_color", text="Change")
+        col.prop(md, "normalize_opacity")
+        if md.normalize_opacity is True:
+            text="Strength"
+        else:
+            text="Opacity Factor"
 
-        col = layout.column()
-        col.separator()
-        col.label(text="Vertex Group:")
-        row = col.row(align=True)
-        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
-        row.prop(md, "invert_vertex", text="", icon='ARROW_LEFTRIGHT')
+        col.prop(md, "factor", text=text)
+        col.prop(md, "modify_color")
 
-        self.gpencil_masking(layout, ob, md, False)
+        self.gpencil_masking(layout, ob, md, True, True)
 
     def GP_ARRAY(self, layout, ob, md):
         col = layout.column()
@@ -1969,33 +1967,39 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
 
         split = layout.split()
         col = split.column()
-        col.label(text="Offset:")
-        col.prop(md, "offset", text="")
-        col.prop(md, "offset_object", text="Object")
+        col.prop(md, "use_constant_offset", text="Constant Offset")
+        subcol = col.column()
+        subcol.enabled = md.use_constant_offset
+        subcol.prop(md, "constant_offset", text="")
+
+        col.prop(md, "use_object_offset")
+        subcol = col.column()
+        subcol.enabled = md.use_object_offset
+        subcol.prop(md, "offset_object", text="")
 
         col = split.column()
-        col.label(text="Shift:")
-        col.prop(md, "shift", text="")
+        col.prop(md, "use_relative_offset", text="Relative Offset")
+        subcol = col.column()
+        subcol.enabled = md.use_relative_offset
+        subcol.prop(md, "relative_offset", text="")
 
         split = layout.split()
         col = split.column()
-        col.label(text="Rotation:")
-        col.prop(md, "rotation", text="")
-        row = col.row(align=True)
-        row.prop(md, "random_rot", text="", icon='TIME', toggle=True)
-        row.prop(md, "rot_factor", text="")
+        col.label(text="Random Offset:")
+        col.prop(md, "random_offset", text="")
 
         col = split.column()
-        col.label(text="Scale:")
-        col.prop(md, "scale", text="")
-        row = col.row(align=True)
-        row.prop(md, "random_scale", text="", icon='TIME', toggle=True)
-        row.prop(md, "scale_factor", text="")
+        col.label(text="Random Rotation:")
+        col.prop(md, "random_rotation", text="")
+
+        col = split.column()
+        col.label(text="Random Scale:")
+        col.prop(md, "random_scale", text="")
 
         col = layout.column()
+        col.prop(md, "seed")
         col.separator()
         col.prop(md, "replace_material", text="Material Override")
-        col.prop(md, "keep_on_top", text="Keep original stroke on top")
 
         self.gpencil_masking(layout, ob, md, False)
 
@@ -2051,7 +2055,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         row.prop(md, "y_axis")
         row.prop(md, "z_axis")
 
-        layout.label(text="Object:")
+        layout.label(text="Mirror Object:")
         layout.prop(md, "object", text="")
 
         self.gpencil_masking(layout, ob, md, False)
@@ -2089,11 +2093,11 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         self.gpencil_masking(layout, ob, md, True)
 
     def GP_OFFSET(self, layout, ob, md):
-        col = layout.column()
+        split = layout.split()
 
-        col.prop(md, "location")
-        col.prop(md, "scale")
-        col.prop(md, "rotation")
+        split.column().prop(md, "location")
+        split.column().prop(md, "rotation")
+        split.column().prop(md, "scale")
 
         self.gpencil_masking(layout, ob, md, True)
 
@@ -2123,25 +2127,19 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
     def GP_MULTIPLY(self, layout, ob, md):
         col = layout.column()
 
-        col.prop(md, "duplications")
+        col.prop(md, "duplicates")
         subcol = col.column()
-        subcol.enabled = md.duplications > 0
+        subcol.enabled = md.duplicates > 0
         subcol.prop(md, "distance")
         subcol.prop(md, "offset", slider=True)
 
         subcol.separator()
 
-        subcol.prop(md, "enable_fading")
-        if md.enable_fading:
+        subcol.prop(md, "use_fade")
+        if md.use_fade:
             subcol.prop(md, "fading_center")
             subcol.prop(md, "fading_thickness", slider=True)
             subcol.prop(md, "fading_opacity", slider=True)
-
-        subcol.separator()
-
-        col.prop(md, "enable_angle_splitting")
-        if md.enable_angle_splitting:
-            col.prop(md, "split_angle")
 
         self.gpencil_masking(layout, ob, md, False)
 
@@ -2162,7 +2160,7 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         col.separator()
         col.prop(md, "vertex_mode")
 
-        self.gpencil_masking(layout, ob, md, True)
+        self.gpencil_masking(layout, ob, md, True, True)
 
 
 classes = (

@@ -360,7 +360,6 @@ static int gp_vertexpaint_levels_exec(bContext *C, wmOperator *op)
   bGPdata *gpd = (bGPdata *)ob->data;
 
   bool changed = false;
-  int i;
   bGPDspoint *pt;
 
   const int mode = RNA_enum_get(op->ptr, "mode");
@@ -384,9 +383,10 @@ static int gp_vertexpaint_levels_exec(bContext *C, wmOperator *op)
 
     /* Stroke points. */
     if (mode != GP_PAINT_VERTEX_FILL) {
+      int i;
       for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
         if ((pt->flag & GP_SPOINT_SELECT) && (pt->vert_color[3] > 0.0f)) {
-          for (int i2 = 0; i < 3; i2++) {
+          for (int i2 = 0; i2 < 3; i2++) {
             pt->vert_color[i2] = gain * (pt->vert_color[i2] + offset);
           }
         }
@@ -612,7 +612,7 @@ static uint get_material_type(MaterialGPencilStyle *gp_style,
       }
       case GP_MATERIAL_MODE_SQUARE: {
         r_i = 3;
-        strcpy(name, "Boxes Stroke-Fill");
+        strcpy(name, "Squares Stroke-Fill");
         break;
       }
       default:
@@ -633,7 +633,7 @@ static uint get_material_type(MaterialGPencilStyle *gp_style,
       }
       case GP_MATERIAL_MODE_SQUARE: {
         r_i = 6;
-        strcpy(name, "Boxes Stroke");
+        strcpy(name, "Squares Stroke");
         break;
       }
       default:
@@ -684,7 +684,7 @@ static int gp_material_to_vertex_exec(bContext *C, wmOperator *op)
 
   bool changed = false;
 
-  short *totcol = BKE_object_material_num(ob);
+  short *totcol = BKE_object_material_len_p(ob);
   if (totcol == 0) {
     return OPERATOR_CANCELLED;
   }

@@ -750,9 +750,9 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
     bool found_depth = false;
 
     /* need to restore the original projection settings before packing up */
-    view3d_region_operator_needs_opengl(tgpi->win, tgpi->ar);
+    view3d_region_operator_needs_opengl(tgpi->win, tgpi->region);
     ED_view3d_autodist_init(tgpi->depsgraph,
-                            tgpi->ar,
+                            tgpi->region,
                             tgpi->v3d,
                             (ts->gpencil_v3d_align & GP_PROJECT_DEPTH_STROKE) ? 1 : 0);
 
@@ -760,9 +760,9 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
     tGPspoint *ptc = &points2D[0];
     for (i = 0; i < gps->totpoints; i++, ptc++) {
       round_v2i_v2fl(mval_i, &ptc->x);
-      if ((ED_view3d_autodist_depth(tgpi->ar, mval_i, depth_margin, depth_arr + i) == 0) &&
+      if ((ED_view3d_autodist_depth(tgpi->region, mval_i, depth_margin, depth_arr + i) == 0) &&
           (i && (ED_view3d_autodist_depth_seg(
-                     tgpi->ar, mval_i, mval_prev, depth_margin + 1, depth_arr + i) == 0))) {
+                     tgpi->region, mval_i, mval_prev, depth_margin + 1, depth_arr + i) == 0))) {
         interp_depth = true;
       }
       else {
@@ -880,7 +880,7 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
       }
 
       /* exponential value */
-      const float exfactor = SQUARE(brush->gpencil_settings->draw_jitter + 2.0f);
+      const float exfactor = square_f(brush->gpencil_settings->draw_jitter + 2.0f);
       const float fac = p2d->rnd[0] * exfactor * jitter;
 
       /* vector */
@@ -956,12 +956,12 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
       ED_gpencil_drawing_reference_get(
           tgpi->scene, tgpi->ob, tgpi->gpl, ts->gpencil_v3d_align, origin);
       /* reproject current */
-      ED_gpencil_tpoint_to_point(tgpi->ar, origin, tpt, &spt);
+      ED_gpencil_tpoint_to_point(tgpi->region, origin, tpt, &spt);
       ED_gp_project_point_to_plane(
           tgpi->scene, tgpi->ob, tgpi->rv3d, origin, tgpi->lock_axis - 1, &spt);
 
       /* reproject previous */
-      ED_gpencil_tpoint_to_point(tgpi->ar, origin, tptb, &spt2);
+      ED_gpencil_tpoint_to_point(tgpi->region, origin, tptb, &spt2);
       ED_gp_project_point_to_plane(
           tgpi->scene, tgpi->ob, tgpi->rv3d, origin, tgpi->lock_axis - 1, &spt2);
       tgpi->totpixlen += len_v3v3(&spt.x, &spt2.x);
@@ -986,8 +986,13 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
     }
 
     /* convert screen-coordinates to 3D coordinates */
-    gp_stroke_convertcoords_tpoint(
-        tgpi->scene, tgpi->ar, tgpi->ob, tgpi->gpl, p2d, depth_arr ? depth_arr + i : NULL, &pt->x);
+    gp_stroke_convertcoords_tpoint(tgpi->scene,
+                                   tgpi->region,
+                                   tgpi->ob,
+                                   tgpi->gpl,
+                                   p2d,
+                                   depth_arr ? depth_arr + i : NULL,
+                                   &pt->x);
 
     pt->pressure = pressure;
     pt->strength = strength;
@@ -1013,7 +1018,7 @@ static void gp_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
     for (int i = 0; i < tgpi->gpd->runtime.tot_cp_points; i++) {
       bGPDcontrolpoint *cp = &cps[i];
       gp_stroke_convertcoords_tpoint(
-          tgpi->scene, tgpi->ar, tgpi->ob, tgpi->gpl, (tGPspoint *)cp, NULL, &cp->x);
+          tgpi->scene, tgpi->region, tgpi->ob, tgpi->gpl, (tGPspoint *)cp, NULL, &cp->x);
     }
   }
 
@@ -1139,8 +1144,8 @@ static void gpencil_primitive_init(bContext *C, wmOperator *op)
   tgpi->ob = CTX_data_active_object(C);
   tgpi->ob_eval = (Object *)DEG_get_evaluated_object(tgpi->depsgraph, tgpi->ob);
   tgpi->sa = CTX_wm_area(C);
-  tgpi->ar = CTX_wm_region(C);
-  tgpi->rv3d = tgpi->ar->regiondata;
+  tgpi->region = CTX_wm_region(C);
+  tgpi->rv3d = tgpi->region->regiondata;
   tgpi->v3d = tgpi->sa->spacedata.first;
   tgpi->win = CTX_wm_window(C);
 
@@ -1153,7 +1158,7 @@ static void gpencil_primitive_init(bContext *C, wmOperator *op)
   /* set GP datablock */
   tgpi->gpd = gpd;
   /* region where paint was originated */
-  tgpi->gpd->runtime.ar = tgpi->ar;
+  tgpi->gpd->runtime.ar = tgpi->region;
 
   /* if brush doesn't exist, create a new set (fix damaged files from old versions) */
   if ((paint->brush == NULL) || (paint->brush->gpencil_settings == NULL)) {
@@ -1309,7 +1314,7 @@ static void gpencil_primitive_interaction_end(bContext *C,
     BKE_gpencil_dvert_ensure(gps);
     for (int i = 0; i < gps->totpoints; i++) {
       MDeformVert *ve = &gps->dvert[i];
-      MDeformWeight *dw = defvert_verify_index(ve, def_nr);
+      MDeformWeight *dw = BKE_defvert_ensure_index(ve, def_nr);
       if (dw) {
         dw->weight = ts->vgroup_weight;
       }

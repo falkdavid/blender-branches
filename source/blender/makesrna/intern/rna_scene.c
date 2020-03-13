@@ -526,7 +526,6 @@ const EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
     {R_BAKE_PASS_FILTER_DIFFUSE, "DIFFUSE", 0, "Diffuse", ""},
     {R_BAKE_PASS_FILTER_GLOSSY, "GLOSSY", 0, "Glossy", ""},
     {R_BAKE_PASS_FILTER_TRANSM, "TRANSMISSION", 0, "Transmission", ""},
-    {R_BAKE_PASS_FILTER_SUBSURFACE, "SUBSURFACE", 0, "Subsurface", ""},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -1079,7 +1078,7 @@ static void rna_Scene_active_keying_set_set(PointerRNA *ptr,
 
 /* get KeyingSet index stuff for list of Keying Sets editing UI
  * - active_keyingset-1 since 0 is reserved for 'none'
- * - don't clamp, otherwise can never set builtins types as active...
+ * - don't clamp, otherwise can never set builtin's types as active...
  */
 static int rna_Scene_active_keying_set_index_get(PointerRNA *ptr)
 {
@@ -4019,6 +4018,16 @@ void rna_def_view_layer_common(StructRNA *srna, const bool scene)
     RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   }
 
+  prop = RNA_def_property(srna, "use_volumes", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_VOLUMES);
+  RNA_def_property_ui_text(prop, "Volumes", "Render volumes in this Layer");
+  if (scene) {
+    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+  }
+  else {
+    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  }
+
   /* passes */
   prop = RNA_def_property(srna, "use_pass_combined", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "passflag", SCE_PASS_COMBINED);
@@ -4950,11 +4959,6 @@ static void rna_def_bake_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Transmission", "Add transmission contribution");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-  prop = RNA_def_property(srna, "use_pass_subsurface", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_SUBSURFACE);
-  RNA_def_property_ui_text(prop, "Subsurface", "Add subsurface contribution");
-  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
   prop = RNA_def_property(srna, "pass_filter", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "pass_filter");
   RNA_def_property_enum_items(prop, rna_enum_bake_pass_filter_type_items);
@@ -5718,14 +5722,14 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Resolution %", "Percentage scale for render resolution");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_SceneSequencer_update");
 
-  prop = RNA_def_property(srna, "tile_x", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "tile_x", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "tilex");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_range(prop, 8, 65536);
   RNA_def_property_ui_text(prop, "Tile X", "Horizontal tile size to use while rendering");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-  prop = RNA_def_property(srna, "tile_y", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "tile_y", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "tiley");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_range(prop, 8, 65536);
@@ -6708,29 +6712,29 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem eevee_shadow_size_items[] = {
-      {64, "64", 0, "64px", ""},
-      {128, "128", 0, "128px", ""},
-      {256, "256", 0, "256px", ""},
-      {512, "512", 0, "512px", ""},
-      {1024, "1024", 0, "1024px", ""},
-      {2048, "2048", 0, "2048px", ""},
-      {4096, "4096", 0, "4096px", ""},
+      {64, "64", 0, "64 px", ""},
+      {128, "128", 0, "128 px", ""},
+      {256, "256", 0, "256 px", ""},
+      {512, "512", 0, "512 px", ""},
+      {1024, "1024", 0, "1024 px", ""},
+      {2048, "2048", 0, "2048 px", ""},
+      {4096, "4096", 0, "4096 px", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
   static const EnumPropertyItem eevee_gi_visibility_size_items[] = {
-      {8, "8", 0, "8px", ""},
-      {16, "16", 0, "16px", ""},
-      {32, "32", 0, "32px", ""},
-      {64, "64", 0, "64px", ""},
+      {8, "8", 0, "8 px", ""},
+      {16, "16", 0, "16 px", ""},
+      {32, "32", 0, "32 px", ""},
+      {64, "64", 0, "64 px", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
   static const EnumPropertyItem eevee_volumetric_tile_size_items[] = {
-      {2, "2", 0, "2px", ""},
-      {4, "4", 0, "4px", ""},
-      {8, "8", 0, "8px", ""},
-      {16, "16", 0, "16px", ""},
+      {2, "2", 0, "2 px", ""},
+      {4, "4", 0, "4 px", ""},
+      {8, "8", 0, "8 px", ""},
+      {16, "16", 0, "16 px", ""},
       {0, NULL, 0, NULL, NULL},
   };
 

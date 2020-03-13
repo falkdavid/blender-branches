@@ -2356,6 +2356,11 @@ static void rna_def_modifier_wave(BlenderRNA *brna)
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_WaveModifier_defgrp_name_set");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+  prop = RNA_def_property(srna, "invert_vertex_group", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_WAVE_INVERT_VGROUP);
+  RNA_def_property_ui_text(prop, "Invert", "Invert vertex group influence");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
   prop = RNA_def_property(srna, "speed", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
   RNA_def_property_ui_range(prop, -1, 1, 10, 2);
@@ -3102,6 +3107,13 @@ static void rna_def_modifier_correctivesmooth(BlenderRNA *brna)
   RNA_def_property_int_sdna(prop, NULL, "repeat");
   RNA_def_property_ui_range(prop, 0, 200, 1, -1);
   RNA_def_property_ui_text(prop, "Repeat", "");
+  RNA_def_property_update(prop, 0, "rna_CorrectiveSmoothModifier_update");
+
+  prop = RNA_def_property(srna, "scale", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(prop, NULL, "scale");
+  RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.0, 10.0, 5, 3);
+  RNA_def_property_ui_text(prop, "Scale", "Compensate for scale applied by other modifiers");
   RNA_def_property_update(prop, 0, "rna_CorrectiveSmoothModifier_update");
 
   prop = RNA_def_property(srna, "rest_source", PROP_ENUM, PROP_NONE);
@@ -5635,7 +5647,7 @@ static void rna_def_modifier_laplaciandeform(BlenderRNA *brna)
   prop = RNA_def_property(srna, "vertex_group", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, NULL, "anchor_grp_name");
   RNA_def_property_ui_text(
-      prop, "Vertex Group for Anchors", "Name of Vertex Group which determines Anchors");
+      prop, "Anchor Weights", "Name of Vertex Group which determines Anchors");
   RNA_def_property_string_funcs(
       prop, NULL, NULL, "rna_LaplacianDeformModifier_anchor_grp_name_set");
 

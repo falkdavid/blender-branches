@@ -85,7 +85,7 @@ static void deformStroke(GpencilModifierData *md,
     return;
   }
 
-  BKE_gpencil_stroke_subdivide(gps, mmd->level, mmd->flag, mmd->type);
+  BKE_gpencil_stroke_subdivide(gps, mmd->level, mmd->type);
 }
 
 static void bakeModifier(struct Main *UNUSED(bmain),
@@ -105,7 +105,7 @@ static void bakeModifier(struct Main *UNUSED(bmain),
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Subdiv = {
-    /* name */ "Subdivision",
+    /* name */ "Subdivide",
     /* structName */ "SubdivGpencilModifierData",
     /* structSize */ sizeof(SubdivGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

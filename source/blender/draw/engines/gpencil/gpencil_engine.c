@@ -127,6 +127,12 @@ void GPENCIL_engine_init(void *ved)
                        (v3d->shading.flag & V3D_SHADING_SCENE_WORLD_RENDER));
 
     stl->pd->v3d_color_type = (v3d->shading.type == OB_SOLID) ? v3d->shading.color_type : -1;
+    /* Special case: If Vertex Paint mode, use always Vertex mode. */
+    if (v3d->shading.type == OB_SOLID && ctx->obact && ctx->obact->type == OB_GPENCIL &&
+        ctx->obact->mode == OB_MODE_VERTEX_GPENCIL) {
+      stl->pd->v3d_color_type = V3D_SHADING_VERTEX_COLOR;
+    }
+
     copy_v3_v3(stl->pd->v3d_single_color, v3d->shading.single_color);
 
     /* For non active frame, use only lines in multiedit mode. */
@@ -142,6 +148,7 @@ void GPENCIL_engine_init(void *ved)
     use_scene_world = true;
     stl->pd->use_multiedit_lines_only = false;
     stl->pd->xray_alpha = 1.0f;
+    stl->pd->v3d_color_type = -1;
   }
 
   stl->pd->use_lighting = (v3d && v3d->shading.type > OB_SOLID) || stl->pd->is_render;
@@ -193,7 +200,8 @@ void GPENCIL_cache_init(void *ved)
   pd->use_layer_fb = false;
   pd->use_object_fb = false;
   pd->use_mask_fb = false;
-  pd->use_signed_fb = false;
+  /* Always use high precision for render. */
+  pd->use_signed_fb = !pd->is_viewport;
 
   if (draw_ctx->v3d) {
     const bool hide_overlay = ((draw_ctx->v3d->flag2 & V3D_HIDE_OVERLAYS) != 0);
@@ -207,7 +215,7 @@ void GPENCIL_cache_init(void *ved)
     Scene *scene = draw_ctx->scene;
     pd->simplify_fill = GPENCIL_SIMPLIFY_FILL(scene, playing);
     pd->simplify_fx = GPENCIL_SIMPLIFY_FX(scene, playing) ||
-                      (draw_ctx->v3d->shading.type < OB_MATERIAL);
+                      (draw_ctx->v3d->shading.type < OB_RENDER);
 
     /* Fade Layer. */
     const bool is_fade_layer = ((!hide_overlay) && (!pd->is_render) &&
@@ -443,7 +451,8 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
   }
   else {
     iter->do_sbuffer_call = !pd->do_fast_drawing && (gpd == pd->sbuffer_gpd) &&
-                            (gpl == pd->sbuffer_layer);
+                            (gpl == pd->sbuffer_layer) &&
+                            (gpf == NULL || gpf->runtime.onion_id == 0.0f);
   }
 
   GPENCIL_tLayer *tgp_layer = gpencil_layer_cache_add(pd, iter->ob, gpl, gpf, iter->tgp_ob);
@@ -477,7 +486,7 @@ static void gpencil_stroke_cache_populate(bGPDlayer *gpl,
   bool hide_material = (gp_style->flag & GP_MATERIAL_HIDE) != 0;
   bool show_stroke = (gp_style->flag & GP_MATERIAL_STROKE_SHOW) != 0;
   bool show_fill = (gps->tot_triangles > 0) && ((gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0) &&
-                   (!iter->pd->simplify_fill);
+                   (!iter->pd->simplify_fill) && ((gps->flag & GP_STROKE_NOFILL) == 0);
 
   bool only_lines = gpl && gpf && gpl->actframe != gpf && iter->pd->use_multiedit_lines_only;
 
@@ -487,7 +496,8 @@ static void gpencil_stroke_cache_populate(bGPDlayer *gpl,
 
   GPUUniformBuffer *ubo_mat;
   GPUTexture *tex_stroke, *tex_fill;
-  gpencil_material_resources_get(iter->matpool, gps->mat_nr, &tex_stroke, &tex_fill, &ubo_mat);
+  gpencil_material_resources_get(
+      iter->matpool, iter->mat_ofs + gps->mat_nr, &tex_stroke, &tex_fill, &ubo_mat);
 
   bool resource_changed = (iter->ubo_mat != ubo_mat) ||
                           (tex_fill && (iter->tex_fill != tex_fill)) ||
@@ -700,7 +710,7 @@ void GPENCIL_cache_finish(void *ved)
 
     if (pd->use_mask_fb) {
       /* We need an extra depth to not disturb the normal drawing.
-       * The color_tx is needed for framebuffer cmpleteness. */
+       * The color_tx is needed for frame-buffer completeness. */
       GPUTexture *color_tx, *depth_tx;
       depth_tx = DRW_texture_pool_query_2d(
           size[0], size[1], GPU_DEPTH24_STENCIL8, &draw_engine_gpencil_type);

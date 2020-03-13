@@ -24,6 +24,10 @@
  * \ingroup bke
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct BoundBox;
 struct Brush;
 struct CurveMapping;
@@ -66,7 +70,7 @@ struct RegionView3D;
 
 /* Vertex Color macros. */
 #define GPENCIL_USE_VERTEX_COLOR(toolsettings) \
-  ((toolsettings->gp_paint->flag & GPPAINT_FLAG_USE_VERTEXCOLOR))
+  ((toolsettings->gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR))
 #define GPENCIL_USE_VERTEX_COLOR_STROKE(toolsettings, brush) \
   ((GPENCIL_USE_VERTEX_COLOR(toolsettings) && \
     ((brush->gpencil_settings->vertex_mode == GPPAINT_MODE_STROKE) || \
@@ -109,14 +113,11 @@ struct bGPDlayer *BKE_gpencil_layer_duplicate(const struct bGPDlayer *gpl_src);
 void BKE_gpencil_frame_copy_strokes(struct bGPDframe *gpf_src, struct bGPDframe *gpf_dst);
 struct bGPDstroke *BKE_gpencil_stroke_duplicate(struct bGPDstroke *gps_src, const bool dup_points);
 
-void BKE_gpencil_copy_data(struct bGPdata *gpd_dst, const struct bGPdata *gpd_src, const int flag);
 struct bGPdata *BKE_gpencil_copy(struct Main *bmain, const struct bGPdata *gpd);
 
 struct bGPdata *BKE_gpencil_data_duplicate(struct Main *bmain,
                                            const struct bGPdata *gpd,
                                            bool internal_copy);
-
-void BKE_gpencil_make_local(struct Main *bmain, struct bGPdata *gpd, const bool lib_local);
 
 void BKE_gpencil_frame_delete_laststroke(struct bGPDlayer *gpl, struct bGPDframe *gpf);
 
@@ -235,7 +236,7 @@ bool BKE_gpencil_stroke_select_check(const struct bGPDstroke *gps);
 
 struct BoundBox *BKE_gpencil_boundbox_get(struct Object *ob);
 void BKE_gpencil_centroid_3d(struct bGPdata *gpd, float r_centroid[3]);
-void BKE_gpencil_stroke_collision_get(struct bGPDstroke *gps);
+void BKE_gpencil_stroke_boundingbox_calc(struct bGPDstroke *gps);
 
 /* vertex groups */
 void BKE_gpencil_dvert_ensure(struct bGPDstroke *gps);
@@ -249,7 +250,7 @@ void BKE_gpencil_frame_active_set(struct Depsgraph *depsgraph, struct bGPdata *g
 void BKE_gpencil_stroke_normal(const struct bGPDstroke *gps, float r_normal[3]);
 void BKE_gpencil_stroke_simplify_adaptive(struct bGPDstroke *gps, float factor);
 void BKE_gpencil_stroke_simplify_fixed(struct bGPDstroke *gps);
-void BKE_gpencil_stroke_subdivide(struct bGPDstroke *gps, int level, int flag, int type);
+void BKE_gpencil_stroke_subdivide(struct bGPDstroke *gps, int level, int type);
 bool BKE_gpencil_stroke_trim(struct bGPDstroke *gps);
 void BKE_gpencil_stroke_merge_distance(struct bGPDframe *gpf,
                                        struct bGPDstroke *gps,
@@ -365,9 +366,6 @@ void BKE_gpencil_visible_stroke_iter(struct Object *ob,
 extern void (*BKE_gpencil_batch_cache_dirty_tag_cb)(struct bGPdata *gpd);
 extern void (*BKE_gpencil_batch_cache_free_cb)(struct bGPdata *gpd);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 void BKE_gpencil_frame_original_pointers_update(const struct bGPDframe *gpf_orig,
                                                 const struct bGPDframe *gpf_eval);
 void BKE_gpencil_update_orig_pointers(const struct Object *ob_orig, const struct Object *ob_eval);

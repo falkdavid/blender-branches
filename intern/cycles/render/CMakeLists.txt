@@ -24,6 +24,7 @@ set(SRC
   hair.cpp
   image.cpp
   integrator.cpp
+  jitter.cpp
   light.cpp
   merge.cpp
   mesh.cpp
@@ -62,6 +63,7 @@ set(SRC_HEADERS
   image.h
   integrator.h
   light.h
+  jitter.h
   merge.h
   mesh.h
   nodes.h
@@ -90,6 +92,8 @@ if(WITH_CYCLES_OSL)
   list(APPEND LIB
     cycles_kernel_osl
   )
+
+  SET_PROPERTY(SOURCE osl.cpp PROPERTY COMPILE_FLAGS ${RTTI_DISABLE_FLAGS})
 endif()
 
 include_directories(${INC})

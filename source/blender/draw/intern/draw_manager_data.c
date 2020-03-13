@@ -514,7 +514,7 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
   ob_infos->ob_flag += (ob->base_flag & BASE_FROM_DUPLI) ? (1 << 2) : 0;
   ob_infos->ob_flag += (ob->base_flag & BASE_FROM_SET) ? (1 << 3) : 0;
   ob_infos->ob_flag += (ob == DST.draw_ctx.obact) ? (1 << 4) : 0;
-  /* Negative scalling. */
+  /* Negative scaling. */
   ob_infos->ob_flag *= (ob->transflag & OB_NEG_SCALE) ? -1.0f : 1.0f;
   /* Object Color. */
   copy_v4_v4(ob_infos->ob_color, ob->color);
@@ -853,6 +853,7 @@ typedef struct DRWSculptCallbackData {
   bool use_wire;
   bool use_mats;
   bool use_mask;
+  bool use_fsets;
   bool fast_mode; /* Set by draw manager. Do not init. */
 
   int debug_node_nr;
@@ -873,11 +874,6 @@ static float sculpt_debug_colors[9][4] = {
 
 static void sculpt_draw_cb(DRWSculptCallbackData *scd, GPU_PBVH_Buffers *buffers)
 {
-  /* Meh... use_mask is a bit misleading here. */
-  if (scd->use_mask && !GPU_pbvh_buffers_has_mask(buffers)) {
-    return;
-  }
-
   GPUBatch *geom = GPU_pbvh_buffers_batch_get(buffers, scd->fast_mode, scd->use_wire);
   short index = 0;
 
@@ -1239,6 +1235,19 @@ static DRWShadingGroup *drw_shgroup_material_create_ex(GPUPass *gpupass, DRWPass
   return grp;
 }
 
+static void drw_shgroup_material_texture(DRWShadingGroup *grp,
+                                         GPUMaterialTexture *tex,
+                                         const char *name,
+                                         int textarget)
+{
+  GPUTexture *gputex = GPU_texture_from_blender(tex->ima, tex->iuser, NULL, textarget);
+  DRW_shgroup_uniform_texture(grp, name, gputex);
+
+  GPUTexture **gputex_ref = BLI_memblock_alloc(DST.vmempool->images);
+  *gputex_ref = gputex;
+  GPU_texture_ref(gputex);
+}
+
 static DRWShadingGroup *drw_shgroup_material_inputs(DRWShadingGroup *grp,
                                                     struct GPUMaterial *material)
 {
@@ -1246,35 +1255,20 @@ static DRWShadingGroup *drw_shgroup_material_inputs(DRWShadingGroup *grp,
 
   /* Bind all textures needed by the material. */
   for (GPUMaterialTexture *tex = textures.first; tex; tex = tex->next) {
-    GPUTexture *gputex;
-
     if (tex->ima) {
       /* Image */
-      GPUTexture **gputex_ref = BLI_memblock_alloc(DST.vmempool->images);
-
-      int textarget;
-      if (tex->type == GPU_TEX2D_ARRAY) {
-        textarget = GL_TEXTURE_2D_ARRAY;
-      }
-      else if (tex->type == GPU_TEX1D_ARRAY) {
-        textarget = GL_TEXTURE_1D_ARRAY;
+      if (tex->tiled_mapping_name[0]) {
+        drw_shgroup_material_texture(grp, tex, tex->sampler_name, GL_TEXTURE_2D_ARRAY);
+        drw_shgroup_material_texture(grp, tex, tex->tiled_mapping_name, GL_TEXTURE_1D_ARRAY);
       }
       else {
-        textarget = GL_TEXTURE_2D;
+        drw_shgroup_material_texture(grp, tex, tex->sampler_name, GL_TEXTURE_2D);
       }
-      *gputex_ref = gputex = GPU_texture_from_blender(tex->ima, tex->iuser, NULL, textarget);
-
-      GPU_texture_ref(gputex);
     }
     else if (tex->colorband) {
       /* Color Ramp */
-      gputex = *tex->colorband;
+      DRW_shgroup_uniform_texture(grp, tex->sampler_name, *tex->colorband);
     }
-    else {
-      continue;
-    }
-
-    DRW_shgroup_uniform_texture(grp, tex->shadername, gputex);
   }
 
   GPUUniformBuffer *ubo = GPU_material_uniform_buffer_get(material);

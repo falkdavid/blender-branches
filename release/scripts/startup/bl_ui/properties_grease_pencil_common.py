@@ -222,9 +222,6 @@ class GreasePencilDisplayPanel:
             if brush.gpencil_tool == 'DRAW':
                 col.prop(gp_settings, "show_lasso", text="Show Fill Color While Drawing")
 
-            if brush.gpencil_tool in {'FILL', 'TINT'}:
-                col.prop(brush, "cursor_color_add", text="Cursor Color")
-
         elif ob.mode == 'SCULPT_GPENCIL':
             col = layout.column(align=True)
             col.active = settings.show_brush
@@ -238,13 +235,11 @@ class GreasePencilDisplayPanel:
             col.active = settings.show_brush
 
             col.prop(brush, "cursor_color_add", text="Cursor Color")
-            col.prop(brush, "cursor_color_subtract", text="Inverse Cursor Color")
 
         elif ob.mode == 'VERTEX_GPENCIL':
-            col = layout.column(align=True)
-            col.active = settings.show_brush
-
-            col.prop(brush, "cursor_color_add", text="Cursor Color")
+            row = layout.row(align=True)
+            row.prop(settings, "show_brush", text="")
+            row.label(text="Display Cursor")
 
 
 class GreasePencilBrushFalloff:
@@ -333,6 +328,32 @@ class GPENCIL_MT_move_to_layer(Menu):
                 else:
                     icon = 'NONE'
                 layout.operator("gpencil.move_to_layer", text=gpl.info, icon=icon).layer = i
+                i -= 1
+
+            layout.separator()
+
+        layout.operator("gpencil.layer_add", text="New Layer", icon='ADD')
+
+
+class GPENCIL_MT_layer_active(Menu):
+    bl_label = "Change Active Layer"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_REGION_WIN'
+
+        gpd = context.gpencil_data
+        if gpd:
+            gpl_active = context.active_gpencil_layer
+            tot_layers = len(gpd.layers)
+            i = tot_layers - 1
+            while i >= 0:
+                gpl = gpd.layers[i]
+                if gpl.info == gpl_active.info:
+                    icon = 'GREASEPENCIL'
+                else:
+                    icon = 'NONE'
+                layout.operator("gpencil.layer_active", text=gpl.info, icon=icon).layer = i
                 i -= 1
 
             layout.separator()
@@ -651,15 +672,8 @@ class GreasePencilVertexcolorPanel:
         ob = context.object
 
         if ob:
-            if tool in {'DRAW', 'FILL'} and is_vertex is False:
-                row = layout.row(align=True)
-                row.prop(gp_settings, "vertex_mode", text="Mode")
-                row = layout.row(align=True)
-                row.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
-
-            if tool == 'TINT' or is_vertex is True:
-                row = layout.row(align=True)
-                row.prop(gp_settings, "vertex_mode", text="Mode")
+            col = layout.column()
+            col.template_color_picker(brush, "color", value_slider=True)
 
             sub_row = layout.row(align=True)
             sub_row.prop(brush, "color", text="")
@@ -671,6 +685,16 @@ class GreasePencilVertexcolorPanel:
             row.template_ID(gpencil_paint, "palette", new="palette.new")
             if gpencil_paint.palette:
                 layout.template_palette(gpencil_paint, "palette", color=True)
+
+            if tool in {'DRAW', 'FILL'} and is_vertex is False:
+                row = layout.row(align=True)
+                row.prop(gp_settings, "vertex_mode", text="Mode")
+                row = layout.row(align=True)
+                row.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
+
+            if tool == 'TINT' or is_vertex is True:
+                row = layout.row(align=True)
+                row.prop(gp_settings, "vertex_mode", text="Mode")
 
 
 class GPENCIL_UL_layer(UIList):
@@ -910,6 +934,7 @@ classes = (
     GPENCIL_MT_snap,
     GPENCIL_MT_cleanup,
     GPENCIL_MT_move_to_layer,
+    GPENCIL_MT_layer_active,
 
     GPENCIL_MT_gpencil_draw_delete,
     GPENCIL_MT_layer_mask_menu,

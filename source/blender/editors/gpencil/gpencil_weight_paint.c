@@ -94,7 +94,7 @@ typedef struct tGP_BrushWeightpaintData {
   Scene *scene;
   Object *object;
 
-  ARegion *ar;
+  ARegion *region;
 
   /* Current GPencil datablock */
   bGPdata *gpd;
@@ -258,9 +258,9 @@ static bool brush_draw_apply(tGP_BrushWeightpaintData *gso,
     }
   }
   /* Get current weight and blend. */
-  MDeformWeight *dw = defvert_verify_index(dvert, gso->vrgroup);
+  MDeformWeight *dw = BKE_defvert_ensure_index(dvert, gso->vrgroup);
   if (dw) {
-    dw->weight = interpf(dw->weight, gso->brush->weight, inf);
+    dw->weight = interpf(gso->brush->weight, dw->weight, inf);
     CLAMP(dw->weight, 0.0f, 1.0f);
   }
   return true;
@@ -317,7 +317,7 @@ static bool gp_weightpaint_brush_init(bContext *C, wmOperator *op)
     gso->vrgroup = -1;
   }
 
-  gso->ar = CTX_wm_region(C);
+  gso->region = CTX_wm_region(C);
 
   /* Multiframe settings. */
   gso->is_multiframe = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gso->gpd);
@@ -335,8 +335,6 @@ static bool gp_weightpaint_brush_init(bContext *C, wmOperator *op)
   /* Update header. */
   gp_weightpaint_brush_header_set(C);
 
-  /* Setup cursor drawing. */
-  ED_gpencil_toggle_brush_cursor(C, true, NULL);
   return true;
 }
 
@@ -344,9 +342,8 @@ static void gp_weightpaint_brush_exit(bContext *C, wmOperator *op)
 {
   tGP_BrushWeightpaintData *gso = op->customdata;
 
-  /* Disable cursor and headerprints. */
+  /* Disable headerprints. */
   ED_workspace_status_text(C, NULL);
-  ED_gpencil_toggle_brush_cursor(C, false, NULL);
 
   /* Free operator data */
   MEM_SAFE_FREE(gso->pbuffer);
@@ -748,14 +745,14 @@ static int gp_weightpaint_brush_invoke(bContext *C, wmOperator *op, const wmEven
 
   /* start drawing immediately? */
   if (is_modal == false) {
-    ARegion *ar = CTX_wm_region(C);
+    ARegion *region = CTX_wm_region(C);
 
     /* apply first dab... */
     gso->is_painting = true;
     gp_weightpaint_brush_apply_event(C, op, event);
 
     /* redraw view with feedback */
-    ED_region_tag_redraw(ar);
+    ED_region_tag_redraw(region);
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -865,8 +862,7 @@ static int gp_weightpaint_brush_modal(bContext *C, wmOperator *op, const wmEvent
 
   /* Redraw region? */
   if (redraw_region) {
-    ARegion *ar = CTX_wm_region(C);
-    ED_region_tag_redraw(ar);
+    ED_region_tag_redraw(CTX_wm_region(C));
   }
 
   /* Redraw toolsettings (brush settings)? */
