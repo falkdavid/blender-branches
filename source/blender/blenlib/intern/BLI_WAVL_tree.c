@@ -393,7 +393,8 @@ static void rebalance_delete(WAVLT_Tree *tree, WAVLT_Node *node)
   /* case 2: node is 3-child */
   if (is_i_child(3, node)) {
     WAVLT_Node *sib = sibling(node);
-    while(is_i_child(3, node) && (is_i_child(2, sib) || is_type(2, 2, sib))) {
+    while(sib != NULL && is_i_child(3, node) && 
+         (is_i_child(2, sib) || is_type(2, 2, sib))) {
       if (!is_i_child(2, sib)) {
         demote(sib);
         update_size(sib);
