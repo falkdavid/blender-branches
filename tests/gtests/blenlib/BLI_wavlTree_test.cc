@@ -635,13 +635,13 @@ static void random_delete_helper(int num_items, int rng_seed)
     SampleData *data = range[i];
     BLI_wavlTree_insert(tree, cmp_sample_data, data);
   }
-  debug_print_tree(tree);
+  //debug_print_tree(tree);
   BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
   for (int i = 0; i < num_items; i++) {
     SampleData *data = range[i];
-    std::cout << "Delete: " << data->my_data << "\n";
+    //std::cout << "Delete: " << data->my_data << "\n";
     BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, data);
-    debug_print_tree(tree);
+    //debug_print_tree(tree);
     EXPECT_TRUE(tree_ordered(tree));
     EXPECT_TRUE(check_rank_rule(tree));
     EXPECT_EQ(num_items - (i + 1), BLI_wavlTree_size(tree));
@@ -667,4 +667,75 @@ TEST(wavlTree, delete100)
 TEST(wavlTree, delete1000)
 {
   random_delete_helper(1000, 7890);
+}
+
+TEST(wavlTree, updateSingle)
+{
+  WAVLT_Tree *tree;
+  tree = BLI_wavlTree_new();
+  SampleData *s1 = create_sample_node(5);
+  SampleData *s2 = create_sample_node(3);
+  WAVLT_Node *s1n = BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  BLI_wavlTree_insert(tree, cmp_sample_data, s2);
+
+  EXPECT_EQ(s1, BLI_wavlTree_max_data(tree));
+  EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
+
+  s1->my_data = 1;
+  BLI_wavlTree_update_node(tree, cmp_sample_data, s1n);
+
+  EXPECT_FALSE(BLI_wavlTree_empty(tree));
+  EXPECT_EQ(2, BLI_wavlTree_size(tree));
+  EXPECT_EQ(s1, BLI_wavlTree_min_data(tree));
+  EXPECT_EQ(s2, BLI_wavlTree_max_data(tree));
+
+  EXPECT_TRUE(tree_ordered(tree));
+  EXPECT_TRUE(check_rank_rule(tree));
+
+  BLI_wavlTree_free(tree, free_sample_data);
+}
+
+static void random_update_helper(int num_items, int rng_seed)
+{
+  RNG *rng = BLI_rng_new(rng_seed);
+  WAVLT_Tree *tree = BLI_wavlTree_new();
+  SampleData **range = create_sample_range(num_items);
+  BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
+  for (int i = 0; i < num_items; i++) {
+    SampleData *data = range[i];
+    BLI_wavlTree_insert(tree, cmp_sample_data, data);
+  }
+  //debug_print_tree(tree);
+  /* Do random updates */
+  BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
+  for (int i = 0; i < num_items; i++) {
+    SampleData *data = range[i];
+    int new_val = (int)ceilf32(BLI_rng_get_float(rng) * (float)num_items);
+    //std::cout << "Update: " << data->my_data << " -> " << new_val << "\n";
+    WAVLT_Node *update_node = BLI_wavlTree_search(tree, cmp_sample_data, data);
+    data->my_data = new_val;
+    BLI_wavlTree_update_node(tree, cmp_sample_data, update_node);
+
+    //debug_print_tree(tree);
+    EXPECT_TRUE(tree_ordered(tree));
+    EXPECT_TRUE(check_rank_rule(tree));
+  }
+
+  BLI_wavlTree_free(tree, NULL);
+  MEM_freeN(range);
+}
+
+TEST(wavlTree, randomUpdate10)
+{
+  random_update_helper(10, 1234);
+}
+
+TEST(wavlTree, randomUpdate100)
+{
+  random_update_helper(100, 4567);
+}
+
+TEST(wavlTree, randomUpdate1000)
+{
+  random_update_helper(1000, 7890);
 }

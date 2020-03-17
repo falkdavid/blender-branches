@@ -381,7 +381,9 @@ static WAVLT_Node *delete_binary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_
   }
 
   /* replace node data */
-  free_data(node->data);
+  if (free_data != NULL) {
+    free_data(node->data);
+  }
   node->data = replace_node->data;
   
   /* replace_node must be leaf or unary */
@@ -567,6 +569,7 @@ uint BLI_wavlTree_size(const WAVLT_Tree *tree)
 }
 
 /**
+ * Node search:
  * Searches for a particular data node (search_data) using the WAVLT_comparator_FP function.
  * Returns the WAVLT_Node if it was found, NULL otherwise.
  */
@@ -637,6 +640,7 @@ void *BLI_wavlTree_max_data(const WAVLT_Tree *tree)
 }
 
 /**
+ * Node insert:
  * Inserts a new node (data) into the tree using the WAVLT_comparator_FP function
  * to compare the nodes. If the data to be inserted has the same key as a node
  * that is already in the tree, the node will not be inserted and the function
@@ -652,7 +656,7 @@ WAVLT_Node *BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void 
     tree->root = new_wavl_node;
     tree->min_node = new_wavl_node;
     tree->max_node = new_wavl_node;
-    return NULL;
+    return new_wavl_node;
   }
 
   /* create a new node to insert */
@@ -729,27 +733,23 @@ WAVLT_Node *BLI_wavlTree_insert(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void 
   return new_wavl_node;
 }
 
-void BLI_wavlTree_update_node(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_Node *node)
+/**
+ * Update node:
+ * Deletes the node while keeping the data, then inserts a new node with the saved data.
+ * Used to update a node if the data inside has changed.
+ * Returns a pointer to the updated node.
+ */
+WAVLT_Node *BLI_wavlTree_update_node(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_Node *node)
 {
   if (node == NULL) {
-    return;
+    return NULL;
   }
   /* save pointer to data */
   void *data = node->data;
   /* delete node, but don't free data */
   BLI_wavlTree_delete_node(tree, NULL, node);
-  BLI_wavlTree_insert(tree, cmp, data);
-}
-
-void BLI_wavlTree_update(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
-{
-  WAVLT_Node *update_node = BLI_wavlTree_search(tree, cmp, data);
-  if (update_node == NULL) {
-    return;
-  }
-  /* don't free data as it was updated */
-  BLI_wavlTree_delete_node(tree, NULL, update_node);
-  BLI_wavlTree_insert(tree, cmp, data);
+  WAVLT_Node *new_node = BLI_wavlTree_insert(tree, cmp, data);
+  return new_node;
 }
 
 void BLI_wavlTree_delete_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
@@ -771,6 +771,10 @@ void BLI_wavlTree_delete_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WA
   }
 }
 
+/**
+ * Delete node:
+ * Finds the node containing "data" and removes it from the tree.
+ */
 void BLI_wavlTree_delete(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_free_data_FP free_data, void *data)
 {
   WAVLT_Node *delete_node = BLI_wavlTree_search(tree, cmp, data);

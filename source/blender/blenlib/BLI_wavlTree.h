@@ -106,8 +106,7 @@ void *BLI_wavlTree_min_data(const struct WAVLT_Tree *tree);
 void *BLI_wavlTree_max_data(const struct WAVLT_Tree *tree);
 
 struct WAVLT_Node *BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
-void BLI_wavlTree_update_node(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, struct WAVLT_Node *node);
-void BLI_wavlTree_update(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+struct WAVLT_Node *BLI_wavlTree_update_node(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, struct WAVLT_Node *node);
 void BLI_wavlTree_delete_node(struct WAVLT_Tree *tree, WAVLT_free_data_FP free_data, struct WAVLT_Node *node);
 void BLI_wavlTree_delete(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_free_data_FP free_data, void *data);
 
