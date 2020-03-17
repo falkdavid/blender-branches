@@ -53,7 +53,7 @@ set(SRC
   intern/BLI_memiter.c
   intern/BLI_mempool.c
   intern/BLI_timer.c
-  intern/BLI_WAVL_tree.c
+  intern/BLI_wavl_tree.c
   intern/DLRB_tree.c
   intern/array_store.c
   intern/array_store_utils.c
@@ -252,7 +252,7 @@ set(SRC
   BLI_voronoi_2d.h
   BLI_voxel.h
   BLI_winstuff.h
-  BLI_wavlTree.h
+  BLI_wavl_tree.h
   PIL_time.h
   PIL_time_utildefines.h
 )

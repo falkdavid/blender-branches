@@ -8,7 +8,7 @@
 
 extern "C" {
 #include "BLI_compiler_attrs.h"
-#include "BLI_wavlTree.h"
+#include "BLI_wavl_tree.h"
 #include "BLI_utildefines.h"
 #include "BLI_rand.h"
 };
@@ -65,7 +65,7 @@ static void free_sample_range(SampleData **range, int num_items)
   MEM_freeN(range);
 }
 
-static int tree_height(WAVLT_Node *root)
+static int tree_height(WAVL_Node *root)
 {
   if (root != NULL) {
     int lh = tree_height(root->left);
@@ -75,7 +75,7 @@ static int tree_height(WAVLT_Node *root)
   return 0;
 }
 
-static void debug_print_tree_rec(WAVLT_Node *root, int space)
+static void debug_print_tree_rec(WAVL_Node *root, int space)
 {
   if (root == NULL) {
     return;
@@ -91,7 +91,7 @@ static void debug_print_tree_rec(WAVLT_Node *root, int space)
   debug_print_tree_rec(root->left, space);
 }
 
-static void debug_print_tree(WAVLT_Tree *tree)
+static void debug_print_tree(WAVL_Tree *tree)
 {
   if (tree->root == NULL) {
     return;
@@ -101,7 +101,7 @@ static void debug_print_tree(WAVLT_Tree *tree)
   std::cout << "\n";
 }
 
-static bool tree_ordered(WAVLT_Tree *tree)
+static bool tree_ordered(WAVL_Tree *tree)
 {
   if (BLI_wavlTree_empty(tree)) {
     return true;
@@ -119,7 +119,7 @@ static bool tree_ordered(WAVLT_Tree *tree)
   return true;
 }
 
-static bool check_height_rule(WAVLT_Tree *tree)
+static bool check_height_rule(WAVL_Tree *tree)
 {
   if (BLI_wavlTree_empty(tree)) {
     return true;
@@ -134,9 +134,9 @@ static bool check_height_rule(WAVLT_Tree *tree)
   return h < limit;
 }
 
-static bool check_rank_rule(WAVLT_Tree *tree)
+static bool check_rank_rule(WAVL_Tree *tree)
 {
-  for (WAVLT_Node *curr = tree->min_node; curr != NULL; curr = curr->succ) {
+  for (WAVL_Node *curr = tree->min_node; curr != NULL; curr = curr->succ) {
     if (curr != tree->root) {
       int rank_diff = curr->parent->rank - curr->rank;
       // All rank differences should be 1 or 2
@@ -157,7 +157,7 @@ static bool check_rank_rule(WAVLT_Tree *tree)
 
 TEST(wavlTree, newTree) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   EXPECT_EQ(0, BLI_wavlTree_size(tree));
   EXPECT_TRUE(BLI_wavlTree_empty(tree));
@@ -165,14 +165,14 @@ TEST(wavlTree, newTree)
 
 TEST(wavlTree, freeEmptyTree) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   BLI_wavlTree_free(tree, free_sample_data);
 }
 
 TEST(wavlTree, insertSingle) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   BLI_wavlTree_insert(tree, cmp_sample_data, s1);
@@ -188,7 +188,7 @@ TEST(wavlTree, insertSingle)
 
 TEST(wavlTree, insertSame) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(10);
@@ -207,7 +207,7 @@ TEST(wavlTree, insertSame)
 
 TEST(wavlTree, twoInsertLeft) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(5);
@@ -220,8 +220,8 @@ TEST(wavlTree, twoInsertLeft)
   EXPECT_EQ(s2, BLI_wavlTree_min_data(tree));
   EXPECT_EQ(s1, BLI_wavlTree_max_data(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
 
   EXPECT_TRUE(s1n != NULL);
   EXPECT_TRUE(s2n != NULL);
@@ -240,7 +240,7 @@ TEST(wavlTree, twoInsertLeft)
 
 TEST(wavlTree, twoInsertRight) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(15);
@@ -253,8 +253,8 @@ TEST(wavlTree, twoInsertRight)
   EXPECT_EQ(s1, BLI_wavlTree_min_data(tree));
   EXPECT_EQ(s2, BLI_wavlTree_max_data(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
 
   EXPECT_TRUE(s1n != NULL);
   EXPECT_TRUE(s2n != NULL);
@@ -273,7 +273,7 @@ TEST(wavlTree, twoInsertRight)
 
 TEST(wavlTree, leftRotate) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(15);
@@ -285,9 +285,9 @@ TEST(wavlTree, leftRotate)
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(3, BLI_wavlTree_size(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
-  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
 
   //debug_print_tree(tree);
 
@@ -309,7 +309,7 @@ TEST(wavlTree, leftRotate)
 
 TEST(wavlTree, rightRotate) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(5);
@@ -321,9 +321,9 @@ TEST(wavlTree, rightRotate)
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(3, BLI_wavlTree_size(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
-  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
 
   //debug_print_tree(tree);
 
@@ -345,7 +345,7 @@ TEST(wavlTree, rightRotate)
 
 TEST(wavlTree, doubleLeftRotate) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(5);
   SampleData *s2 = create_sample_node(6);
@@ -363,11 +363,11 @@ TEST(wavlTree, doubleLeftRotate)
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(5, BLI_wavlTree_size(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
-  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
-  WAVLT_Node *s4n = BLI_wavlTree_search(tree, cmp_sample_data, s4);
-  WAVLT_Node *s5n = BLI_wavlTree_search(tree, cmp_sample_data, s5);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+  WAVL_Node *s4n = BLI_wavlTree_search(tree, cmp_sample_data, s4);
+  WAVL_Node *s5n = BLI_wavlTree_search(tree, cmp_sample_data, s5);
 
   EXPECT_EQ(tree->root, s1n);
   EXPECT_EQ(s2n, s1n->right);
@@ -383,7 +383,7 @@ TEST(wavlTree, doubleLeftRotate)
 
 TEST(wavlTree, doubleRightRotate) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(5);
   SampleData *s2 = create_sample_node(1);
@@ -401,11 +401,11 @@ TEST(wavlTree, doubleRightRotate)
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(5, BLI_wavlTree_size(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
-  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
-  WAVLT_Node *s4n = BLI_wavlTree_search(tree, cmp_sample_data, s4);
-  WAVLT_Node *s5n = BLI_wavlTree_search(tree, cmp_sample_data, s5);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+  WAVL_Node *s4n = BLI_wavlTree_search(tree, cmp_sample_data, s4);
+  WAVL_Node *s5n = BLI_wavlTree_search(tree, cmp_sample_data, s5);
 
   EXPECT_EQ(tree->root, s1n);
   EXPECT_EQ(s2n, s1n->left);
@@ -421,7 +421,7 @@ TEST(wavlTree, doubleRightRotate)
 
 TEST(wavlTree, doubleRightRotate2) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(2);
   SampleData *s2 = create_sample_node(1);
@@ -439,11 +439,11 @@ TEST(wavlTree, doubleRightRotate2)
   EXPECT_FALSE(BLI_wavlTree_empty(tree));
   EXPECT_EQ(5, BLI_wavlTree_size(tree));
 
-  WAVLT_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
-  WAVLT_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
-  WAVLT_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
-  WAVLT_Node *s4n = BLI_wavlTree_search(tree, cmp_sample_data, s4);
-  WAVLT_Node *s5n = BLI_wavlTree_search(tree, cmp_sample_data, s5);
+  WAVL_Node *s1n = BLI_wavlTree_search(tree, cmp_sample_data, s1);
+  WAVL_Node *s2n = BLI_wavlTree_search(tree, cmp_sample_data, s2);
+  WAVL_Node *s3n = BLI_wavlTree_search(tree, cmp_sample_data, s3);
+  WAVL_Node *s4n = BLI_wavlTree_search(tree, cmp_sample_data, s4);
+  WAVL_Node *s5n = BLI_wavlTree_search(tree, cmp_sample_data, s5);
 
   EXPECT_EQ(tree->root, s1n);
   EXPECT_EQ(s2n, s1n->left);
@@ -457,7 +457,7 @@ TEST(wavlTree, doubleRightRotate2)
   BLI_wavlTree_free(tree, free_sample_data);
 }
 
-static void insert_array_into_tree(WAVLT_Tree *tree, int *array, int length)
+static void insert_array_into_tree(WAVL_Tree *tree, int *array, int length)
 {
   for (int i = 0; i < length; i++) {
     int elem = array[i];
@@ -469,7 +469,7 @@ static void insert_array_into_tree(WAVLT_Tree *tree, int *array, int length)
 
 TEST(wavlTree, doubleRightRotate3) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   int elems[7] = {2, 9, 8, 7, 1, 6, 4};
   insert_array_into_tree(tree, elems, 7);
@@ -486,7 +486,7 @@ TEST(wavlTree, doubleRightRotate3)
 
 static void random_insert_helper(int num_items, int rng_seed)
 {
-  WAVLT_Tree *tree = BLI_wavlTree_new();
+  WAVL_Tree *tree = BLI_wavlTree_new();
   SampleData **range = create_sample_range(num_items);
   BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
   for (int i = 0; i < num_items; i++) {
@@ -519,7 +519,7 @@ TEST(wavlTree, insert1000)
 
 TEST(wavlTree, deleteRoot1) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   BLI_wavlTree_insert(tree, cmp_sample_data, s1);
@@ -532,7 +532,7 @@ TEST(wavlTree, deleteRoot1)
 
 TEST(wavlTree, deleteRoot2) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(15);
@@ -558,7 +558,7 @@ TEST(wavlTree, deleteRoot2)
 
 TEST(wavlTree, deleteRoot3) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(10);
   SampleData *s2 = create_sample_node(5);
@@ -584,7 +584,7 @@ TEST(wavlTree, deleteRoot3)
 
 TEST(wavlTree, deleteRoot4) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(5);
   SampleData *s2 = create_sample_node(3);
@@ -607,7 +607,7 @@ TEST(wavlTree, deleteRoot4)
 
 TEST(wavlTree, deleteTwo) 
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(5);
   SampleData *s2 = create_sample_node(3);
@@ -629,7 +629,7 @@ TEST(wavlTree, deleteTwo)
 
 static void random_delete_helper(int num_items, int rng_seed)
 {
-  WAVLT_Tree *tree = BLI_wavlTree_new();
+  WAVL_Tree *tree = BLI_wavlTree_new();
   SampleData **range = create_sample_range(num_items);
   for (int i = 0; i < num_items; i++) {
     SampleData *data = range[i];
@@ -671,11 +671,11 @@ TEST(wavlTree, delete1000)
 
 TEST(wavlTree, updateSingle)
 {
-  WAVLT_Tree *tree;
+  WAVL_Tree *tree;
   tree = BLI_wavlTree_new();
   SampleData *s1 = create_sample_node(5);
   SampleData *s2 = create_sample_node(3);
-  WAVLT_Node *s1n = BLI_wavlTree_insert(tree, cmp_sample_data, s1);
+  WAVL_Node *s1n = BLI_wavlTree_insert(tree, cmp_sample_data, s1);
   BLI_wavlTree_insert(tree, cmp_sample_data, s2);
 
   EXPECT_EQ(s1, BLI_wavlTree_max_data(tree));
@@ -698,7 +698,7 @@ TEST(wavlTree, updateSingle)
 static void random_update_helper(int num_items, int rng_seed)
 {
   RNG *rng = BLI_rng_new(rng_seed);
-  WAVLT_Tree *tree = BLI_wavlTree_new();
+  WAVL_Tree *tree = BLI_wavlTree_new();
   SampleData **range = create_sample_range(num_items);
   BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
   for (int i = 0; i < num_items; i++) {
@@ -712,7 +712,7 @@ static void random_update_helper(int num_items, int rng_seed)
     SampleData *data = range[i];
     int new_val = (int)ceilf32(BLI_rng_get_float(rng) * (float)num_items);
     //std::cout << "Update: " << data->my_data << " -> " << new_val << "\n";
-    WAVLT_Node *update_node = BLI_wavlTree_search(tree, cmp_sample_data, data);
+    WAVL_Node *update_node = BLI_wavlTree_search(tree, cmp_sample_data, data);
     data->my_data = new_val;
     BLI_wavlTree_update_node(tree, cmp_sample_data, update_node);
 

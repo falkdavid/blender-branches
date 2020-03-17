@@ -45,13 +45,13 @@ extern "C" {
 /* Data structs*/
 
 /* Node data */
-typedef struct WAVLT_Node {
+typedef struct WAVL_Node {
   /* pointers for tree structure */
-  struct WAVLT_Node *left, *right;
-  struct WAVLT_Node *parent;
+  struct WAVL_Node *left, *right;
+  struct WAVL_Node *parent;
   /* pointers to successor and predecessor 
    * for quick access */
-  struct WAVLT_Node *succ, *pred;
+  struct WAVL_Node *succ, *pred;
   /* Size of the subtree including the node */
   uint size;
   /* The rank is an approximation of the distance 
@@ -60,24 +60,24 @@ typedef struct WAVLT_Node {
   int rank;
   /* pointer to the data in the node */
   void *data;
-} WAVLT_Node;
+} WAVL_Node;
 
 /* WAVL Tree data */
-typedef struct WAVLT_Tree {
+typedef struct WAVL_Tree {
   /* root node */
-  struct WAVLT_Node *root;
+  struct WAVL_Node *root;
   /* pointers to min and max node 
    * for quick access */
-  struct WAVLT_Node *min_node, *max_node;
-} WAVLT_Tree;
+  struct WAVL_Node *min_node, *max_node;
+} WAVL_Tree;
 
 /* ********************************************** */
 /* Callbacks */
 
 /**
  * Callback function that returns -1, 0, 1 depending on
- * whether the data in WAVLT_Node A is less than, equal,
- * or greater than the data in WAVLT_Node B.
+ * whether the data in WAVL_Node A is less than, equal,
+ * or greater than the data in WAVL_Node B.
  */
 typedef short (*WAVLT_comparator_FP)(void *data_a, void *data_b);
 
@@ -89,37 +89,37 @@ typedef void (*WAVLT_free_data_FP)(void *data);
 /* ********************************************** */
 /* Public API */
 
-struct WAVLT_Tree *BLI_wavlTree_new(void);
-void BLI_wavlTree_free(struct WAVLT_Tree *tree, WAVLT_free_data_FP free_data);
+struct WAVL_Tree *BLI_wavlTree_new(void);
+void BLI_wavlTree_free(struct WAVL_Tree *tree, WAVLT_free_data_FP free_data);
 
-bool BLI_wavlTree_empty(const struct WAVLT_Tree *tree);
-uint BLI_wavlTree_size(const struct WAVLT_Tree *tree);
+bool BLI_wavlTree_empty(const struct WAVL_Tree *tree);
+uint BLI_wavlTree_size(const struct WAVL_Tree *tree);
 
-struct WAVLT_Node *BLI_wavlTree_search(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
-struct WAVLT_Node *BLI_wavlTree_successor_ex(const struct WAVLT_Node *node);
-struct WAVLT_Node *BLI_wavlTree_successor(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
-struct WAVLT_Node *BLI_wavlTree_predecessor_ex(const struct WAVLT_Node *node);
-struct WAVLT_Node *BLI_wavlTree_predecessor(const struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
-struct WAVLT_Node *BLI_wavlTree_min(const struct WAVLT_Tree *tree);
-struct WAVLT_Node *BLI_wavlTree_max(const struct WAVLT_Tree *tree);
-void *BLI_wavlTree_min_data(const struct WAVLT_Tree *tree);
-void *BLI_wavlTree_max_data(const struct WAVLT_Tree *tree);
+struct WAVL_Node *BLI_wavlTree_search(const struct WAVL_Tree *tree, WAVLT_comparator_FP cmp, void *search_data);
+struct WAVL_Node *BLI_wavlTree_successor_ex(const struct WAVL_Node *node);
+struct WAVL_Node *BLI_wavlTree_successor(const struct WAVL_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+struct WAVL_Node *BLI_wavlTree_predecessor_ex(const struct WAVL_Node *node);
+struct WAVL_Node *BLI_wavlTree_predecessor(const struct WAVL_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+struct WAVL_Node *BLI_wavlTree_min(const struct WAVL_Tree *tree);
+struct WAVL_Node *BLI_wavlTree_max(const struct WAVL_Tree *tree);
+void *BLI_wavlTree_min_data(const struct WAVL_Tree *tree);
+void *BLI_wavlTree_max_data(const struct WAVL_Tree *tree);
 
-struct WAVLT_Node *BLI_wavlTree_insert(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data);
-struct WAVLT_Node *BLI_wavlTree_update_node(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, struct WAVLT_Node *node);
-void BLI_wavlTree_delete_node(struct WAVLT_Tree *tree, WAVLT_free_data_FP free_data, struct WAVLT_Node *node);
-void BLI_wavlTree_delete(struct WAVLT_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_free_data_FP free_data, void *data);
+struct WAVL_Node *BLI_wavlTree_insert(struct WAVL_Tree *tree, WAVLT_comparator_FP cmp, void *data);
+struct WAVL_Node *BLI_wavlTree_update_node(struct WAVL_Tree *tree, WAVLT_comparator_FP cmp, struct WAVL_Node *node);
+void BLI_wavlTree_delete_node(struct WAVL_Tree *tree, WAVLT_free_data_FP free_data, struct WAVL_Node *node);
+void BLI_wavlTree_delete(struct WAVL_Tree *tree, WAVLT_comparator_FP cmp, WAVLT_free_data_FP free_data, void *data);
 
 /* Macro for in-order walk over the the data in the tree (uses predecessor-successor DLL).
  * The type should be that of the data in a node */
 #define WAVLTREE_INORDER(type, var, tree) \
   type var = (type)((tree)->min_node->data); \
-  for (WAVLT_Node *_curr = (tree)->min_node; _curr != NULL; \
+  for (WAVL_Node *_curr = (tree)->min_node; _curr != NULL; \
   _curr = _curr->succ, var = (_curr != NULL) ? (type)(_curr->data) : NULL)
 
 #define WAVLTREE_REVERSE_INORDER(type, var, tree) \
   type var = (type)((tree)->max_node->data); \
-  for (WAVLT_Node *_curr = (tree)->max_node; _curr != NULL; \
+  for (WAVL_Node *_curr = (tree)->max_node; _curr != NULL; \
   _curr = _curr->pred, var = (_curr != NULL) ? (type)(_curr->data) : NULL)
 
 /* ********************************************** */
