@@ -62,6 +62,26 @@ BLI_INLINE bool is_i_child(int i, WAVLT_Node *node)
   return false;
 }
 
+/* Helper: check if the left child has rank diff i */
+BLI_INLINE bool left_child_is_i(int i, WAVLT_Node *p)
+{
+  int diff = (p->left != NULL) ? p->rank - p->left->rank : p->rank + 1;
+  if (diff == i) {
+    return true;
+  }
+  return false;
+}
+
+/* Helper: check if the right child has rank diff i */
+BLI_INLINE bool right_child_is_i(int i, WAVLT_Node *p)
+{
+  int diff = (p->right != NULL) ? p->rank - p->right->rank : p->rank + 1;
+  if (diff == i) {
+    return true;
+  }
+  return false;
+}
+
 /* Helper: check if the node is of type l,r (rank diff of l/r-child is l/r) */
 BLI_INLINE bool is_type(int l, int r, WAVLT_Node *node)
 {
@@ -325,7 +345,6 @@ static WAVLT_Node *delete_unary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_d
     else {
       parent->right = child;
     }
-
     child->parent = parent;
   }
 
@@ -366,16 +385,15 @@ static WAVLT_Node *delete_binary_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_
   node->data = replace_node->data;
   
   /* replace_node must be leaf or unary */
-  WAVLT_Node *parent_node = NULL;
   if (leaf(replace_node)) {
     /* dont free data as it is used by 'node' now. */
-    parent_node = delete_leaf_node(tree, NULL, replace_node);
+    replace_node = delete_leaf_node(tree, NULL, replace_node);
   }
   else {
-    parent_node = delete_unary_node(tree, NULL, replace_node);
+    replace_node = delete_unary_node(tree, NULL, replace_node);
   }
 
-  return parent_node;
+  return replace_node;
 }
 
 /* Helper: Rebalance the tree after a deletion. 'node' is leaf or unary */
@@ -388,66 +406,92 @@ static void rebalance_delete(WAVLT_Tree *tree, WAVLT_Node *node)
   if (leaf(node) && is_type(2, 2, node)) {
     demote(node);
     update_size(node);
+    node = node->parent;
   }
 
-  /* case 2: node is 3-child */
-  if (is_i_child(3, node)) {
-    WAVLT_Node *sib = sibling(node);
-    while(sib != NULL && is_i_child(3, node) && 
-         (is_i_child(2, sib) || is_type(2, 2, sib))) {
-      if (!is_i_child(2, sib)) {
-        demote(sib);
-        update_size(sib);
-      }
-      demote(node->parent);
-      update_size(node->parent);
-
-      node = node->parent;
-      sib = sibling(node);
-    }
-
-    /* case 3: rotations */
-    if (is_type(1, 3, node)) {
-      /* rotate right */
-      if(is_i_child(1, node->left->left)) {
-        promote(node->left);
+  /* case 2: node has a 3-child */
+  while (node != NULL) {
+    if (right_child_is_i(3, node)) {
+      if (left_child_is_i(2, node)) {
         demote(node);
-        right_rotate(tree, node->left);
-        if (leaf(node)) {
-          demote(node);
-        }
       }
-      /* double rotate */
-      else if (is_i_child(2, node->left->left)) {
-        promote(node->left->right);
-        promote(node->left->right);
+      else if (is_type(2, 2, node->left)) {
         demote(node->left);
         demote(node);
-        demote(node);
-        left_rotate(tree, node->left);
-        right_rotate(tree, node->left);
       }
+      else {
+        update_size(node);
+        break;
+      }
+      update_size(node);
+      node = node->parent;
     }
-    else if (is_type(3, 1, node)){
-      /* rotate left */
-      if(is_i_child(1, node->right->right)) {
-        promote(node->right);
+    else if (left_child_is_i(3, node)) {
+      if (right_child_is_i(2, node)) {
         demote(node);
-        left_rotate(tree, node->right);
-        if (leaf(node)) {
-          demote(node);
-        }
       }
-      /* double rotate */
-      else if (is_i_child(2, node->right->right)) {
-        promote(node->right->left);
-        promote(node->right->left);
+      else if (is_type(2, 2, node->right)) {
         demote(node->right);
         demote(node);
-        demote(node);
-        right_rotate(tree, node->right);
-        left_rotate(tree, node->right);
       }
+      else {
+        update_size(node);
+        break;
+      }
+      update_size(node);
+      node = node->parent;
+    }
+    else {
+      update_size(node);
+      break;
+    }
+  }
+
+  if (node == NULL) {
+    return;
+  }
+
+  /* case 3: rotations */
+  if (is_type(1, 3, node)) {
+    WAVLT_Node *sib = node->left;
+    if (left_child_is_i(1, sib)) {
+      right_rotate(tree, node);
+      promote(sib);
+      demote(node);
+      if (leaf(node)) {
+        demote(node);
+      }
+    }
+    else if (is_type(2, 1, sib)) {
+      WAVLT_Node *v = sib->right;
+      left_rotate(tree, sib);
+      right_rotate(tree, node);
+      promote(v);
+      promote(v);
+      demote(sib);
+      demote(node);
+      demote(node);
+    }
+  }
+  else if (is_type(3, 1, node)) {
+    WAVLT_Node *sib = node->right;
+    if (right_child_is_i(1, sib)) {
+      left_rotate(tree, node);
+      promote(sib);
+      demote(node);
+      if (leaf(node)) {
+        demote(node);
+      }
+    }
+    else if (is_type(1, 2, sib)) {
+      WAVLT_Node *v = sib->left;
+      right_rotate(tree, sib);
+      left_rotate(tree, node);
+      promote(v);
+      promote(v);
+      demote(sib);
+      demote(node);
+      demote(node);
     }
   }
 
@@ -710,20 +754,20 @@ void BLI_wavlTree_update(WAVLT_Tree *tree, WAVLT_comparator_FP cmp, void *data)
 
 void BLI_wavlTree_delete_node(WAVLT_Tree *tree, WAVLT_free_data_FP free_data, WAVLT_Node *node)
 {
-  WAVLT_Node *parent = NULL;
+  WAVLT_Node *replace_node = NULL;
   if (leaf(node)) {
-    parent = delete_leaf_node(tree, free_data, node);
+    replace_node = delete_leaf_node(tree, free_data, node);
   }
   else if (unary(node)) {
-    parent = delete_unary_node(tree, free_data, node);
+    replace_node = delete_unary_node(tree, free_data, node);
   }
   else {
-    parent = delete_binary_node(tree, free_data, node);
+    replace_node = delete_binary_node(tree, free_data, node);
   }
   
-  /* rebalance the tree if there exists a parent node */
-  if (parent != NULL) {
-    rebalance_delete(tree, parent);
+  /* rebalance the tree if there exists a replace_node node */
+  if (replace_node != NULL) {
+    rebalance_delete(tree, replace_node);
   }
 }
 

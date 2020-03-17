@@ -14,7 +14,7 @@ extern "C" {
 };
 
 /* ************************************************************************ */
-/* HELPER FUNCTIONS */
+/* TEST HELPER FUNCTIONS */
 
 typedef struct SampleData {
   int my_data;
@@ -80,12 +80,14 @@ static void debug_print_tree_rec(WAVLT_Node *root, int space)
   if (root == NULL) {
     return;
   }
-  space += 5;
+  space += 8;
   debug_print_tree_rec(root->right, space);
-  for (int i = 5; i < space; i++) {
+  for (int i = 8; i < space; i++) {
     std::cout << " ";
   }
-  std::cout << ((SampleData *)(root->data))->my_data << "\n";
+  int diff = (root->parent != NULL) ? root->parent->rank - root->rank : -1;
+  std::cout << "(" << diff << ") " << ((SampleData *)(root->data))->my_data;
+  std::cout << " r:" << root->rank << "\n";
   debug_print_tree_rec(root->left, space);
 }
 
@@ -135,10 +137,14 @@ static bool check_height_rule(WAVLT_Tree *tree)
 static bool check_rank_rule(WAVLT_Tree *tree)
 {
   for (WAVLT_Node *curr = tree->min_node; curr != NULL; curr = curr->succ) {
-    int rank_diff = (curr->parent != NULL) ? curr->parent->rank - curr->rank : 1;
-    if (rank_diff != 1 && rank_diff != 2) {
-      return false;
+    if (curr != tree->root) {
+      int rank_diff = curr->parent->rank - curr->rank;
+      // All rank differences should be 1 or 2
+      if (rank_diff != 1 && rank_diff != 2) {
+        return false;
+      }
     }
+
     if ((curr->left == NULL) && (curr->right == NULL) && curr->rank != 0) {
       return false;
     }
@@ -629,12 +635,16 @@ static void random_delete_helper(int num_items, int rng_seed)
     SampleData *data = range[i];
     BLI_wavlTree_insert(tree, cmp_sample_data, data);
   }
+  debug_print_tree(tree);
   BLI_array_randomize(range, sizeof(SampleData *), num_items, rng_seed);
   for (int i = 0; i < num_items; i++) {
     SampleData *data = range[i];
+    std::cout << "Delete: " << data->my_data << "\n";
     BLI_wavlTree_delete(tree, cmp_sample_data, free_sample_data, data);
+    debug_print_tree(tree);
     EXPECT_TRUE(tree_ordered(tree));
     EXPECT_TRUE(check_rank_rule(tree));
+    EXPECT_EQ(num_items - (i + 1), BLI_wavlTree_size(tree));
   }
   
   EXPECT_EQ(0, BLI_wavlTree_size(tree));
@@ -646,15 +656,15 @@ static void random_delete_helper(int num_items, int rng_seed)
 
 TEST(wavlTree, delete10)
 {
-  random_delete_helper(10, 1234);
+  random_delete_helper(16, 4567);
 }
 
-// TEST(wavlTree, delete100)
-// {
-//   random_delete_helper(100, 4567);
-// }
+TEST(wavlTree, delete100)
+{
+  random_delete_helper(100, 1234);
+}
 
-// TEST(wavlTree, delete10000)
-// {
-//   random_delete_helper(10000, 7890);
-// }
+TEST(wavlTree, delete1000)
+{
+  random_delete_helper(1000, 7890);
+}
