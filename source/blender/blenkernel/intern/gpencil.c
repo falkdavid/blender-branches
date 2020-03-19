@@ -37,6 +37,7 @@
 #include "BLI_polyfill_2d.h"
 #include "BLI_string_utils.h"
 #include "BLI_heap.h"
+#include "BLI_wavl_tree.h"
 
 #include "BLT_translation.h"
 
@@ -4790,6 +4791,11 @@ void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, flo
     curr->front = (tMonochainPoint *)curr->points.first;
     BLI_heap_insert(acl, curr->min[0], curr);
   }
+
+  /* SCL = Sweeping chain list; all chains that intersect the sweep line */
+  WAVL_Tree *scl = BLI_wavlTree_new();
+  /* OVL = output vertex list */
+  ListBase ovl = {NULL, NULL};
 
   /* while there is at least one active chain */
   while(!BLI_heap_is_empty(acl)) {

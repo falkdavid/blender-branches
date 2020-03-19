@@ -31,12 +31,12 @@ extern "C" {
 /* WAVL Tree Implementation:
  *
  * WAVL-trees (or weak AVL-trees) are a hybrid of RB-trees and AVL-trees.
- * They where first introduced in the paper "Rank-balanced trees" by 
+ * They where first introduced in the paper "Rank-balanced trees" by
  * Haeupler, Bernhard; Sen, Siddhartha; Tarjan, Robert E. (2015)
  * http://sidsen.azurewebsites.net//papers/rb-trees-talg.pdf.
  * The main advantage of AVL-trees over RB-trees is that they are more
  * balanced. RB-trees however use a constant amount of tree rotations
- * when deleting a node, compared to a (worst case) logarithmic 
+ * when deleting a node, compared to a (worst case) logarithmic
  * number using AVL-trees. WAVL-trees have both of the better properties.
  */
 
@@ -49,12 +49,12 @@ typedef struct WAVL_Node {
   /* pointers for tree structure */
   struct WAVL_Node *left, *right;
   struct WAVL_Node *parent;
-  /* pointers to successor and predecessor 
+  /* pointers to successor and predecessor
    * for quick access */
   struct WAVL_Node *succ, *pred;
   /* Size of the subtree including the node */
   uint size;
-  /* The rank is an approximation of the distance 
+  /* The rank is an approximation of the distance
    * to the farthest leaf descendant.
    * (used internally to balance the BST) */
   int rank;
@@ -66,7 +66,7 @@ typedef struct WAVL_Node {
 typedef struct WAVL_Tree {
   /* root node */
   struct WAVL_Node *root;
-  /* pointers to min and max node 
+  /* pointers to min and max node
    * for quick access */
   struct WAVL_Node *min_node, *max_node;
 } WAVL_Tree;
