@@ -22,6 +22,10 @@
 
 #include "DNA_gpencil_modifier_types.h" /* needed for all enum typdefs */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct Depsgraph;
 struct GpencilModifierData;
 struct ID;
@@ -137,20 +141,10 @@ typedef struct GpencilModifierTypeInfo {
   /**
    * Callback for GP "geometry" modifiers that create extra geometry
    * in the frame (e.g. Array)
-   *
-   * The gpf parameter contains the GP frame/strokes to operate on. This is
-   * usually a copy of the original (unmodified and saved to files) stroke data.
-   * Modifiers should only add any generated strokes to this frame (and not one accessed
-   * via the gpl parameter).
-   *
-   * The modifier_index parameter indicates where the modifier is
-   * in the modifier stack in relation to other modifiers.
    */
   void (*generateStrokes)(struct GpencilModifierData *md,
                           struct Depsgraph *depsgraph,
-                          struct Object *ob,
-                          struct bGPDlayer *gpl,
-                          struct bGPDframe *gpf);
+                          struct Object *ob);
 
   /**
    * Bake-down GP modifier's effects into the GP data-block.
@@ -303,4 +297,14 @@ void BKE_gpencil_modifiers_calc(struct Depsgraph *depsgraph,
 void BKE_gpencil_prepare_eval_data(struct Depsgraph *depsgraph,
                                    struct Scene *scene,
                                    struct Object *ob);
+
+struct bGPDframe *BKE_gpencil_frame_retime_get(struct Depsgraph *depsgraph,
+                                               struct Scene *scene,
+                                               struct Object *ob,
+                                               struct bGPDlayer *gpl);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* __BKE_GPENCIL_MODIFIER_H__ */

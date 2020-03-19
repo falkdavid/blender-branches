@@ -242,6 +242,7 @@ typedef struct SceneRenderLayer {
 #define SCE_LAY_STRAND (1 << 5)
 #define SCE_LAY_FRS (1 << 6)
 #define SCE_LAY_AO (1 << 7)
+#define SCE_LAY_VOLUMES (1 << 8)
 /* flags between (1 << 8) and (1 << 15) are set to 1 already, for future options */
 
 #define SCE_LAY_ALL_Z (1 << 15)
@@ -1000,13 +1001,14 @@ typedef struct UvSculpt {
 typedef struct GpPaint {
   Paint paint;
   int flag;
-  char _pad[4];
+  /* Mode of paint (Materials or Vertex Color). */
+  int mode;
 } GpPaint;
 
 /* GpPaint.flag */
 enum {
-  /* weight paint only */
-  GPPAINT_FLAG_USE_VERTEXCOLOR = (1 << 0),
+  GPPAINT_FLAG_USE_MATERIAL = 0,
+  GPPAINT_FLAG_USE_VERTEXCOLOR = 1,
 };
 
 /* Grease pencil vertex paint. */
@@ -1468,6 +1470,9 @@ typedef struct ToolSettings {
 
   /** Auto normalizing mode in wpaint. */
   char auto_normalize;
+  /** Present weights as if all locked vertex groups were
+   *  deleted, and the remaining deform groups normalized. */
+  char wpaint_lock_relative;
   /** Paint multiple bones in wpaint. */
   char multipaint;
   char weightuser;
@@ -1478,7 +1483,7 @@ typedef struct ToolSettings {
   char gpencil_selectmode_vertex;
 
   /* UV painting */
-  char _pad2[2];
+  char _pad2[1];
   char uv_sculpt_settings;
   char uv_relax_method;
   /* XXX: these sculpt_paint_* fields are deprecated, use the
@@ -1631,7 +1636,8 @@ typedef struct SceneEEVEE {
   int shadow_cube_size;
   int shadow_cascade_size;
 
-  struct LightCache *light_cache;
+  struct LightCache *light_cache DNA_DEPRECATED;
+  struct LightCache *light_cache_data;
   char light_cache_info[64];
 
   float overscan;
@@ -1894,25 +1900,6 @@ enum {
   R_COLOR_MANAGEMENT = (1 << 0),
   R_COLOR_MANAGEMENT_UNUSED_1 = (1 << 1),
 };
-
-#ifdef DNA_DEPRECATED_ALLOW
-/* RenderData.subimtype flag options for imtype */
-enum {
-  R_OPENEXR_HALF = (1 << 0), /*deprecated*/
-  R_OPENEXR_ZBUF = (1 << 1), /*deprecated*/
-  R_PREVIEW_JPG = (1 << 2),  /*deprecated*/
-  R_CINEON_LOG = (1 << 3),   /*deprecated*/
-  R_TIFF_16BIT = (1 << 4),   /*deprecated*/
-
-  R_JPEG2K_12BIT = (1 << 5),
-  /* Jpeg2000 */             /*deprecated*/
-  R_JPEG2K_16BIT = (1 << 6), /*deprecated*/
-  R_JPEG2K_YCC = (1 << 7),
-  /* when disabled use RGB */      /*deprecated*/
-  R_JPEG2K_CINE_PRESET = (1 << 8), /*deprecated*/
-  R_JPEG2K_CINE_48FPS = (1 << 9),  /*deprecated*/
-};
-#endif
 
 /* bake_mode: same as RE_BAKE_xxx defines */
 /* RenderData.bake_flag */
@@ -2199,6 +2186,9 @@ typedef enum eSculptFlags {
 
   /* Don't display mask in viewport, but still use it for strokes. */
   SCULPT_HIDE_MASK = (1 << 15),
+
+  /* Don't display face sets in viewport. */
+  SCULPT_HIDE_FACE_SETS = (1 << 16),
 } eSculptFlags;
 
 /* ImagePaintSettings.mode */

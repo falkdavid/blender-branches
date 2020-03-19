@@ -2407,12 +2407,13 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
   float input = 0.0f;
   if (wstate->flags & DRW_MESH_WEIGHT_STATE_MULTIPAINT) {
     /* Multi-Paint feature */
-    input = BKE_defvert_multipaint_collective_weight(
-        dvert,
-        wstate->defgroup_len,
-        wstate->defgroup_sel,
-        wstate->defgroup_sel_count,
-        (wstate->flags & DRW_MESH_WEIGHT_STATE_AUTO_NORMALIZE) != 0);
+    bool is_normalized = (wstate->flags & (DRW_MESH_WEIGHT_STATE_AUTO_NORMALIZE |
+                                           DRW_MESH_WEIGHT_STATE_LOCK_RELATIVE));
+    input = BKE_defvert_multipaint_collective_weight(dvert,
+                                                     wstate->defgroup_len,
+                                                     wstate->defgroup_sel,
+                                                     wstate->defgroup_sel_count,
+                                                     is_normalized);
     /* make it black if the selected groups have no weight on a vertex */
     if (input == 0.0f) {
       return -1.0f;
@@ -2420,7 +2421,7 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
   }
   else {
     /* default, non tricky behavior */
-    input = defvert_find_weight(dvert, wstate->defgroup_active);
+    input = BKE_defvert_find_weight(dvert, wstate->defgroup_active);
 
     if (input == 0.0f) {
       switch (wstate->alert_mode) {
@@ -2428,13 +2429,20 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
           return -1.0f;
           break;
         case OB_DRAW_GROUPUSER_ALL:
-          if (defvert_is_weight_zero(dvert, wstate->defgroup_len)) {
+          if (BKE_defvert_is_weight_zero(dvert, wstate->defgroup_len)) {
             return -1.0f;
           }
           break;
       }
     }
   }
+
+  /* Lock-Relative: display the fraction of current weight vs total unlocked weight. */
+  if (wstate->flags & DRW_MESH_WEIGHT_STATE_LOCK_RELATIVE) {
+    input = BKE_defvert_lock_relative_weight(
+        input, dvert, wstate->defgroup_len, wstate->defgroup_locked, wstate->defgroup_unlocked);
+  }
+
   CLAMP(input, 0.0f, 1.0f);
   return input;
 }
@@ -3199,7 +3207,7 @@ static const MeshExtract extract_stretch_angle = {
 /** \} */
 
 /* ---------------------------------------------------------------------- */
-/** \name Extract Edit UV angle stretch
+/** \name Extract Edit Mesh Analysis Colors
  * \{ */
 
 static void *extract_mesh_analysis_init(const MeshRenderData *mr, void *buf)
@@ -3296,8 +3304,7 @@ static void uv_from_jitter_v2(float uv[2])
     uv[1] = 1.0f - uv[1];
   }
 
-  CLAMP(uv[0], 0.0f, 1.0f);
-  CLAMP(uv[1], 0.0f, 1.0f);
+  clamp_v2(uv, 0.0f, 1.0f);
 }
 
 BLI_INLINE float thickness_remap(float fac, float min, float max, float minmax_irange)

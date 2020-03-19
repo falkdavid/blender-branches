@@ -61,6 +61,7 @@
 #include "BKE_deform.h"
 #include "BKE_gpencil.h"
 #include "BKE_icons.h"
+#include "BKE_idtype.h"
 #include "BKE_image.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
@@ -74,6 +75,54 @@
 #include "DEG_depsgraph_query.h"
 
 static CLG_LogRef LOG = {"bke.gpencil"};
+
+static void greasepencil_copy_data(Main *UNUSED(bmain),
+                                   ID *id_dst,
+                                   const ID *id_src,
+                                   const int UNUSED(flag))
+{
+  bGPdata *gpd_dst = (bGPdata *)id_dst;
+  const bGPdata *gpd_src = (const bGPdata *)id_src;
+
+  /* duplicate material array */
+  if (gpd_src->mat) {
+    gpd_dst->mat = MEM_dupallocN(gpd_src->mat);
+  }
+
+  /* copy layers */
+  BLI_listbase_clear(&gpd_dst->layers);
+  LISTBASE_FOREACH (bGPDlayer *, gpl_src, &gpd_src->layers) {
+    /* make a copy of source layer and its data */
+
+    /* TODO here too could add unused flags... */
+    bGPDlayer *gpl_dst = BKE_gpencil_layer_duplicate(gpl_src);
+
+    BLI_addtail(&gpd_dst->layers, gpl_dst);
+  }
+}
+
+static void greasepencil_free_data(ID *id)
+{
+  /* Really not ideal, but for now will do... In theory custom behaviors like not freeing cache
+   * should be handled through specific API, and not be part of the generic one. */
+  BKE_gpencil_free((bGPdata *)id, true);
+}
+
+IDTypeInfo IDType_ID_GD = {
+    .id_code = ID_GD,
+    .id_filter = FILTER_ID_GD,
+    .main_listbase_index = INDEX_ID_GD,
+    .struct_size = sizeof(bGPdata),
+    .name = "GPencil",
+    .name_plural = "grease_pencils",
+    .translation_context = BLT_I18NCONTEXT_ID_GPENCIL,
+    .flags = 0,
+
+    .init_data = NULL,
+    .copy_data = greasepencil_copy_data,
+    .free_data = greasepencil_free_data,
+    .make_local = NULL,
+};
 
 /* ************************************************** */
 /* Draw Engine */
@@ -148,12 +197,10 @@ void BKE_gpencil_free_stroke(bGPDstroke *gps)
 /* Free strokes belonging to a gp-frame */
 bool BKE_gpencil_free_strokes(bGPDframe *gpf)
 {
-  bGPDstroke *gps_next;
   bool changed = (BLI_listbase_is_empty(&gpf->strokes) == false);
 
   /* free strokes */
-  for (bGPDstroke *gps = gpf->strokes.first; gps; gps = gps_next) {
-    gps_next = gps->next;
+  LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
     BKE_gpencil_free_stroke(gps);
   }
   BLI_listbase_clear(&gpf->strokes);
@@ -218,9 +265,6 @@ void BKE_gpencil_free_layers(ListBase *list)
 /** Free (or release) any data used by this grease pencil (does not free the gpencil itself). */
 void BKE_gpencil_free(bGPdata *gpd, bool free_all)
 {
-  /* clear animation data */
-  BKE_animdata_free(&gpd->id, false);
-
   /* free layers */
   BKE_gpencil_free_layers(&gpd->layers);
 
@@ -571,7 +615,7 @@ bGPDstroke *BKE_gpencil_stroke_duplicate(bGPDstroke *gps_src, const bool dup_poi
 
   gps_dst = MEM_dupallocN(gps_src);
   gps_dst->prev = gps_dst->next = NULL;
-  gps_dst->triangles = MEM_dupallocN(gps_dst->triangles);
+  gps_dst->triangles = MEM_dupallocN(gps_src->triangles);
 
   if (dup_points) {
     gps_dst->points = MEM_dupallocN(gps_src->points);
@@ -675,35 +719,6 @@ bGPDlayer *BKE_gpencil_layer_duplicate(const bGPDlayer *gpl_src)
   return gpl_dst;
 }
 
-/**
- * Only copy internal data of GreasePencil ID from source
- * to already allocated/initialized destination.
- * You probably never want to use that directly,
- * use #BKE_id_copy or #BKE_id_copy_ex for typical needs.
- *
- * WARNING! This function will not handle ID user count!
- *
- * \param flag: Copying options (see BKE_lib_id.h's LIB_ID_COPY_... flags for more).
- */
-void BKE_gpencil_copy_data(bGPdata *gpd_dst, const bGPdata *gpd_src, const int UNUSED(flag))
-{
-  /* duplicate material array */
-  if (gpd_src->mat) {
-    gpd_dst->mat = MEM_dupallocN(gpd_src->mat);
-  }
-
-  /* copy layers */
-  BLI_listbase_clear(&gpd_dst->layers);
-  LISTBASE_FOREACH (bGPDlayer *, gpl_src, &gpd_src->layers) {
-    /* make a copy of source layer and its data */
-
-    /* TODO here too could add unused flags... */
-    bGPDlayer *gpl_dst = BKE_gpencil_layer_duplicate(gpl_src);
-
-    BLI_addtail(&gpd_dst->layers, gpl_dst);
-  }
-}
-
 /* Standard API to make a copy of GP datablock, separate from copying its data */
 bGPdata *BKE_gpencil_copy(Main *bmain, const bGPdata *gpd)
 {
@@ -737,15 +752,10 @@ bGPdata *BKE_gpencil_data_duplicate(Main *bmain, const bGPdata *gpd_src, bool in
   }
 
   /* Copy internal data (layers, etc.) */
-  BKE_gpencil_copy_data(gpd_dst, gpd_src, 0);
+  greasepencil_copy_data(bmain, &gpd_dst->id, &gpd_src->id, 0);
 
   /* return new */
   return gpd_dst;
-}
-
-void BKE_gpencil_make_local(Main *bmain, bGPdata *gpd, const bool lib_local)
-{
-  BKE_id_make_local_generic(bmain, &gpd->id, true, lib_local);
 }
 
 /* ************************************************** */
@@ -1094,9 +1104,9 @@ void BKE_gpencil_layer_mask_sort(bGPdata *gpd, bGPDlayer *gpl)
 {
   /* Update sort index. */
   LISTBASE_FOREACH (bGPDlayer_Mask *, mask, &gpl->mask_layers) {
-    bGPDlayer *gpl = BKE_gpencil_layer_named_get(gpd, mask->name);
-    if (gpl != NULL) {
-      mask->sort_index = BLI_findindex(&gpd->layers, gpl);
+    bGPDlayer *gpl_mask = BKE_gpencil_layer_named_get(gpd, mask->name);
+    if (gpl_mask != NULL) {
+      mask->sort_index = BLI_findindex(&gpd->layers, gpl_mask);
     }
     else {
       mask->sort_index = 0;
@@ -1110,6 +1120,32 @@ void BKE_gpencil_layer_mask_sort_all(bGPdata *gpd)
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     BKE_gpencil_layer_mask_sort(gpd, gpl);
   }
+}
+
+static int gpencil_cb_cmp_frame(void *thunk, const void *a, const void *b)
+{
+  const bGPDframe *frame_a = a;
+  const bGPDframe *frame_b = b;
+
+  if (frame_a->framenum < frame_b->framenum) {
+    return -1;
+  }
+  if (frame_a->framenum > frame_b->framenum) {
+    return 1;
+  }
+  if (thunk != NULL) {
+    *((bool *)thunk) = true;
+  }
+  /* Sort selected last. */
+  if ((frame_a->flag & GP_FRAME_SELECT) && ((frame_b->flag & GP_FRAME_SELECT) == 0)) {
+    return 1;
+  }
+  return 0;
+}
+
+void BKE_gpencil_layer_frames_sort(struct bGPDlayer *gpl, bool *r_has_duplicate_frames)
+{
+  BLI_listbase_sort_r(&gpl->frames, gpencil_cb_cmp_frame, r_has_duplicate_frames);
 }
 
 /* get the active gp-layer for editing */
@@ -1453,8 +1489,8 @@ void BKE_gpencil_centroid_3d(bGPdata *gpd, float r_centroid[3])
   mul_v3_v3fl(r_centroid, tot, 0.5f);
 }
 
-/* Compute stroke collision detection center and radius. */
-void BKE_gpencil_stroke_collision_get(bGPDstroke *gps)
+/* Compute stroke bounding box. */
+void BKE_gpencil_stroke_boundingbox_calc(bGPDstroke *gps)
 {
   INIT_MINMAX(gps->boundbox_min, gps->boundbox_max);
   BKE_gpencil_stroke_minmax(gps, false, gps->boundbox_min, gps->boundbox_max);
@@ -1556,14 +1592,14 @@ void BKE_gpencil_vgroup_remove(Object *ob, bDeformGroup *defgroup)
           if (gps->dvert != NULL) {
             for (int i = 0; i < gps->totpoints; i++) {
               dvert = &gps->dvert[i];
-              MDeformWeight *dw = defvert_find_index(dvert, def_nr);
+              MDeformWeight *dw = BKE_defvert_find_index(dvert, def_nr);
               if (dw != NULL) {
-                defvert_remove_group(dvert, dw);
+                BKE_defvert_remove_group(dvert, dw);
               }
               else {
                 /* Reorganize weights for other groups after deleted one. */
                 for (int g = 0; g < totgrp; g++) {
-                  dw = defvert_find_index(dvert, g);
+                  dw = BKE_defvert_find_index(dvert, g);
                   if ((dw != NULL) && (dw->def_nr > def_nr)) {
                     dw->def_nr--;
                   }
@@ -1653,8 +1689,8 @@ static void stroke_interpolate_deform_weights(
   int i;
 
   for (i = 0; i < vert->totweight; i++) {
-    float wl = defvert_find_weight(vl, vert->dw[i].def_nr);
-    float wr = defvert_find_weight(vr, vert->dw[i].def_nr);
+    float wl = BKE_defvert_find_weight(vl, vert->dw[i].def_nr);
+    float wr = BKE_defvert_find_weight(vr, vert->dw[i].def_nr);
     vert->dw[i].weight = interpf(wr, wl, ratio);
   }
 }
@@ -2046,13 +2082,14 @@ bool BKE_gpencil_stroke_split(bGPDframe *gpf,
   }
 
   if (gps->dvert) {
-    new_dv = MEM_callocN(sizeof(MDeformVert) * new_count, "gp_stroke_dverts_remaining");
+    new_dv = MEM_callocN(sizeof(MDeformVert) * new_count,
+                         "gp_stroke_dverts_remaining(MDeformVert)");
     for (int i = 0; i < new_count; i++) {
       dv = &gps->dvert[i + before_index];
       new_dv[i].flag = dv->flag;
       new_dv[i].totweight = dv->totweight;
       new_dv[i].dw = MEM_callocN(sizeof(MDeformWeight) * dv->totweight,
-                                 "gp_stroke_dverts_dw_remaining");
+                                 "gp_stroke_dverts_dw_remaining(MDeformWeight)");
       for (int j = 0; j < dv->totweight; j++) {
         new_dv[i].dw[j].weight = dv->dw[j].weight;
         new_dv[i].dw[j].def_nr = dv->dw[j].def_nr;
@@ -2498,7 +2535,7 @@ bool BKE_gpencil_merge_materials_table_get(Object *ob,
   MaterialGPencilStyle *gp_style_primary = NULL;
   MaterialGPencilStyle *gp_style_secondary = NULL;
 
-  short *totcol = BKE_object_material_num(ob);
+  short *totcol = BKE_object_material_len_p(ob);
   if (totcol == 0) {
     return changed;
   }
@@ -2603,7 +2640,7 @@ void BKE_gpencil_stats_update(bGPdata *gpd)
 /* get material index (0-based like mat_nr not actcol) */
 int BKE_gpencil_object_material_index_get(Object *ob, Material *ma)
 {
-  short *totcol = BKE_object_material_num(ob);
+  short *totcol = BKE_object_material_len_p(ob);
   Material *read_ma = NULL;
   for (short i = 0; i < *totcol; i++) {
     read_ma = BKE_object_material_get(ob, i + 1);
@@ -2892,8 +2929,8 @@ void BKE_gpencil_stroke_geometry_update(bGPDstroke *gps)
   /* calc uv data along the stroke */
   BKE_gpencil_stroke_uv_update(gps);
 
-  /* Calc collision center and radius. */
-  BKE_gpencil_stroke_collision_get(gps);
+  /* Calc stroke bounding box. */
+  BKE_gpencil_stroke_boundingbox_calc(gps);
 }
 
 float BKE_gpencil_stroke_length(const bGPDstroke *gps, bool use_3d)
@@ -3081,16 +3118,16 @@ bool BKE_gpencil_stroke_close(bGPDstroke *gps)
     /* Set weights. */
     if (gps->dvert != NULL) {
       MDeformVert *dvert1 = &gps->dvert[old_tot - 1];
-      MDeformWeight *dw1 = defvert_verify_index(dvert1, 0);
+      MDeformWeight *dw1 = BKE_defvert_ensure_index(dvert1, 0);
       float weight_1 = dw1 ? dw1->weight : 0.0f;
 
       MDeformVert *dvert2 = &gps->dvert[0];
-      MDeformWeight *dw2 = defvert_verify_index(dvert2, 0);
+      MDeformWeight *dw2 = BKE_defvert_ensure_index(dvert2, 0);
       float weight_2 = dw2 ? dw2->weight : 0.0f;
 
       MDeformVert *dvert_final = &gps->dvert[old_tot + i - 1];
       dvert_final->totweight = 0;
-      MDeformWeight *dw = defvert_verify_index(dvert_final, 0);
+      MDeformWeight *dw = BKE_defvert_ensure_index(dvert_final, 0);
       if (dvert_final->dw) {
         dw->weight = interpf(weight_2, weight_1, step);
       }
@@ -4989,6 +5026,9 @@ void BKE_gpencil_frame_original_pointers_update(const struct bGPDframe *gpf_orig
 
       /* Assign original point pointer. */
       for (int i = 0; i < gps_orig->totpoints; i++) {
+        if (i > gps_eval->totpoints - 1) {
+          break;
+        }
         bGPDspoint *pt_eval = &gps_eval->points[i];
         pt_eval->runtime.pt_orig = &gps_orig->points[i];
         pt_eval->runtime.idx_orig = i;
@@ -5085,42 +5125,35 @@ void BKE_gpencil_update_layer_parent(const Depsgraph *depsgraph, Object *ob)
   }
 
   bGPdata *gpd = (bGPdata *)ob->data;
-  bGPDspoint *pt;
-  int i;
-  float diff_mat[4][4];
   float cur_mat[4][4];
 
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     if ((gpl->parent != NULL) && (gpl->actframe != NULL)) {
-      Object *ob_eval = DEG_get_evaluated_object(depsgraph, gpl->parent);
-
+      Object *ob_parent = DEG_get_evaluated_object(depsgraph, gpl->parent);
       /* calculate new matrix */
       if ((gpl->partype == PAROBJECT) || (gpl->partype == PARSKEL)) {
-        invert_m4_m4(cur_mat, ob_eval->obmat);
+        copy_m4_m4(cur_mat, ob_parent->obmat);
       }
       else if (gpl->partype == PARBONE) {
-        bPoseChannel *pchan = BKE_pose_channel_find_name(ob_eval->pose, gpl->parsubstr);
-        if (pchan) {
-          float tmp_mat[4][4];
-          mul_m4_m4m4(tmp_mat, ob_eval->obmat, pchan->pose_mat);
-          invert_m4_m4(cur_mat, tmp_mat);
+        bPoseChannel *pchan = BKE_pose_channel_find_name(ob_parent->pose, gpl->parsubstr);
+        if (pchan != NULL) {
+          copy_m4_m4(cur_mat, ob->imat);
+          mul_m4_m4m4(cur_mat, ob_parent->obmat, pchan->pose_mat);
+        }
+        else {
+          unit_m4(cur_mat);
         }
       }
       /* only redo if any change */
       if (!equals_m4m4(gpl->inverse, cur_mat)) {
-
-        /* first apply current transformation to all strokes */
-        BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
-        /* undo local object */
-        sub_v3_v3(diff_mat[3], ob->obmat[3]);
-
         LISTBASE_FOREACH (bGPDstroke *, gps, &gpl->actframe->strokes) {
+          bGPDspoint *pt;
+          int i;
           for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
-            mul_m4_v3(diff_mat, &pt->x);
+            mul_m4_v3(gpl->inverse, &pt->x);
+            mul_m4_v3(cur_mat, &pt->x);
           }
         }
-        /* set new parent matrix */
-        copy_m4_m4(gpl->inverse, cur_mat);
       }
     }
   }

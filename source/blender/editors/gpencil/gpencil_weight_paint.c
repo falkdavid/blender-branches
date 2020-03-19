@@ -94,7 +94,7 @@ typedef struct tGP_BrushWeightpaintData {
   Scene *scene;
   Object *object;
 
-  ARegion *ar;
+  ARegion *region;
 
   /* Current GPencil datablock */
   bGPdata *gpd;
@@ -110,7 +110,7 @@ typedef struct tGP_BrushWeightpaintData {
   /* Start of new paint */
   bool first;
 
-  /* Is multiframe editing enabled, and are we using falloff for that? */
+  /* Is multi-frame editing enabled, and are we using falloff for that? */
   bool is_multiframe;
   bool use_multiframe_falloff;
 
@@ -127,10 +127,10 @@ typedef struct tGP_BrushWeightpaintData {
   /* - Effect 2D vector */
   float dvec[2];
 
-  /* - multiframe falloff factor */
+  /* - multi-frame falloff factor. */
   float mf_falloff;
 
-  /* brush geometry (bounding box) */
+  /* brush geometry (bounding box). */
   rcti brush_rect;
 
   /* Temp data to save selected points */
@@ -206,7 +206,7 @@ static float brush_influence_calc(tGP_BrushWeightpaintData *gso, const int radiu
   float brush_fallof = BKE_brush_curve_strength(brush, distance, (float)radius);
   influence *= brush_fallof;
 
-  /* apply multiframe falloff */
+  /* apply multi-frame falloff */
   influence *= gso->mf_falloff;
 
   /* return influence */
@@ -258,9 +258,9 @@ static bool brush_draw_apply(tGP_BrushWeightpaintData *gso,
     }
   }
   /* Get current weight and blend. */
-  MDeformWeight *dw = defvert_verify_index(dvert, gso->vrgroup);
+  MDeformWeight *dw = BKE_defvert_ensure_index(dvert, gso->vrgroup);
   if (dw) {
-    dw->weight = interpf(dw->weight, gso->brush->weight, inf);
+    dw->weight = interpf(gso->brush->weight, dw->weight, inf);
     CLAMP(dw->weight, 0.0f, 1.0f);
   }
   return true;
@@ -317,7 +317,7 @@ static bool gp_weightpaint_brush_init(bContext *C, wmOperator *op)
     gso->vrgroup = -1;
   }
 
-  gso->ar = CTX_wm_region(C);
+  gso->region = CTX_wm_region(C);
 
   /* Multiframe settings. */
   gso->is_multiframe = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gso->gpd);
@@ -335,8 +335,6 @@ static bool gp_weightpaint_brush_init(bContext *C, wmOperator *op)
   /* Update header. */
   gp_weightpaint_brush_header_set(C);
 
-  /* Setup cursor drawing. */
-  ED_gpencil_toggle_brush_cursor(C, true, NULL);
   return true;
 }
 
@@ -344,9 +342,8 @@ static void gp_weightpaint_brush_exit(bContext *C, wmOperator *op)
 {
   tGP_BrushWeightpaintData *gso = op->customdata;
 
-  /* Disable cursor and headerprints. */
+  /* Disable headerprints. */
   ED_workspace_status_text(C, NULL);
-  ED_gpencil_toggle_brush_cursor(C, false, NULL);
 
   /* Free operator data */
   MEM_SAFE_FREE(gso->pbuffer);
@@ -588,7 +585,7 @@ static bool gp_weightpaint_brush_apply_to_layers(bContext *C, tGP_BrushWeightpai
 
     /* Active Frame or MultiFrame? */
     if (gso->is_multiframe) {
-      /* init multiframe falloff options */
+      /* init multi-frame falloff options */
       int f_init = 0;
       int f_end = 0;
 
@@ -599,10 +596,10 @@ static bool gp_weightpaint_brush_apply_to_layers(bContext *C, tGP_BrushWeightpai
       LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
         /* Always do active frame; Otherwise, only include selected frames */
         if ((gpf == gpl->actframe) || (gpf->flag & GP_FRAME_SELECT)) {
-          /* compute multiframe falloff factor */
+          /* Compute multi-frame falloff factor. */
           if (gso->use_multiframe_falloff) {
-            /* Faloff depends on distance to active frame (relative to the overall frame range)
-             */
+            /* Falloff depends on distance to active frame
+             * (relative to the overall frame range). */
             gso->mf_falloff = BKE_gpencil_multiframe_falloff_calc(
                 gpf, gpl->actframe->framenum, f_init, f_end, ts->gp_sculpt.cur_falloff);
           }
@@ -659,7 +656,7 @@ static void gp_weightpaint_brush_apply(bContext *C, wmOperator *op, PointerRNA *
   gso->brush_rect.xmax = mouse[0] + radius;
   gso->brush_rect.ymax = mouse[1] + radius;
 
-  /* Calc 2D direction vector and relative angle. */
+  /* Calculate 2D direction vector and relative angle. */
   brush_calc_dvec_2d(gso);
 
   changed = gp_weightpaint_brush_apply_to_layers(C, gso);
@@ -748,14 +745,14 @@ static int gp_weightpaint_brush_invoke(bContext *C, wmOperator *op, const wmEven
 
   /* start drawing immediately? */
   if (is_modal == false) {
-    ARegion *ar = CTX_wm_region(C);
+    ARegion *region = CTX_wm_region(C);
 
     /* apply first dab... */
     gso->is_painting = true;
     gp_weightpaint_brush_apply_event(C, op, event);
 
     /* redraw view with feedback */
-    ED_region_tag_redraw(ar);
+    ED_region_tag_redraw(region);
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -801,7 +798,7 @@ static int gp_weightpaint_brush_modal(bContext *C, wmOperator *op, const wmEvent
       /* Abort painting if any of the usual things are tried */
       case MIDDLEMOUSE:
       case RIGHTMOUSE:
-      case ESCKEY:
+      case EVT_ESCKEY:
         gp_weightpaint_brush_exit(C, op);
         return OPERATOR_FINISHED;
     }
@@ -822,7 +819,7 @@ static int gp_weightpaint_brush_modal(bContext *C, wmOperator *op, const wmEvent
 
       /* Exit modal operator, based on the "standard" ops */
       case RIGHTMOUSE:
-      case ESCKEY:
+      case EVT_ESCKEY:
         gp_weightpaint_brush_exit(C, op);
         return OPERATOR_FINISHED;
 
@@ -837,24 +834,24 @@ static int gp_weightpaint_brush_modal(bContext *C, wmOperator *op, const wmEvent
         break;
 
       /* Change Frame - Allowed */
-      case LEFTARROWKEY:
-      case RIGHTARROWKEY:
-      case UPARROWKEY:
-      case DOWNARROWKEY:
+      case EVT_LEFTARROWKEY:
+      case EVT_RIGHTARROWKEY:
+      case EVT_UPARROWKEY:
+      case EVT_DOWNARROWKEY:
         return OPERATOR_PASS_THROUGH;
 
       /* Camera/View Gizmo's - Allowed */
       /* (See rationale in gpencil_paint.c -> gpencil_draw_modal()) */
-      case PAD0:
-      case PAD1:
-      case PAD2:
-      case PAD3:
-      case PAD4:
-      case PAD5:
-      case PAD6:
-      case PAD7:
-      case PAD8:
-      case PAD9:
+      case EVT_PAD0:
+      case EVT_PAD1:
+      case EVT_PAD2:
+      case EVT_PAD3:
+      case EVT_PAD4:
+      case EVT_PAD5:
+      case EVT_PAD6:
+      case EVT_PAD7:
+      case EVT_PAD8:
+      case EVT_PAD9:
         return OPERATOR_PASS_THROUGH;
 
       /* Unhandled event */
@@ -865,8 +862,7 @@ static int gp_weightpaint_brush_modal(bContext *C, wmOperator *op, const wmEvent
 
   /* Redraw region? */
   if (redraw_region) {
-    ARegion *ar = CTX_wm_region(C);
-    ED_region_tag_redraw(ar);
+    ED_region_tag_redraw(CTX_wm_region(C));
   }
 
   /* Redraw toolsettings (brush settings)? */

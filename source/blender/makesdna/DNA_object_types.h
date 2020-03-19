@@ -124,7 +124,7 @@ struct CustomData_MeshMasks;
 typedef struct Object_Runtime {
   /**
    * The custom data layer mask that was last used
-   * to calculate mesh_eval and mesh_deform_eval.
+   * to calculate data_eval and mesh_deform_eval.
    */
   CustomData_MeshMasks last_data_mask;
 
@@ -141,25 +141,25 @@ typedef struct Object_Runtime {
   char _pad1[3];
 
   /**
-   * Denotes whether the evaluated mesh is owned by this object or is referenced and owned by
+   * Denotes whether the evaluated data is owned by this object or is referenced and owned by
    * somebody else.
    */
-  char is_mesh_eval_owned;
+  char is_data_eval_owned;
 
   /** Axis aligned boundbox (in localspace). */
   struct BoundBox *bb;
 
   /**
-   * Original mesh pointer, before object->data was changed to point
-   * to mesh_eval.
+   * Original data pointer, before object->data was changed to point
+   * to data_eval.
    * Is assigned by dependency graph's copy-on-write evaluation.
    */
-  struct Mesh *mesh_orig;
+  struct ID *data_orig;
   /**
-   * Mesh structure created during object evaluation.
+   * Object data structure created during object evaluation.
    * It has all modifiers applied.
    */
-  struct Mesh *mesh_eval;
+  struct ID *data_eval;
   /**
    * Mesh structure created during object evaluation.
    * It has deformation only modifiers applied on it.
@@ -456,12 +456,18 @@ enum {
   /** Grease Pencil object used in 3D view but not used for annotation in 2D. */
   OB_GPENCIL = 26,
 
+  OB_HAIR = 27,
+
+  OB_POINTCLOUD = 28,
+
+  OB_VOLUME = 29,
+
   OB_TYPE_MAX,
 };
 
 /* check if the object type supports materials */
 #define OB_TYPE_SUPPORT_MATERIAL(_type) \
-  (((_type) >= OB_MESH && (_type) <= OB_MBALL) || ((_type) == OB_GPENCIL))
+  (((_type) >= OB_MESH && (_type) <= OB_MBALL) || ((_type) >= OB_GPENCIL && (_type) <= OB_VOLUME))
 #define OB_TYPE_SUPPORT_VGROUP(_type) (ELEM(_type, OB_MESH, OB_LATTICE, OB_GPENCIL))
 #define OB_TYPE_SUPPORT_EDITMODE(_type) \
   (ELEM(_type, OB_MESH, OB_FONT, OB_CURVE, OB_SURF, OB_MBALL, OB_LATTICE, OB_ARMATURE))
@@ -472,7 +478,20 @@ enum {
 
 /* is this ID type used as object data */
 #define OB_DATA_SUPPORT_ID(_id_type) \
-  (ELEM(_id_type, ID_ME, ID_CU, ID_MB, ID_LA, ID_SPK, ID_LP, ID_CA, ID_LT, ID_GD, ID_AR))
+  (ELEM(_id_type, \
+        ID_ME, \
+        ID_CU, \
+        ID_MB, \
+        ID_LA, \
+        ID_SPK, \
+        ID_LP, \
+        ID_CA, \
+        ID_LT, \
+        ID_GD, \
+        ID_AR, \
+        ID_HA, \
+        ID_PT, \
+        ID_VO))
 
 #define OB_DATA_SUPPORT_ID_CASE \
 ID_ME: \
@@ -484,7 +503,10 @@ case ID_LP: \
 case ID_CA: \
 case ID_LT: \
 case ID_GD: \
-case ID_AR
+case ID_AR: \
+case ID_HA: \
+case ID_PT: \
+case ID_VO
 
 /* partype: first 4 bits: type */
 enum {
@@ -529,16 +551,6 @@ enum {
   OB_NEGX = 3,
   OB_NEGY = 4,
   OB_NEGZ = 5,
-};
-
-/* dt: no flags */
-enum {
-  OB_BOUNDBOX = 1,
-  OB_WIRE = 2,
-  OB_SOLID = 3,
-  OB_MATERIAL = 4,
-  OB_TEXTURE = 5,
-  OB_RENDER = 6,
 };
 
 /* dtx: flags (short) */

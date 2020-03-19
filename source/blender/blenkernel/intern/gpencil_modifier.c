@@ -622,7 +622,7 @@ GpencilModifierData *BKE_gpencil_modifiers_findByName(Object *ob, const char *na
   return BLI_findstring(&(ob->greasepencil_modifiers), name, offsetof(GpencilModifierData, name));
 }
 
-void BKE_gpencil_stroke_subdivide(bGPDstroke *gps, int level, int flag, int type)
+void BKE_gpencil_stroke_subdivide(bGPDstroke *gps, int level, int type)
 {
   bGPDspoint *temp_points;
   MDeformVert *temp_dverts = NULL;
@@ -748,6 +748,18 @@ static int gpencil_remap_time_get(Depsgraph *depsgraph, Scene *scene, Object *ob
   return remap_cfra;
 }
 
+/* Get the current frame retimed with time modifiers. */
+bGPDframe *BKE_gpencil_frame_retime_get(Depsgraph *depsgraph,
+                                        Scene *scene,
+                                        Object *ob,
+                                        bGPDlayer *gpl)
+{
+  int remap_cfra = gpencil_remap_time_get(depsgraph, scene, ob, gpl);
+  bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, remap_cfra, GP_GETFRAME_USE_PREV);
+
+  return gpf;
+}
+
 static void gpencil_assign_object_eval(Object *object)
 {
   BLI_assert(object->id.tag & LIB_TAG_COPIED_ON_WRITE);
@@ -862,34 +874,34 @@ void BKE_gpencil_modifiers_calc(Depsgraph *depsgraph, Scene *scene, Object *ob)
   /* Init general modifiers data. */
   BKE_gpencil_lattice_init(ob);
 
-  /* Loop all layers and apply modifiers. */
-  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-    /* Remap frame (Time modifier) */
-    int remap_cfra = gpencil_remap_time_get(depsgraph, scene, ob, gpl);
-    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, remap_cfra, GP_GETFRAME_USE_PREV);
+  const bool time_remap = BKE_gpencil_has_time_modifiers(ob);
 
-    if (gpf == NULL) {
-      continue;
-    }
+  LISTBASE_FOREACH (GpencilModifierData *, md, &ob->greasepencil_modifiers) {
 
-    LISTBASE_FOREACH (GpencilModifierData *, md, &ob->greasepencil_modifiers) {
+    if (GPENCIL_MODIFIER_ACTIVE(md, is_render)) {
+      const GpencilModifierTypeInfo *mti = BKE_gpencil_modifierType_getInfo(md->type);
 
-      if (GPENCIL_MODIFIER_ACTIVE(md, is_render)) {
-        const GpencilModifierTypeInfo *mti = BKE_gpencil_modifierType_getInfo(md->type);
+      if ((GPENCIL_MODIFIER_EDIT(md, is_edit)) && (!is_render)) {
+        continue;
+      }
 
-        if ((GPENCIL_MODIFIER_EDIT(md, is_edit)) && (!is_render)) {
-          continue;
-        }
+      /* Apply geometry modifiers (add new geometry). */
+      if (mti && mti->generateStrokes) {
+        mti->generateStrokes(md, depsgraph, ob);
+      }
 
-        /* Apply geometry modifiers (add new geometry). */
-        if (mti->generateStrokes) {
-          mti->generateStrokes(md, depsgraph, ob, gpl, gpf);
-        }
+      /* Apply deform modifiers and Time remap (only change geometry). */
+      if ((time_remap) || (mti && mti->deformStroke)) {
+        LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+          bGPDframe *gpf = BKE_gpencil_frame_retime_get(depsgraph, scene, ob, gpl);
+          if (gpf == NULL) {
+            continue;
+          }
 
-        /* Apply deform modifiers (only change geometry). */
-        if (mti && mti->deformStroke) {
-          LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-            mti->deformStroke(md, depsgraph, ob, gpl, gpf, gps);
+          if (mti->deformStroke) {
+            LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+              mti->deformStroke(md, depsgraph, ob, gpl, gpf, gps);
+            }
           }
         }
       }

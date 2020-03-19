@@ -256,7 +256,7 @@ void ED_armature_bone_rename(Main *bmain,
       }
 
       if (modifiers_usesArmature(ob, arm)) {
-        bDeformGroup *dg = defgroup_find_name(ob, oldname);
+        bDeformGroup *dg = BKE_object_defgroup_find_name(ob, oldname);
         if (dg) {
           BLI_strncpy(dg->name, newname, MAXBONENAME);
         }
@@ -313,7 +313,7 @@ void ED_armature_bone_rename(Main *bmain,
             case eGpencilModifierType_Armature: {
               ArmatureGpencilModifierData *mmd = (ArmatureGpencilModifierData *)gp_md;
               if (mmd->object && mmd->object->data == arm) {
-                bDeformGroup *dg = defgroup_find_name(ob, oldname);
+                bDeformGroup *dg = BKE_object_defgroup_find_name(ob, oldname);
                 if (dg) {
                   BLI_strncpy(dg->name, newname, MAXBONENAME);
                 }
@@ -359,9 +359,9 @@ void ED_armature_bone_rename(Main *bmain,
           for (sl = sa->spacedata.first; sl; sl = sl->next) {
             if (sl->spacetype == SPACE_VIEW3D) {
               View3D *v3d = (View3D *)sl;
-              if (v3d->ob_centre && v3d->ob_centre->data == arm) {
-                if (STREQ(v3d->ob_centre_bone, oldname)) {
-                  BLI_strncpy(v3d->ob_centre_bone, newname, MAXBONENAME);
+              if (v3d->ob_center && v3d->ob_center->data == arm) {
+                if (STREQ(v3d->ob_center_bone, oldname)) {
+                  BLI_strncpy(v3d->ob_center_bone, newname, MAXBONENAME);
                 }
               }
             }

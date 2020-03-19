@@ -61,6 +61,7 @@
 #include "BLT_translation.h"
 
 #include "transform.h"
+#include "transform_constraints.h"
 #include "transform_convert.h"
 #include "transform_draw_cursors.h"
 #include "transform_mode.h"
@@ -70,7 +71,7 @@
  * and being able to set it to zero is handy. */
 // #define USE_NUM_NO_ZERO
 
-static void drawTransformApply(const struct bContext *C, ARegion *ar, void *arg);
+static void drawTransformApply(const struct bContext *C, ARegion *region, void *arg);
 
 static void initSnapSpatial(TransInfo *t, float r_snap[3]);
 
@@ -83,8 +84,8 @@ bool transdata_check_local_islands(TransInfo *t, short around)
 
 void setTransformViewMatrices(TransInfo *t)
 {
-  if (t->spacetype == SPACE_VIEW3D && t->ar && t->ar->regiontype == RGN_TYPE_WINDOW) {
-    RegionView3D *rv3d = t->ar->regiondata;
+  if (t->spacetype == SPACE_VIEW3D && t->region && t->region->regiontype == RGN_TYPE_WINDOW) {
+    RegionView3D *rv3d = t->region->regiondata;
 
     copy_m4_m4(t->viewmat, rv3d->viewmat);
     copy_m4_m4(t->viewinv, rv3d->viewinv);
@@ -173,14 +174,14 @@ static void convertViewVec2D_mask(View2D *v2d, float r_vec[3], int dx, int dy)
 
 void convertViewVec(TransInfo *t, float r_vec[3], double dx, double dy)
 {
-  if ((t->spacetype == SPACE_VIEW3D) && (t->ar->regiontype == RGN_TYPE_WINDOW)) {
+  if ((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW)) {
     if (t->options & CTX_PAINT_CURVE) {
       r_vec[0] = dx;
       r_vec[1] = dy;
     }
     else {
       const float mval_f[2] = {(float)dx, (float)dy};
-      ED_view3d_win_to_delta(t->ar, mval_f, r_vec, t->zfac);
+      ED_view3d_win_to_delta(t->region, mval_f, r_vec, t->zfac);
     }
   }
   else if (t->spacetype == SPACE_IMAGE) {
@@ -202,7 +203,7 @@ void convertViewVec(TransInfo *t, float r_vec[3], double dx, double dy)
     convertViewVec2D(t->view, r_vec, dx, dy);
   }
   else if (ELEM(t->spacetype, SPACE_NODE, SPACE_SEQ)) {
-    convertViewVec2D(&t->ar->v2d, r_vec, dx, dy);
+    convertViewVec2D(&t->region->v2d, r_vec, dx, dy);
   }
   else if (t->spacetype == SPACE_CLIP) {
     if (t->options & CTX_MASK) {
@@ -224,8 +225,8 @@ void convertViewVec(TransInfo *t, float r_vec[3], double dx, double dy)
 void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DProjTest flag)
 {
   if (t->spacetype == SPACE_VIEW3D) {
-    if (t->ar->regiontype == RGN_TYPE_WINDOW) {
-      if (ED_view3d_project_int_global(t->ar, vec, adr, flag) != V3D_PROJ_RET_OK) {
+    if (t->region->regiontype == RGN_TYPE_WINDOW) {
+      if (ED_view3d_project_int_global(t->region, vec, adr, flag) != V3D_PROJ_RET_OK) {
         /* this is what was done in 2.64, perhaps we can be smarter? */
         adr[0] = (int)2140000000.0f;
         adr[1] = (int)2140000000.0f;
@@ -243,7 +244,7 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 
       BKE_mask_coord_to_image(sima->image, &sima->iuser, v, v);
 
-      ED_image_point_pos__reverse(sima, t->ar, v, v);
+      ED_image_point_pos__reverse(sima, t->region, v, v);
 
       adr[0] = v[0];
       adr[1] = v[1];
@@ -308,7 +309,7 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 
         BKE_mask_coord_to_movieclip(sc->clip, &sc->user, v, v);
 
-        ED_clip_point_stable_pos__reverse(sc, t->ar, v, v);
+        ED_clip_point_stable_pos__reverse(sc, t->region, v, v);
 
         adr[0] = v[0];
         adr[1] = v[1];
@@ -347,12 +348,12 @@ void projectFloatViewEx(TransInfo *t, const float vec[3], float adr[2], const eV
         adr[0] = vec[0];
         adr[1] = vec[1];
       }
-      else if (t->ar->regiontype == RGN_TYPE_WINDOW) {
+      else if (t->region->regiontype == RGN_TYPE_WINDOW) {
         /* allow points behind the view [#33643] */
-        if (ED_view3d_project_float_global(t->ar, vec, adr, flag) != V3D_PROJ_RET_OK) {
+        if (ED_view3d_project_float_global(t->region, vec, adr, flag) != V3D_PROJ_RET_OK) {
           /* XXX, 2.64 and prior did this, weak! */
-          adr[0] = t->ar->winx / 2.0f;
-          adr[1] = t->ar->winy / 2.0f;
+          adr[0] = t->region->winx / 2.0f;
+          adr[1] = t->region->winy / 2.0f;
         }
         return;
       }
@@ -433,7 +434,7 @@ static void viewRedrawForce(const bContext *C, TransInfo *t)
   else if (t->spacetype == SPACE_VIEW3D) {
     if (t->options & CTX_PAINT_CURVE) {
       wmWindow *window = CTX_wm_window(C);
-      WM_paint_cursor_tag_redraw(window, t->ar);
+      WM_paint_cursor_tag_redraw(window, t->region);
     }
     else {
       /* Do we need more refined tags? */
@@ -479,7 +480,7 @@ static void viewRedrawForce(const bContext *C, TransInfo *t)
     }
     else if (t->options & CTX_PAINT_CURVE) {
       wmWindow *window = CTX_wm_window(C);
-      WM_paint_cursor_tag_redraw(window, t->ar);
+      WM_paint_cursor_tag_redraw(window, t->region);
     }
     else if (t->flag & T_CURSOR) {
       ED_area_tag_redraw(t->sa);
@@ -787,21 +788,21 @@ static void transform_event_xyz_constraint(TransInfo *t, short key_type, char cm
 
     /* Initialize */
     switch (key_type) {
-      case XKEY:
+      case EVT_XKEY:
         msg1 = TIP_("along X");
         msg2 = TIP_("along %s X");
         msg3 = TIP_("locking %s X");
         axis = 'X';
         constraint_axis = CON_AXIS0;
         break;
-      case YKEY:
+      case EVT_YKEY:
         msg1 = TIP_("along Y");
         msg2 = TIP_("along %s Y");
         msg3 = TIP_("locking %s Y");
         axis = 'Y';
         constraint_axis = CON_AXIS1;
         break;
-      case ZKEY:
+      case EVT_ZKEY:
         msg1 = TIP_("along Z");
         msg2 = TIP_("along %s Z");
         msg3 = TIP_("locking %s Z");
@@ -814,7 +815,7 @@ static void transform_event_xyz_constraint(TransInfo *t, short key_type, char cm
     }
     constraint_plane = ((CON_AXIS0 | CON_AXIS1 | CON_AXIS2) & (~constraint_axis));
 
-    if (edit_2d && (key_type != ZKEY)) {
+    if (edit_2d && (key_type != EVT_ZKEY)) {
       if (cmode == axis) {
         stopConstraint(t);
       }
@@ -1046,42 +1047,42 @@ int transformEvent(TransInfo *t, const wmEvent *event)
         break;
       case TFM_MODAL_AXIS_X:
         if (!(t->flag & T_NO_CONSTRAINT)) {
-          transform_event_xyz_constraint(t, XKEY, cmode, false);
+          transform_event_xyz_constraint(t, EVT_XKEY, cmode, false);
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
         break;
       case TFM_MODAL_AXIS_Y:
         if ((t->flag & T_NO_CONSTRAINT) == 0) {
-          transform_event_xyz_constraint(t, YKEY, cmode, false);
+          transform_event_xyz_constraint(t, EVT_YKEY, cmode, false);
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
         break;
       case TFM_MODAL_AXIS_Z:
         if ((t->flag & (T_NO_CONSTRAINT)) == 0) {
-          transform_event_xyz_constraint(t, ZKEY, cmode, false);
+          transform_event_xyz_constraint(t, EVT_ZKEY, cmode, false);
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
         break;
       case TFM_MODAL_PLANE_X:
         if ((t->flag & (T_NO_CONSTRAINT | T_2D_EDIT)) == 0) {
-          transform_event_xyz_constraint(t, XKEY, cmode, true);
+          transform_event_xyz_constraint(t, EVT_XKEY, cmode, true);
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
         break;
       case TFM_MODAL_PLANE_Y:
         if ((t->flag & (T_NO_CONSTRAINT | T_2D_EDIT)) == 0) {
-          transform_event_xyz_constraint(t, YKEY, cmode, true);
+          transform_event_xyz_constraint(t, EVT_YKEY, cmode, true);
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
         break;
       case TFM_MODAL_PLANE_Z:
         if ((t->flag & (T_NO_CONSTRAINT | T_2D_EDIT)) == 0) {
-          transform_event_xyz_constraint(t, ZKEY, cmode, true);
+          transform_event_xyz_constraint(t, EVT_ZKEY, cmode, true);
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
@@ -1186,23 +1187,29 @@ int transformEvent(TransInfo *t, const wmEvent *event)
   /* else do non-mapped events */
   else if (event->val == KM_PRESS) {
     switch (event->type) {
+      case EVT_ESCKEY:
       case RIGHTMOUSE:
         t->state = TRANS_CANCEL;
         handled = true;
         break;
-      /* enforce redraw of transform when modifiers are used */
-      case LEFTSHIFTKEY:
-      case RIGHTSHIFTKEY:
-        t->modifiers |= MOD_CONSTRAINT_PLANE;
-        t->redraw |= TREDRAW_HARD;
-        handled = true;
-        break;
 
-      case SPACEKEY:
+      case EVT_SPACEKEY:
+      case EVT_PADENTER:
+      case EVT_RETKEY:
+        if (event->is_repeat) {
+          break;
+        }
         t->state = TRANS_CONFIRM;
         handled = true;
         break;
 
+      /* enforce redraw of transform when modifiers are used */
+      case EVT_LEFTSHIFTKEY:
+      case EVT_RIGHTSHIFTKEY:
+        t->modifiers |= MOD_CONSTRAINT_PLANE;
+        t->redraw |= TREDRAW_HARD;
+        handled = true;
+        break;
       case MIDDLEMOUSE:
         if ((t->flag & T_NO_CONSTRAINT) == 0) {
           /* exception for switching to dolly, or trackball, in camera view */
@@ -1239,16 +1246,10 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case ESCKEY:
-        t->state = TRANS_CANCEL;
-        handled = true;
-        break;
-      case PADENTER:
-      case RETKEY:
-        t->state = TRANS_CONFIRM;
-        handled = true;
-        break;
-      case GKEY:
+      case EVT_GKEY:
+        if (event->is_repeat) {
+          break;
+        }
         /* only switch when... */
         if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL)) {
           restoreTransObjects(t);
@@ -1260,7 +1261,10 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case SKEY:
+      case EVT_SKEY:
+        if (event->is_repeat) {
+          break;
+        }
         /* only switch when... */
         if (ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION, TFM_TRACKBALL)) {
           restoreTransObjects(t);
@@ -1272,7 +1276,10 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case RKEY:
+      case EVT_RKEY:
+        if (event->is_repeat) {
+          break;
+        }
         /* only switch when... */
         if (!(t->options & CTX_TEXTURE)) {
           if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL, TFM_TRANSLATION)) {
@@ -1292,7 +1299,10 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           }
         }
         break;
-      case CKEY:
+      case EVT_CKEY:
+        if (event->is_repeat) {
+          break;
+        }
         if (event->alt) {
           if (!(t->options & CTX_NO_PET)) {
             t->flag ^= T_PROP_CONNECTED;
@@ -1303,7 +1313,10 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           }
         }
         break;
-      case OKEY:
+      case EVT_OKEY:
+        if (event->is_repeat) {
+          break;
+        }
         if (t->flag & T_PROP_EDIT && event->shift) {
           t->prop_mode = (t->prop_mode + 1) % PROP_MODE_MAX;
           calculatePropRatio(t);
@@ -1311,7 +1324,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case PADPLUSKEY:
+      case EVT_PADPLUSKEY:
         if (event->alt && t->flag & T_PROP_EDIT) {
           t->prop_size *= (t->modifiers & MOD_PRECISION) ? 1.01f : 1.1f;
           if (t->spacetype == SPACE_VIEW3D && t->persp != RV3D_ORTHO) {
@@ -1322,7 +1335,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case PAGEUPKEY:
+      case EVT_PAGEUPKEY:
       case WHEELDOWNMOUSE:
         if (t->flag & T_AUTOIK) {
           transform_autoik_update(t, 1);
@@ -1333,7 +1346,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
         t->redraw = TREDRAW_HARD;
         handled = true;
         break;
-      case PADMINUS:
+      case EVT_PADMINUS:
         if (event->alt && t->flag & T_PROP_EDIT) {
           t->prop_size /= (t->modifiers & MOD_PRECISION) ? 1.01f : 1.1f;
           calculatePropRatio(t);
@@ -1341,7 +1354,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case PAGEDOWNKEY:
+      case EVT_PAGEDOWNKEY:
       case WHEELUPMOUSE:
         if (t->flag & T_AUTOIK) {
           transform_autoik_update(t, -1);
@@ -1352,15 +1365,18 @@ int transformEvent(TransInfo *t, const wmEvent *event)
         t->redraw = TREDRAW_HARD;
         handled = true;
         break;
-      case LEFTALTKEY:
-      case RIGHTALTKEY:
+      case EVT_LEFTALTKEY:
+      case EVT_RIGHTALTKEY:
         if (ELEM(t->spacetype, SPACE_SEQ, SPACE_VIEW3D)) {
           t->flag |= T_ALT_TRANSFORM;
           t->redraw |= TREDRAW_HARD;
           handled = true;
         }
         break;
-      case NKEY:
+      case EVT_NKEY:
+        if (event->is_repeat) {
+          break;
+        }
         if (ELEM(t->mode, TFM_ROTATION)) {
           if ((t->flag & T_EDIT) && t->obedit_type == OB_MESH) {
             restoreTransObjects(t);
@@ -1381,8 +1397,8 @@ int transformEvent(TransInfo *t, const wmEvent *event)
   }
   else if (event->val == KM_RELEASE) {
     switch (event->type) {
-      case LEFTSHIFTKEY:
-      case RIGHTSHIFTKEY:
+      case EVT_LEFTSHIFTKEY:
+      case EVT_RIGHTSHIFTKEY:
         t->modifiers &= ~MOD_CONSTRAINT_PLANE;
         t->redraw |= TREDRAW_HARD;
         handled = true;
@@ -1396,8 +1412,8 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           handled = true;
         }
         break;
-      case LEFTALTKEY:
-      case RIGHTALTKEY:
+      case EVT_LEFTALTKEY:
+      case EVT_RIGHTALTKEY:
         if (ELEM(t->spacetype, SPACE_SEQ, SPACE_VIEW3D)) {
           t->flag &= ~T_ALT_TRANSFORM;
           t->redraw |= TREDRAW_HARD;
@@ -1497,11 +1513,11 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
   return success;
 }
 
-static bool transinfo_show_overlay(const struct bContext *C, TransInfo *t, ARegion *ar)
+static bool transinfo_show_overlay(const struct bContext *C, TransInfo *t, ARegion *region)
 {
   /* Don't show overlays when not the active view and when overlay is disabled: T57139 */
   bool ok = false;
-  if (ar == t->ar) {
+  if (region == t->region) {
     ok = true;
   }
   else {
@@ -1516,11 +1532,11 @@ static bool transinfo_show_overlay(const struct bContext *C, TransInfo *t, ARegi
   return ok;
 }
 
-static void drawTransformView(const struct bContext *C, ARegion *ar, void *arg)
+static void drawTransformView(const struct bContext *C, ARegion *region, void *arg)
 {
   TransInfo *t = arg;
 
-  if (!transinfo_show_overlay(C, t, ar)) {
+  if (!transinfo_show_overlay(C, t, region)) {
     return;
   }
 
@@ -1530,7 +1546,7 @@ static void drawTransformView(const struct bContext *C, ARegion *ar, void *arg)
   drawPropCircle(C, t);
   drawSnapping(C, t);
 
-  if (ar == t->ar) {
+  if (region == t->region) {
     /* edge slide, vert slide */
     drawEdgeSlide(t);
     drawVertSlide(t);
@@ -1542,13 +1558,13 @@ static void drawTransformView(const struct bContext *C, ARegion *ar, void *arg)
 
 /* just draw a little warning message in the top-right corner of the viewport
  * to warn that autokeying is enabled */
-static void drawAutoKeyWarning(TransInfo *UNUSED(t), ARegion *ar)
+static void drawAutoKeyWarning(TransInfo *UNUSED(t), ARegion *region)
 {
   const char *printable = IFACE_("Auto Keying On");
   float printable_size[2];
   int xco, yco;
 
-  const rcti *rect = ED_region_visible_rect(ar);
+  const rcti *rect = ED_region_visible_rect(region);
 
   const int font_id = BLF_default();
   BLF_width_and_height(
@@ -1582,15 +1598,15 @@ static void drawAutoKeyWarning(TransInfo *UNUSED(t), ARegion *ar)
   GPU_blend(false);
 }
 
-static void drawTransformPixel(const struct bContext *C, ARegion *ar, void *arg)
+static void drawTransformPixel(const struct bContext *C, ARegion *region, void *arg)
 {
   TransInfo *t = arg;
 
-  if (!transinfo_show_overlay(C, t, ar)) {
+  if (!transinfo_show_overlay(C, t, region)) {
     return;
   }
 
-  if (ar == t->ar) {
+  if (region == t->region) {
     Scene *scene = t->scene;
     ViewLayer *view_layer = t->view_layer;
     Object *ob = OBACT(view_layer);
@@ -1601,10 +1617,10 @@ static void drawTransformPixel(const struct bContext *C, ARegion *ar, void *arg)
      *   AND only for the active region (as showing all is too overwhelming)
      */
     if ((U.autokey_flag & AUTOKEY_FLAG_NOWARNING) == 0) {
-      if (ar == t->ar) {
+      if (region == t->region) {
         if (t->flag & (T_OBJECT | T_POSE)) {
           if (ob && autokeyframe_cfra_can_key(scene, &ob->id)) {
-            drawAutoKeyWarning(t, ar);
+            drawAutoKeyWarning(t, region);
           }
         }
       }
@@ -1635,9 +1651,9 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
     }
   }
 
-  if ((prop = RNA_struct_find_property(op->ptr, "mouse_coordinate_override"))) {
+  if ((prop = RNA_struct_find_property(op->ptr, "center_override"))) {
     /* Important for redo operations. */
-    RNA_property_int_set_array(op->ptr, prop, t->mouse.imval);
+    RNA_property_float_set_array(op->ptr, prop, t->center_global);
   }
 
   if (t->flag & T_PROP_EDIT_ALL) {
@@ -1851,7 +1867,7 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
 static void initSnapSpatial(TransInfo *t, float r_snap[3])
 {
   if (t->spacetype == SPACE_VIEW3D) {
-    RegionView3D *rv3d = t->ar->regiondata;
+    RegionView3D *rv3d = t->region->regiondata;
 
     if (rv3d) {
       View3D *v3d = t->sa->spacedata.first;
@@ -1951,11 +1967,11 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   if (t->spacetype == SPACE_VIEW3D) {
     t->draw_handle_apply = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformApply, t, REGION_DRAW_PRE_VIEW);
+        t->region->type, drawTransformApply, t, REGION_DRAW_PRE_VIEW);
     t->draw_handle_view = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
+        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_pixel = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformPixel, t, REGION_DRAW_POST_PIXEL);
+        t->region->type, drawTransformPixel, t, REGION_DRAW_POST_PIXEL);
     t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C),
                                                      SPACE_TYPE_ANY,
                                                      RGN_TYPE_ANY,
@@ -1965,7 +1981,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_IMAGE) {
     t->draw_handle_view = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
+        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C),
                                                      SPACE_TYPE_ANY,
                                                      RGN_TYPE_ANY,
@@ -1975,7 +1991,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_CLIP) {
     t->draw_handle_view = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
+        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C),
                                                      SPACE_TYPE_ANY,
                                                      RGN_TYPE_ANY,
@@ -1985,7 +2001,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_NODE) {
     t->draw_handle_view = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
+        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C),
                                                      SPACE_TYPE_ANY,
                                                      RGN_TYPE_ANY,
@@ -1995,7 +2011,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_GRAPH) {
     t->draw_handle_view = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
+        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C),
                                                      SPACE_TYPE_ANY,
                                                      RGN_TYPE_ANY,
@@ -2005,7 +2021,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_ACTION) {
     t->draw_handle_view = ED_region_draw_cb_activate(
-        t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
+        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C),
                                                      SPACE_TYPE_ANY,
                                                      RGN_TYPE_ANY,
@@ -2044,10 +2060,10 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
         }
 
         if (kmi->propvalue == TFM_MODAL_SNAP_INV_ON && kmi->val == KM_PRESS) {
-          if ((ELEM(kmi->type, LEFTCTRLKEY, RIGHTCTRLKEY) && event->ctrl) ||
-              (ELEM(kmi->type, LEFTSHIFTKEY, RIGHTSHIFTKEY) && event->shift) ||
-              (ELEM(kmi->type, LEFTALTKEY, RIGHTALTKEY) && event->alt) ||
-              ((kmi->type == OSKEY) && event->oskey)) {
+          if ((ELEM(kmi->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && event->ctrl) ||
+              (ELEM(kmi->type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) && event->shift) ||
+              (ELEM(kmi->type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && event->alt) ||
+              ((kmi->type == EVT_OSKEY) && event->oskey)) {
             t->modifiers |= MOD_SNAP_INVERT;
           }
           break;
@@ -2234,7 +2250,7 @@ void transformApply(bContext *C, TransInfo *t)
   t->context = NULL;
 }
 
-static void drawTransformApply(const bContext *C, ARegion *UNUSED(ar), void *arg)
+static void drawTransformApply(const bContext *C, ARegion *UNUSED(region), void *arg)
 {
   TransInfo *t = arg;
 

@@ -126,9 +126,7 @@ static void gp_interpolate_free_temp_strokes(bGPDframe *gpf)
     return;
   }
 
-  bGPDstroke *gps_next;
-  for (bGPDstroke *gps = gpf->strokes.first; gps; gps = gps_next) {
-    gps_next = gps->next;
+  LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
     if (gps->flag & GP_STROKE_TAG) {
       BLI_remlink(&gpf->strokes, gps);
       BKE_gpencil_free_stroke(gps);
@@ -347,8 +345,8 @@ static void gp_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
  */
 static void gpencil_mouse_update_shift(tGPDinterpolate *tgpi, wmOperator *op, const wmEvent *event)
 {
-  float mid = (float)(tgpi->ar->winx - tgpi->ar->winrct.xmin) / 2.0f;
-  float mpos = event->x - tgpi->ar->winrct.xmin;
+  float mid = (float)(tgpi->region->winx - tgpi->region->winrct.xmin) / 2.0f;
+  float mpos = event->x - tgpi->region->winrct.xmin;
 
   if (mpos >= mid) {
     tgpi->shift = ((mpos - mid) * tgpi->high_limit) / mid;
@@ -447,7 +445,7 @@ static bool gp_interpolate_set_init_values(bContext *C, wmOperator *op, tGPDinte
   tgpi->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   tgpi->scene = CTX_data_scene(C);
   tgpi->sa = CTX_wm_area(C);
-  tgpi->ar = CTX_wm_region(C);
+  tgpi->region = CTX_wm_region(C);
   tgpi->flag = ts->gp_interpolate.flag;
 
   /* set current frame number */
@@ -565,8 +563,8 @@ static int gpencil_interpolate_modal(bContext *C, wmOperator *op, const wmEvent 
 
   switch (event->type) {
     case LEFTMOUSE: /* confirm */
-    case PADENTER:
-    case RETKEY: {
+    case EVT_PADENTER:
+    case EVT_RETKEY: {
       /* return to normal cursor and header status */
       ED_area_status_text(tgpi->sa, NULL);
       ED_workspace_status_text(C, NULL);
@@ -600,7 +598,7 @@ static int gpencil_interpolate_modal(bContext *C, wmOperator *op, const wmEvent 
       return OPERATOR_FINISHED;
     }
 
-    case ESCKEY: /* cancel */
+    case EVT_ESCKEY: /* cancel */
     case RIGHTMOUSE: {
       /* return to normal cursor and header status */
       ED_area_status_text(tgpi->sa, NULL);
@@ -993,7 +991,6 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
 
       /* create new strokes data with interpolated points reading original stroke */
       for (gps_from = prevFrame->strokes.first; gps_from; gps_from = gps_from->next) {
-        bGPDstroke *new_stroke = NULL;
 
         /* only selected */
         if ((flag & GP_TOOLFLAG_INTERPOLATE_ONLY_SELECTED) &&
@@ -1023,7 +1020,7 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
         }
 
         /* create new stroke */
-        new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true);
+        bGPDstroke *new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true);
 
         /* if destination stroke is smaller, resize new_stroke to size of gps_to stroke */
         if (gps_from->totpoints > gps_to->totpoints) {
@@ -1040,6 +1037,8 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
             new_stroke->dvert = MEM_recallocN(new_stroke->dvert,
                                               sizeof(*new_stroke->dvert) * gps_to->totpoints);
           }
+
+          new_stroke->totpoints = gps_to->totpoints;
         }
 
         /* update points position */

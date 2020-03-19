@@ -78,6 +78,8 @@ extern struct DrawEngineType draw_engine_eevee_type;
   SHADER_IRRADIANCE
 /* clang-format on */
 
+#define EEVEE_PROBE_MAX min_ii(MAX_PROBE, GPU_max_texture_layers() / 6)
+
 #define SWAP_DOUBLE_BUFFERS() \
   { \
     if (effects->swap_double_buffer) { \
@@ -123,9 +125,21 @@ extern struct DrawEngineType draw_engine_eevee_type;
   } \
   ((void)0)
 
-#define LOOK_DEV_OVERLAY_ENABLED(v3d) \
-  ((v3d) && (v3d->shading.type == OB_MATERIAL) && ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) && \
-   (v3d->overlay.flag & V3D_OVERLAY_LOOK_DEV))
+BLI_INLINE bool eevee_hdri_preview_overlay_enabled(const View3D *v3d)
+{
+  /* Only show the HDRI Preview in Shading Preview in the Viewport. */
+  if (v3d == NULL || v3d->shading.type != OB_MATERIAL) {
+    return false;
+  }
+
+  /* Only show the HDRI Preview when viewing the Combined render pass */
+  if (v3d->shading.render_pass != SCE_PASS_COMBINED) {
+    return false;
+  }
+
+  return ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) && (v3d->overlay.flag & V3D_OVERLAY_LOOK_DEV);
+}
+
 #define USE_SCENE_LIGHT(v3d) \
   ((!v3d) || \
    ((v3d->shading.type == OB_MATERIAL) && (v3d->shading.flag & V3D_SHADING_SCENE_LIGHTS)) || \
@@ -136,8 +150,6 @@ extern struct DrawEngineType draw_engine_eevee_type;
              ((v3d->shading.type == OB_RENDER) && \
               ((v3d->shading.flag & V3D_SHADING_SCENE_WORLD_RENDER) == 0))))
 
-#define OCTAHEDRAL_SIZE_FROM_CUBESIZE(cube_size) \
-  ((int)ceilf(sqrtf((cube_size * cube_size) * 6.0f)))
 #define MIN_CUBE_LOD_LEVEL 3
 #define MAX_PLANAR_LOD_LEVEL 9
 
@@ -886,10 +898,14 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
                                     EEVEE_ViewLayerData *sldata,
                                     Object *ob,
                                     bool *cast_shadow);
-void EEVEE_hair_cache_populate(EEVEE_Data *vedata,
-                               EEVEE_ViewLayerData *sldata,
-                               Object *ob,
-                               bool *cast_shadow);
+void EEVEE_particle_hair_cache_populate(EEVEE_Data *vedata,
+                                        EEVEE_ViewLayerData *sldata,
+                                        Object *ob,
+                                        bool *cast_shadow);
+void EEVEE_object_hair_cache_populate(EEVEE_Data *vedata,
+                                      EEVEE_ViewLayerData *sldata,
+                                      Object *ob,
+                                      bool *cast_shadow);
 void EEVEE_materials_cache_finish(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 struct GPUMaterial *EEVEE_material_world_lightprobe_get(struct Scene *scene, struct World *wo);
 struct GPUMaterial *EEVEE_material_world_background_get(struct Scene *scene, struct World *wo);
@@ -976,6 +992,7 @@ struct GPUShader *EEVEE_shaders_probe_filter_visibility_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_grid_fill_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_planar_downsample_sh_get(void);
 struct GPUShader *EEVEE_shaders_default_studiolight_sh_get(void);
+struct GPUShader *EEVEE_shaders_background_studiolight_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_cube_display_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_grid_display_sh_get(void);
 struct GPUShader *EEVEE_shaders_probe_planar_display_sh_get(void);
@@ -1185,9 +1202,9 @@ void EEVEE_render_update_passes(struct RenderEngine *engine,
 
 /** eevee_lookdev.c */
 void EEVEE_lookdev_cache_init(EEVEE_Data *vedata,
+                              EEVEE_ViewLayerData *sldata,
                               DRWShadingGroup **grp,
                               DRWPass *pass,
-                              float background_alpha,
                               struct World *world,
                               EEVEE_LightProbesInfo *pinfo);
 void EEVEE_lookdev_draw(EEVEE_Data *vedata);

@@ -118,7 +118,7 @@ typedef struct tGPDinterpolate {
   /** area where painting originated */
   struct ScrArea *sa;
   /** region where painting originated */
-  struct ARegion *ar;
+  struct ARegion *region;
   /** current GP datablock */
   struct bGPdata *gpd;
   /** current material */
@@ -162,7 +162,7 @@ typedef struct tGPDprimitive {
   /** view3d where painting originated */
   struct View3D *v3d;
   /** region where painting originated */
-  struct ARegion *ar;
+  struct ARegion *region;
   /** current GP datablock */
   struct bGPdata *gpd;
   /** current material */
@@ -248,7 +248,7 @@ typedef struct GP_SpaceConversion {
   struct bGPDlayer *gpl;
 
   struct ScrArea *sa;
-  struct ARegion *ar;
+  struct ARegion *region;
   struct View2D *v2d;
 
   rctf *subrect; /* for using the camera rect within the 3d view */
@@ -302,7 +302,7 @@ bool gp_point_xy_to_3d(const GP_SpaceConversion *gsc,
 
 /* helper to convert 2d to 3d */
 void gp_stroke_convertcoords_tpoint(struct Scene *scene,
-                                    struct ARegion *ar,
+                                    struct ARegion *region,
                                     struct Object *ob,
                                     bGPDlayer *gpl,
                                     const struct tGPspoint *point2D,
@@ -407,7 +407,7 @@ void GPENCIL_OT_select_less(struct wmOperatorType *ot);
 void GPENCIL_OT_select_first(struct wmOperatorType *ot);
 void GPENCIL_OT_select_last(struct wmOperatorType *ot);
 void GPENCIL_OT_select_alternate(struct wmOperatorType *ot);
-void GPENCIL_OT_select_color(struct wmOperatorType *ot);
+void GPENCIL_OT_select_vertex_color(struct wmOperatorType *ot);
 
 void GPENCIL_OT_duplicate(struct wmOperatorType *ot);
 void GPENCIL_OT_delete(struct wmOperatorType *ot);
@@ -418,6 +418,7 @@ void GPENCIL_OT_extrude(struct wmOperatorType *ot);
 
 void GPENCIL_OT_move_to_layer(struct wmOperatorType *ot);
 void GPENCIL_OT_layer_change(struct wmOperatorType *ot);
+void GPENCIL_OT_layer_active(struct wmOperatorType *ot);
 
 void GPENCIL_OT_snap_to_grid(struct wmOperatorType *ot);
 void GPENCIL_OT_snap_to_cursor(struct wmOperatorType *ot);
@@ -493,7 +494,6 @@ enum {
 
 void GPENCIL_OT_stroke_arrange(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_change_color(struct wmOperatorType *ot);
-void GPENCIL_OT_stroke_lock_color(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_apply_thickness(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_cyclical_set(struct wmOperatorType *ot);
 void GPENCIL_OT_stroke_caps_set(struct wmOperatorType *ot);
@@ -550,12 +550,13 @@ void GPENCIL_OT_vertex_group_normalize_all(struct wmOperatorType *ot);
 
 /* color handle */
 void GPENCIL_OT_lock_layer(struct wmOperatorType *ot);
-void GPENCIL_OT_color_isolate(struct wmOperatorType *ot);
-void GPENCIL_OT_color_hide(struct wmOperatorType *ot);
-void GPENCIL_OT_color_reveal(struct wmOperatorType *ot);
-void GPENCIL_OT_color_lock_all(struct wmOperatorType *ot);
-void GPENCIL_OT_color_unlock_all(struct wmOperatorType *ot);
-void GPENCIL_OT_color_select(struct wmOperatorType *ot);
+void GPENCIL_OT_material_isolate(struct wmOperatorType *ot);
+void GPENCIL_OT_material_hide(struct wmOperatorType *ot);
+void GPENCIL_OT_material_reveal(struct wmOperatorType *ot);
+void GPENCIL_OT_material_lock_all(struct wmOperatorType *ot);
+void GPENCIL_OT_material_unlock_all(struct wmOperatorType *ot);
+void GPENCIL_OT_material_lock_unused(struct wmOperatorType *ot);
+void GPENCIL_OT_select_material(struct wmOperatorType *ot);
 void GPENCIL_OT_set_active_material(struct wmOperatorType *ot);
 
 /* convert old 2.7 files to 2.8 */

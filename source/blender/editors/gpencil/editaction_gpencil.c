@@ -240,7 +240,6 @@ void ED_gplayer_frames_select_region(KeyframeEditData *ked,
 /* Delete selected frames */
 bool ED_gplayer_frames_delete(bGPDlayer *gpl)
 {
-  bGPDframe *gpf, *gpfn;
   bool changed = false;
 
   /* error checking */
@@ -249,9 +248,7 @@ bool ED_gplayer_frames_delete(bGPDlayer *gpl)
   }
 
   /* check for frames to delete */
-  for (gpf = gpl->frames.first; gpf; gpf = gpfn) {
-    gpfn = gpf->next;
-
+  LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
     if (gpf->flag & GP_FRAME_SELECT) {
       BKE_gpencil_layer_frame_delete(gpl, gpf);
       changed = true;
@@ -264,16 +261,13 @@ bool ED_gplayer_frames_delete(bGPDlayer *gpl)
 /* Duplicate selected frames from given gp-layer */
 void ED_gplayer_frames_duplicate(bGPDlayer *gpl)
 {
-  bGPDframe *gpf, *gpfn;
-
   /* error checking */
   if (gpl == NULL) {
     return;
   }
 
   /* duplicate selected frames  */
-  for (gpf = gpl->frames.first; gpf; gpf = gpfn) {
-    gpfn = gpf->next;
+  LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
 
     /* duplicate this frame */
     if (gpf->flag & GP_FRAME_SELECT) {
@@ -618,13 +612,13 @@ static short mirror_gpf_marker(bGPDframe *gpf, Scene *scene)
 
   /* In order for this mirror function to work without
    * any extra arguments being added, we use the case
-   * of bezt==NULL to denote that we should find the
+   * of gpf==NULL to denote that we should find the
    * marker to mirror over. The static pointer is safe
    * to use this way, as it will be set to null after
    * each cycle in which this is called.
    */
 
-  if (gpf) {
+  if (gpf != NULL) {
     /* mirroring time */
     if ((gpf->flag & GP_FRAME_SELECT) && (marker)) {
       diff = (marker->frame - gpf->framenum);
@@ -665,9 +659,9 @@ void ED_gplayer_mirror_frames(bGPDlayer *gpl, Scene *scene, short mode)
       ED_gplayer_frames_looper(gpl, scene, mirror_gpf_xaxis);
       break;
     case MIRROR_KEYS_MARKER: /* mirror over marker */
-      mirror_gpf_marker(NULL, NULL);
+      mirror_gpf_marker(NULL, scene);
       ED_gplayer_frames_looper(gpl, scene, mirror_gpf_marker);
-      mirror_gpf_marker(NULL, NULL);
+      mirror_gpf_marker(NULL, scene);
       break;
     default: /* just in case */
       ED_gplayer_frames_looper(gpl, scene, mirror_gpf_yaxis);

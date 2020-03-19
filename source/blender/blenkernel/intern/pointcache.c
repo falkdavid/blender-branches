@@ -1953,8 +1953,8 @@ static bool foreach_object_ptcache(
     if (!foreach_object_modifier_ptcache(object, callback, callback_user_data)) {
       return false;
     }
-    /* Consider all object in dupli groups to be part of the same object,
-     * for baking with linking dupligroups. Once we have better overrides
+    /* Consider all object in dupli-groups to be part of the same object,
+     * for baking with linking dupli-groups. Once we have better overrides
      * this can be revisited so users select the local objects directly. */
     if (scene != NULL && (duplis-- > 0) && (object->instance_collection != NULL)) {
       FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (object->instance_collection, current_object) {
@@ -2385,7 +2385,7 @@ static int ptcache_file_header_begin_read(PTCacheFile *pf)
 
   /* if there was an error set file as it was */
   if (error) {
-    fseek(pf->fp, 0, SEEK_SET);
+    BLI_fseek(pf->fp, 0, SEEK_SET);
   }
 
   return !error;

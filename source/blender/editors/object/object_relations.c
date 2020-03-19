@@ -66,6 +66,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_gpencil.h"
 #include "BKE_fcurve.h"
+#include "BKE_hair.h"
 #include "BKE_idprop.h"
 #include "BKE_light.h"
 #include "BKE_lattice.h"
@@ -82,10 +83,12 @@
 #include "BKE_modifier.h"
 #include "BKE_node.h"
 #include "BKE_object.h"
+#include "BKE_pointcloud.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_speaker.h"
 #include "BKE_texture.h"
+#include "BKE_volume.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -707,8 +710,8 @@ bool ED_object_parent_set(ReportList *reports,
       /* if follow, add F-Curve for ctime (i.e. "eval_time") so that path-follow works */
       if (partype == PAR_FOLLOW) {
         /* get or create F-Curve */
-        bAction *act = verify_adt_action(bmain, &cu->id, 1);
-        FCurve *fcu = verify_fcurve(bmain, act, NULL, NULL, "eval_time", 0, 1);
+        bAction *act = ED_id_action_ensure(bmain, &cu->id);
+        FCurve *fcu = ED_action_fcurve_ensure(bmain, act, NULL, NULL, "eval_time", 0);
 
         /* setup dummy 'generator' modifier here to get 1-1 correspondence still working */
         if (!fcu->bezt && !fcu->fpt && !fcu->modifiers.first) {
@@ -1586,7 +1589,7 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
             DEG_id_tag_update(&ob_dst->id, ID_RECALC_COPY_ON_WRITE);
             break;
           case MAKE_LINKS_MODIFIERS:
-            BKE_object_link_modifiers(scene, ob_dst, ob_src);
+            BKE_object_link_modifiers(ob_dst, ob_src);
             DEG_id_tag_update(&ob_dst->id,
                               ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
             break;
@@ -1899,6 +1902,15 @@ static void single_obdata_users(
             break;
           case OB_GPENCIL:
             ob->data = ID_NEW_SET(ob->data, BKE_gpencil_copy(bmain, ob->data));
+            break;
+          case OB_HAIR:
+            ob->data = ID_NEW_SET(ob->data, BKE_hair_copy(bmain, ob->data));
+            break;
+          case OB_POINTCLOUD:
+            ob->data = ID_NEW_SET(ob->data, BKE_pointcloud_copy(bmain, ob->data));
+            break;
+          case OB_VOLUME:
+            ob->data = ID_NEW_SET(ob->data, BKE_volume_copy(bmain, ob->data));
             break;
           default:
             printf("ERROR %s: can't copy %s\n", __func__, id->name);
@@ -2260,7 +2272,7 @@ static int make_local_exec(bContext *C, wmOperator *op)
           }
         }
 
-        matarar = (Material ***)BKE_object_material_array(ob);
+        matarar = BKE_object_material_array_p(ob);
         if (matarar) {
           for (a = 0; a < ob->totcol; a++) {
             ma = (*matarar)[a];
@@ -2609,6 +2621,9 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 
   if (RNA_boolean_get(op->ptr, "obdata")) {
     single_obdata_users(bmain, scene, view_layer, v3d, flag);
+
+    /* Needed since some IDs were remapped? (incl. me->texcomesh, see T73797). */
+    update_deps = true;
   }
 
   if (RNA_boolean_get(op->ptr, "material")) {

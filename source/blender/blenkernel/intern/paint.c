@@ -53,6 +53,7 @@
 #include "BKE_context.h"
 #include "BKE_crazyspace.h"
 #include "BKE_gpencil.h"
+#include "BKE_idtype.h"
 #include "BKE_image.h"
 #include "BKE_key.h"
 #include "BKE_lib_id.h"
@@ -73,6 +74,87 @@
 #include "RNA_enum_types.h"
 
 #include "bmesh.h"
+
+static void palette_init_data(ID *id)
+{
+  Palette *palette = (Palette *)id;
+
+  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(palette, id));
+
+  /* Enable fake user by default. */
+  id_fake_user_set(&palette->id);
+}
+
+static void palette_copy_data(Main *UNUSED(bmain),
+                              ID *id_dst,
+                              const ID *id_src,
+                              const int UNUSED(flag))
+{
+  Palette *palette_dst = (Palette *)id_dst;
+  const Palette *palette_src = (const Palette *)id_src;
+
+  BLI_duplicatelist(&palette_dst->colors, &palette_src->colors);
+}
+
+static void palette_free_data(ID *id)
+{
+  Palette *palette = (Palette *)id;
+
+  BLI_freelistN(&palette->colors);
+}
+
+IDTypeInfo IDType_ID_PAL = {
+    .id_code = ID_PAL,
+    .id_filter = FILTER_ID_PAL,
+    .main_listbase_index = INDEX_ID_PAL,
+    .struct_size = sizeof(Palette),
+    .name = "Palette",
+    .name_plural = "palettes",
+    .translation_context = BLT_I18NCONTEXT_ID_PALETTE,
+    .flags = 0,
+
+    .init_data = palette_init_data,
+    .copy_data = palette_copy_data,
+    .free_data = palette_free_data,
+    .make_local = NULL,
+};
+
+static void paint_curve_copy_data(Main *UNUSED(bmain),
+                                  ID *id_dst,
+                                  const ID *id_src,
+                                  const int UNUSED(flag))
+{
+  PaintCurve *paint_curve_dst = (PaintCurve *)id_dst;
+  const PaintCurve *paint_curve_src = (const PaintCurve *)id_src;
+
+  if (paint_curve_src->tot_points != 0) {
+    paint_curve_dst->points = MEM_dupallocN(paint_curve_src->points);
+  }
+}
+
+static void paint_curve_free_data(ID *id)
+{
+  PaintCurve *paint_curve = (PaintCurve *)id;
+
+  MEM_SAFE_FREE(paint_curve->points);
+  paint_curve->tot_points = 0;
+}
+
+IDTypeInfo IDType_ID_PC = {
+    .id_code = ID_PC,
+    .id_filter = FILTER_ID_PC,
+    .main_listbase_index = INDEX_ID_PC,
+    .struct_size = sizeof(PaintCurve),
+    .name = "PaintCurve",
+    .name_plural = "paint_curves",
+    .translation_context = BLT_I18NCONTEXT_ID_PAINTCURVE,
+    .flags = 0,
+
+    .init_data = NULL,
+    .copy_data = paint_curve_copy_data,
+    .free_data = paint_curve_free_data,
+    .make_local = NULL,
+};
 
 const char PAINT_CURSOR_SCULPT[3] = {255, 100, 100};
 const char PAINT_CURSOR_VERTEX_PAINT[3] = {255, 255, 255};
@@ -531,13 +613,6 @@ uint BKE_paint_get_brush_tool_offset_from_paintmode(const ePaintMode mode)
   return 0;
 }
 
-/** Free (or release) any data used by this paint curve (does not free the pcurve itself). */
-void BKE_paint_curve_free(PaintCurve *pc)
-{
-  MEM_SAFE_FREE(pc->points);
-  pc->tot_points = 0;
-}
-
 PaintCurve *BKE_paint_curve_add(Main *bmain, const char *name)
 {
   PaintCurve *pc;
@@ -547,36 +622,11 @@ PaintCurve *BKE_paint_curve_add(Main *bmain, const char *name)
   return pc;
 }
 
-/**
- * Only copy internal data of PaintCurve ID from source to
- * already allocated/initialized destination.
- * You probably never want to use that directly,
- * use #BKE_id_copy or #BKE_id_copy_ex for typical needs.
- *
- * WARNING! This function will not handle ID user count!
- *
- * \param flag: Copying options (see BKE_lib_id.h's LIB_ID_COPY_... flags for more).
- */
-void BKE_paint_curve_copy_data(Main *UNUSED(bmain),
-                               PaintCurve *pc_dst,
-                               const PaintCurve *pc_src,
-                               const int UNUSED(flag))
-{
-  if (pc_src->tot_points != 0) {
-    pc_dst->points = MEM_dupallocN(pc_src->points);
-  }
-}
-
 PaintCurve *BKE_paint_curve_copy(Main *bmain, const PaintCurve *pc)
 {
   PaintCurve *pc_copy;
   BKE_id_copy(bmain, &pc->id, (ID **)&pc_copy);
   return pc_copy;
-}
-
-void BKE_paint_curve_make_local(Main *bmain, PaintCurve *pc, const bool lib_local)
-{
-  BKE_id_make_local_generic(bmain, &pc->id, true, lib_local);
 }
 
 Palette *BKE_paint_palette(Paint *p)
@@ -636,46 +686,11 @@ Palette *BKE_palette_add(Main *bmain, const char *name)
   return palette;
 }
 
-/**
- * Only copy internal data of Palette ID from source
- * to already allocated/initialized destination.
- * You probably never want to use that directly,
- * use #BKE_id_copy or #BKE_id_copy_ex for typical needs.
- *
- * WARNING! This function will not handle ID user count!
- *
- * \param flag: Copying options (see BKE_lib_id.h's LIB_ID_COPY_... flags for more).
- */
-void BKE_palette_copy_data(Main *UNUSED(bmain),
-                           Palette *palette_dst,
-                           const Palette *palette_src,
-                           const int UNUSED(flag))
-{
-  BLI_duplicatelist(&palette_dst->colors, &palette_src->colors);
-}
-
 Palette *BKE_palette_copy(Main *bmain, const Palette *palette)
 {
   Palette *palette_copy;
   BKE_id_copy(bmain, &palette->id, (ID **)&palette_copy);
   return palette_copy;
-}
-
-void BKE_palette_make_local(Main *bmain, Palette *palette, const bool lib_local)
-{
-  BKE_id_make_local_generic(bmain, &palette->id, true, lib_local);
-}
-
-void BKE_palette_init(Palette *palette)
-{
-  /* Enable fake user by default. */
-  id_fake_user_set(&palette->id);
-}
-
-/** Free (or release) any data used by this palette (does not free the palette itself). */
-void BKE_palette_free(Palette *palette)
-{
-  BLI_freelistN(&palette->colors);
 }
 
 PaletteColor *BKE_palette_color_add(Palette *palette)
@@ -1482,6 +1497,7 @@ static void sculpt_update_object(
 
   ss->deform_modifiers_active = sculpt_modifiers_active(scene, sd, ob);
   ss->show_mask = (sd->flags & SCULPT_HIDE_MASK) == 0;
+  ss->show_face_sets = (sd->flags & SCULPT_HIDE_FACE_SETS) == 0;
 
   ss->building_vp_handle = false;
 
@@ -1521,6 +1537,19 @@ static void sculpt_update_object(
     ss->mloop = me->mloop;
     ss->multires = NULL;
     ss->vmask = CustomData_get_layer(&me->vdata, CD_PAINT_MASK);
+
+    /* Sculpt Face Sets. */
+    if (!CustomData_has_layer(&me->pdata, CD_SCULPT_FACE_SETS)) {
+      ss->face_sets = CustomData_add_layer(
+          &me->pdata, CD_SCULPT_FACE_SETS, CD_CALLOC, NULL, me->totpoly);
+      for (int i = 0; i < me->totpoly; i++) {
+        ss->face_sets[i] = 1;
+      }
+
+      /* Set the default face set color if the datalayer did not exist. */
+      me->face_sets_color_default = 1;
+    }
+    ss->face_sets = CustomData_get_layer(&me->pdata, CD_SCULPT_FACE_SETS);
   }
 
   ss->subdiv_ccg = me_eval->runtime.subdiv_ccg;
@@ -1529,12 +1558,15 @@ static void sculpt_update_object(
   BLI_assert(pbvh == ss->pbvh);
   UNUSED_VARS_NDEBUG(pbvh);
 
+  BKE_pbvh_face_sets_color_set(ss->pbvh, me->face_sets_color_seed, me->face_sets_color_default);
+
   if (need_pmap && ob->type == OB_MESH && !ss->pmap) {
     BKE_mesh_vert_poly_map_create(
         &ss->pmap, &ss->pmap_mem, me->mpoly, me->mloop, me->totvert, me->totpoly, me->totloop);
   }
 
   pbvh_show_mask_set(ss->pbvh, ss->show_mask);
+  pbvh_show_face_sets_set(ss->pbvh, ss->show_face_sets);
 
   if (ss->deform_modifiers_active) {
     if (!ss->orig_cos) {
@@ -1621,7 +1653,7 @@ void BKE_sculpt_update_object_after_eval(Depsgraph *depsgraph, Object *ob_eval)
   /* Update after mesh evaluation in the dependency graph, to rebuild PBVH or
    * other data when modifiers change the mesh. */
   Object *ob_orig = DEG_get_original_object(ob_eval);
-  Mesh *me_eval = ob_eval->runtime.mesh_eval;
+  Mesh *me_eval = BKE_object_get_evaluated_mesh(ob_eval);
 
   BLI_assert(me_eval != NULL);
 
@@ -1771,6 +1803,7 @@ static PBVH *build_pbvh_for_dynamic_topology(Object *ob)
                        ob->sculpt->cd_vert_node_offset,
                        ob->sculpt->cd_face_node_offset);
   pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
+  pbvh_show_face_sets_set(pbvh, false);
   return pbvh;
 }
 
@@ -1792,10 +1825,12 @@ static PBVH *build_pbvh_from_regular_mesh(Object *ob, Mesh *me_eval_deform)
                       me->totvert,
                       &me->vdata,
                       &me->ldata,
+                      &me->pdata,
                       looptri,
                       looptris_num);
 
   pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
+  pbvh_show_face_sets_set(pbvh, ob->sculpt->show_face_sets);
 
   const bool is_deformed = check_sculpt_object_deformed(ob, true);
   if (is_deformed && me_eval_deform != NULL) {
@@ -1821,6 +1856,7 @@ static PBVH *build_pbvh_from_ccg(Object *ob, SubdivCCG *subdiv_ccg)
                        subdiv_ccg->grid_flag_mats,
                        subdiv_ccg->grid_hidden);
   pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
+  pbvh_show_face_sets_set(pbvh, false);
   return pbvh;
 }
 

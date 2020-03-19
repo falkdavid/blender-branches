@@ -72,7 +72,6 @@ void gpencil_modifier_type_init(GpencilModifierTypeInfo *types[])
   INIT_GP_TYPE(Armature);
   INIT_GP_TYPE(Time);
   INIT_GP_TYPE(Multiply);
-  INIT_GP_TYPE(Vertexcolor);
 #undef INIT_GP_TYPE
 }
 
@@ -159,7 +158,7 @@ float get_modifier_point_weight(MDeformVert *dvert, bool inverse, int def_nr)
   float weight = 1.0f;
 
   if ((dvert != NULL) && (def_nr != -1)) {
-    MDeformWeight *dw = defvert_find_index(dvert, def_nr);
+    MDeformWeight *dw = BKE_defvert_find_index(dvert, def_nr);
     weight = dw ? dw->weight : -1.0f;
     if ((weight >= 0.0f) && (inverse == 1)) {
       return -1.0f;

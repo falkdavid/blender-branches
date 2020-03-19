@@ -136,7 +136,6 @@ const UserDef U_default = {
     .recent_files = 10,
     .smooth_viewtx = 200,
     .glreslimit = 0,
-    .curssize = 0,
     .color_picker_type = USER_CP_CIRCLE_HSV,
     .auto_smoothing_new = FCURVE_SMOOTH_CONT_ACCEL,
     .ipo_new = BEZT_IPO_BEZ,
@@ -221,6 +220,11 @@ const UserDef U_default = {
             .temp_win_sizex = 1020,
             .temp_win_sizey = 600,
         },
+
+    .sequencer_disk_cache_dir = "",
+    .sequencer_disk_cache_compression = 0,
+    .sequencer_disk_cache_size_limit = 100,
+    .sequencer_disk_cache_flag = 0,
 
     .runtime =
         {

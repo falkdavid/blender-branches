@@ -582,7 +582,7 @@ void BKE_mesh_from_nurbs_displist(
     Main *bmain, Object *ob, ListBase *dispbase, const char *obdata_name, bool temporary)
 {
   Object *ob1;
-  Mesh *me_eval = ob->runtime.mesh_eval;
+  Mesh *me_eval = (Mesh *)ob->runtime.data_eval;
   Mesh *me;
   Curve *cu;
   MVert *allvert = NULL;
@@ -644,7 +644,7 @@ void BKE_mesh_from_nurbs_displist(
       me = BKE_id_new_nomain(ID_ME, obdata_name);
     }
 
-    ob->runtime.mesh_eval = NULL;
+    ob->runtime.data_eval = NULL;
     BKE_mesh_nomain_to_mesh(me_eval, me, ob, &CD_MASK_MESH, true);
   }
 
@@ -929,11 +929,9 @@ static Object *object_for_curve_to_mesh_create(Object *object)
     BKE_displist_copy(&temp_object->runtime.curve_cache->disp, &object->runtime.curve_cache->disp);
   }
   /* Constructive modifiers will use mesh to store result. */
-  if (object->runtime.mesh_eval != NULL) {
-    BKE_id_copy_ex(NULL,
-                   &object->runtime.mesh_eval->id,
-                   (ID **)&temp_object->runtime.mesh_eval,
-                   LIB_ID_COPY_LOCALIZE);
+  if (object->runtime.data_eval != NULL) {
+    BKE_id_copy_ex(
+        NULL, object->runtime.data_eval, &temp_object->runtime.data_eval, LIB_ID_COPY_LOCALIZE);
   }
 
   /* Need to create copy of curve itself as well, it will be freed by underlying conversion
@@ -994,19 +992,15 @@ static void curve_to_mesh_eval_ensure(Object *object)
    * bit of internal functions (BKE_mesh_from_nurbs_displist, BKE_mesh_nomain_to_mesh) and also
    * Mesh From Curve operator.
    * Brecht says hold off with that. */
-  BKE_displist_make_curveTypes_forRender(NULL,
-                                         NULL,
-                                         &remapped_object,
-                                         &remapped_object.runtime.curve_cache->disp,
-                                         &remapped_object.runtime.mesh_eval,
-                                         false);
+  Mesh *mesh_eval = NULL;
+  BKE_displist_make_curveTypes_forRender(
+      NULL, NULL, &remapped_object, &remapped_object.runtime.curve_cache->disp, &mesh_eval, false);
 
   /* Note: this is to be consistent with `BKE_displist_make_curveTypes()`, however that is not a
    * real issue currently, code here is broken in more than one way, fix(es) will be done
    * separately. */
-  if (remapped_object.runtime.mesh_eval != NULL) {
-    remapped_object.runtime.mesh_eval->id.tag |= LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT;
-    remapped_object.runtime.is_mesh_eval_owned = true;
+  if (mesh_eval != NULL) {
+    BKE_object_eval_assign_data(&remapped_object, &mesh_eval->id, true);
   }
 
   BKE_object_free_curve_cache(&bevel_object);
@@ -1104,8 +1098,8 @@ static Mesh *mesh_new_from_mesh_object_with_layers(Depsgraph *depsgraph, Object 
   }
 
   Object object_for_eval = *object;
-  if (object_for_eval.runtime.mesh_orig != NULL) {
-    object_for_eval.data = object_for_eval.runtime.mesh_orig;
+  if (object_for_eval.runtime.data_orig != NULL) {
+    object_for_eval.data = object_for_eval.runtime.data_orig;
   }
 
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
@@ -1306,7 +1300,7 @@ Mesh *BKE_mesh_create_derived_for_modifier(struct Depsgraph *depsgraph,
                                            ModifierData *md_eval,
                                            int build_shapekey_layers)
 {
-  Mesh *me = ob_eval->runtime.mesh_orig ? ob_eval->runtime.mesh_orig : ob_eval->data;
+  Mesh *me = ob_eval->runtime.data_orig ? ob_eval->runtime.data_orig : ob_eval->data;
   const ModifierTypeInfo *mti = modifierType_getInfo(md_eval->type);
   Mesh *result;
   KeyBlock *kb;
@@ -1426,6 +1420,8 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
                              const CustomData_MeshMasks *mask,
                              bool take_ownership)
 {
+  BLI_assert(mesh_src->id.tag & LIB_TAG_NO_MAIN);
+
   /* mesh_src might depend on mesh_dst, so we need to do everything with a local copy */
   /* TODO(Sybren): the above claim came from 2.7x derived-mesh code (DM_to_mesh);
    * check whether it is still true with Mesh */
@@ -1577,6 +1573,8 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
 
 void BKE_mesh_nomain_to_meshkey(Mesh *mesh_src, Mesh *mesh_dst, KeyBlock *kb)
 {
+  BLI_assert(mesh_src->id.tag & LIB_TAG_NO_MAIN);
+
   int a, totvert = mesh_src->totvert;
   float *fp;
   MVert *mvert;

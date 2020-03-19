@@ -158,16 +158,6 @@ void DRW_gpencil_batch_cache_free(bGPdata *gpd)
   return;
 }
 
-void DRW_gpencil_freecache(struct Object *ob)
-{
-  if ((ob) && (ob->type == OB_GPENCIL)) {
-    bGPdata *gpd = (bGPdata *)ob->data;
-    if (gpd) {
-      DRW_gpencil_batch_cache_free(gpd);
-    }
-  }
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -176,23 +166,20 @@ void DRW_gpencil_freecache(struct Object *ob)
 
 /* MUST match the format below. */
 typedef struct gpStrokeVert {
-  /** Mat is float because we need to pack other float attribs with it. */
-  float mat, strength, stroke_id, point_id;
+  int32_t mat, stroke_id, point_id, packed_asp_hard_rot;
   /** Position and thickness packed in the same attribute. */
   float pos[3], thickness;
-  float uv_fill[2], u_stroke, v_rot;
-  /** Aspect ratio and hardnes. */
-  float aspect_ratio, hardness;
+  /** UV and strength packed in the same attribute. */
+  float uv_fill[2], u_stroke, strength;
 } gpStrokeVert;
 
 static GPUVertFormat *gpencil_stroke_format(void)
 {
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "ma", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "ma", GPU_COMP_I32, 4, GPU_FETCH_INT);
     GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
     GPU_vertformat_attr_add(&format, "uv", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "hard", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
     /* IMPORTANT: This means having only 4 attributes to fit into GPU module limit of 16 attrib. */
     GPU_vertformat_multiload_enable(&format, 4);
   }
@@ -259,6 +246,29 @@ static int gpencil_stroke_is_cyclic(const bGPDstroke *gps)
   return ((gps->flag & GP_STROKE_CYCLIC) != 0) && (gps->totpoints > 2);
 }
 
+BLI_INLINE int32_t pack_rotation_aspect_hardness(float rot, float asp, float hard)
+{
+  int32_t packed = 0;
+  /* Aspect uses 9 bits */
+  float asp_normalized = (asp > 1.0f) ? (1.0f / asp) : asp;
+  packed |= (int32_t)unit_float_to_uchar_clamp(asp_normalized);
+  /* Store if inversed in the 9th bit. */
+  if (asp > 1.0f) {
+    packed |= 1 << 8;
+  }
+  /* Rotation uses 9 bits */
+  /* Rotation are in [-90°..90°] range, so we can encode the sign of the angle + the cosine
+   * because the cosine will always be positive. */
+  packed |= (int32_t)unit_float_to_uchar_clamp(cosf(rot)) << 9;
+  /* Store sine sign in 9th bit. */
+  if (rot < 0.0f) {
+    packed |= 1 << 17;
+  }
+  /* Hardness uses 8 bits */
+  packed |= (int32_t)unit_float_to_uchar_clamp(hard) << 18;
+  return packed;
+}
+
 static void gpencil_buffer_add_point(gpStrokeVert *verts,
                                      gpColorVert *cols,
                                      const bGPDstroke *gps,
@@ -285,15 +295,14 @@ static void gpencil_buffer_add_point(gpStrokeVert *verts,
   vert->u_stroke = pt->uv_fac;
   vert->stroke_id = gps->runtime.stroke_start;
   vert->point_id = v;
-  /* Rotation are in [-90°..90°] range, so we can encode the sign of the angle + the cosine
-   * because the cosine will always be positive. */
-  vert->v_rot = cosf(pt->uv_rot) * signf(pt->uv_rot);
   vert->thickness = max_ff(0.0f, gps->thickness * pt->pressure) * (round_cap1 ? 1.0 : -1.0);
   /* Tag endpoint material to -1 so they get discarded by vertex shader. */
   vert->mat = (is_endpoint) ? -1 : (gps->mat_nr % GP_MATERIAL_BUFFER_LEN);
 
-  vert->aspect_ratio = gps->aspect_ratio[0] / max_ff(gps->aspect_ratio[1], 1e-8);
-  vert->hardness = gps->hardeness;
+  float aspect_ratio = gps->aspect_ratio[0] / max_ff(gps->aspect_ratio[1], 1e-8);
+
+  vert->packed_asp_hard_rot = pack_rotation_aspect_hardness(
+      pt->uv_rot, aspect_ratio, gps->hardeness);
 }
 
 static void gpencil_buffer_add_stroke(gpStrokeVert *verts,
@@ -525,7 +534,7 @@ static void gpencil_sbuffer_stroke_ensure(bGPdata *gpd, bool do_stroke, bool do_
 
     const DRWContextState *draw_ctx = DRW_context_state_get();
     Scene *scene = draw_ctx->scene;
-    ARegion *ar = draw_ctx->ar;
+    ARegion *region = draw_ctx->region;
     Object *ob = draw_ctx->obact;
 
     BLI_assert(ob && (ob->type == OB_GPENCIL));
@@ -537,7 +546,7 @@ static void gpencil_sbuffer_stroke_ensure(bGPdata *gpd, bool do_stroke, bool do_
     ED_gpencil_drawing_reference_get(scene, ob, gpl, ts->gpencil_v3d_align, origin);
 
     for (int i = 0; i < vert_len; i++) {
-      ED_gpencil_tpoint_to_point(ar, origin, &tpoints[i], &gps->points[i]);
+      ED_gpencil_tpoint_to_point(region, origin, &tpoints[i], &gps->points[i]);
       mul_m4_v3(ob->imat, &gps->points[i].x);
       bGPDspoint *pt = &gps->points[i];
       copy_v4_v4(pt->vert_color, gpd->runtime.vert_color);
@@ -646,10 +655,13 @@ typedef struct gpEditIterData {
   int vgindex;
 } gpEditIterData;
 
-static uint32_t gpencil_point_edit_flag(const bGPDspoint *pt, int v, int v_len)
+static uint32_t gpencil_point_edit_flag(const bool layer_lock,
+                                        const bGPDspoint *pt,
+                                        int v,
+                                        int v_len)
 {
   uint32_t sflag = 0;
-  SET_FLAG_FROM_TEST(sflag, pt->flag & GP_SPOINT_SELECT, GP_EDIT_POINT_SELECTED);
+  SET_FLAG_FROM_TEST(sflag, (!layer_lock) && pt->flag & GP_SPOINT_SELECT, GP_EDIT_POINT_SELECTED);
   SET_FLAG_FROM_TEST(sflag, v == 0, GP_EDIT_STROKE_START);
   SET_FLAG_FROM_TEST(sflag, v == (v_len - 1), GP_EDIT_STROKE_END);
   return sflag;
@@ -657,7 +669,7 @@ static uint32_t gpencil_point_edit_flag(const bGPDspoint *pt, int v, int v_len)
 
 static float gpencil_point_edit_weight(const MDeformVert *dvert, int v, int vgindex)
 {
-  return (dvert && dvert[v].dw) ? defvert_find_weight(&dvert[v], vgindex) : -1.0f;
+  return (dvert && dvert[v].dw) ? BKE_defvert_find_weight(&dvert[v], vgindex) : -1.0f;
 }
 
 static void gpencil_edit_stroke_iter_cb(bGPDlayer *gpl,
@@ -665,28 +677,25 @@ static void gpencil_edit_stroke_iter_cb(bGPDlayer *gpl,
                                         bGPDstroke *gps,
                                         void *thunk)
 {
-  /* Cancel if layer is locked. */
-  if (gpl->flag & GP_LAYER_LOCKED) {
-    return;
-  }
-
   gpEditIterData *iter = (gpEditIterData *)thunk;
   const int v_len = gps->totpoints;
   const int v = gps->runtime.stroke_start + 1;
   MDeformVert *dvert = ((iter->vgindex > -1) && gps->dvert) ? gps->dvert : NULL;
   gpEditVert *vert_ptr = iter->verts + v;
 
+  const bool layer_lock = (gpl->flag & GP_LAYER_LOCKED);
   uint32_t sflag = 0;
-  SET_FLAG_FROM_TEST(sflag, gps->flag & GP_STROKE_SELECT, GP_EDIT_STROKE_SELECTED);
+  SET_FLAG_FROM_TEST(
+      sflag, (!layer_lock) && gps->flag & GP_STROKE_SELECT, GP_EDIT_STROKE_SELECTED);
   SET_FLAG_FROM_TEST(sflag, gpf->runtime.onion_id != 0.0f, GP_EDIT_MULTIFRAME);
 
   for (int i = 0; i < v_len; i++) {
-    vert_ptr->vflag = sflag | gpencil_point_edit_flag(&gps->points[i], i, v_len);
+    vert_ptr->vflag = sflag | gpencil_point_edit_flag(layer_lock, &gps->points[i], i, v_len);
     vert_ptr->weight = gpencil_point_edit_weight(dvert, i, iter->vgindex);
     vert_ptr++;
   }
   /* Draw line to first point to complete the loop for cyclic strokes. */
-  vert_ptr->vflag = sflag | gpencil_point_edit_flag(&gps->points[0], 0, v_len);
+  vert_ptr->vflag = sflag | gpencil_point_edit_flag(layer_lock, &gps->points[0], 0, v_len);
   vert_ptr->weight = gpencil_point_edit_weight(dvert, 0, iter->vgindex);
 }
 

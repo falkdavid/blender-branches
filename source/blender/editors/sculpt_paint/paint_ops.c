@@ -377,17 +377,6 @@ static void PALETTE_OT_extract_from_image(wmOperatorType *ot)
 }
 
 /* Sort Palette color by Hue and Saturation. */
-static bool palette_sort_poll(bContext *C)
-{
-  Paint *paint = BKE_paint_get_active_from_context(C);
-  Palette *palette = paint->palette;
-  if (palette) {
-    return true;
-  }
-
-  return false;
-}
-
 static int palette_sort_exec(bContext *C, wmOperator *op)
 {
   const int type = RNA_enum_get(op->ptr, "type");
@@ -477,7 +466,7 @@ static void PALETTE_OT_sort(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = palette_sort_exec;
-  ot->poll = palette_sort_poll;
+  ot->poll = palette_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -522,7 +511,7 @@ static void PALETTE_OT_color_move(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = palette_color_move_exec;
-  ot->poll = palette_sort_poll;
+  ot->poll = palette_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -531,17 +520,6 @@ static void PALETTE_OT_color_move(wmOperatorType *ot)
 }
 
 /* Join Palette swatches. */
-static bool palette_join_poll(bContext *C)
-{
-  Paint *paint = BKE_paint_get_active_from_context(C);
-  Palette *palette = paint->palette;
-  if (palette) {
-    return true;
-  }
-
-  return false;
-}
-
 static int palette_join_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -599,7 +577,7 @@ static void PALETTE_OT_join(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = palette_join_exec;
-  ot->poll = palette_join_poll;
+  ot->poll = palette_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -919,7 +897,7 @@ static int stencil_control_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
   float mvalf[2] = {event->mval[0], event->mval[1]};
-  ARegion *ar = CTX_wm_region(C);
+  ARegion *region = CTX_wm_region(C);
   StencilControlData *scd;
   int mask = RNA_enum_get(op->ptr, "texmode");
 
@@ -944,8 +922,8 @@ static int stencil_control_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
   scd->mode = RNA_enum_get(op->ptr, "mode");
   scd->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
-  scd->area_size[0] = ar->winx;
-  scd->area_size[1] = ar->winy;
+  scd->area_size[0] = region->winx;
+  scd->area_size[1] = region->winy;
 
   op->customdata = scd;
   WM_event_add_modal_handler(C, op);
@@ -999,8 +977,7 @@ static void stencil_control_calculate(StencilControlData *scd, const int mval[2]
       if (scd->constrain_mode != STENCIL_CONSTRAINT_X) {
         mdiff[1] = factor * scd->init_sdim[1];
       }
-      CLAMP(mdiff[0], 5.0f, 10000.0f);
-      CLAMP(mdiff[1], 5.0f, 10000.0f);
+      clamp_v2(mdiff, 5.0f, 10000.0f);
       copy_v2_v2(scd->dim_target, mdiff);
       break;
     }
@@ -1036,14 +1013,14 @@ static int stencil_control_modal(bContext *C, wmOperator *op, const wmEvent *eve
     case MOUSEMOVE:
       stencil_control_calculate(scd, event->mval);
       break;
-    case ESCKEY:
+    case EVT_ESCKEY:
       if (event->val == KM_PRESS) {
         stencil_control_cancel(C, op);
         WM_event_add_notifier(C, NC_WINDOW, NULL);
         return OPERATOR_CANCELLED;
       }
       break;
-    case XKEY:
+    case EVT_XKEY:
       if (event->val == KM_PRESS) {
 
         if (scd->constrain_mode == STENCIL_CONSTRAINT_X) {
@@ -1056,7 +1033,7 @@ static int stencil_control_modal(bContext *C, wmOperator *op, const wmEvent *eve
         stencil_control_calculate(scd, event->mval);
       }
       break;
-    case YKEY:
+    case EVT_YKEY:
       if (event->val == KM_PRESS) {
         if (scd->constrain_mode == STENCIL_CONSTRAINT_Y) {
           scd->constrain_mode = 0;
@@ -1373,7 +1350,7 @@ void ED_keymap_paint(wmKeyConfig *keyconf)
 
   /* Sculpt mode */
   keymap = WM_keymap_ensure(keyconf, "Sculpt", 0, 0);
-  keymap->poll = sculpt_mode_poll;
+  keymap->poll = SCULPT_mode_poll;
 
   /* Vertex Paint mode */
   keymap = WM_keymap_ensure(keyconf, "Vertex Paint", 0, 0);
@@ -1384,7 +1361,7 @@ void ED_keymap_paint(wmKeyConfig *keyconf)
   keymap->poll = weight_paint_mode_poll;
 
   /*Weight paint's Vertex Selection Mode */
-  keymap = WM_keymap_ensure(keyconf, "Weight Paint Vertex Selection", 0, 0);
+  keymap = WM_keymap_ensure(keyconf, "Paint Vertex Selection (Weight, Vertex)", 0, 0);
   keymap->poll = vert_paint_poll;
 
   /* Image/Texture Paint mode */
@@ -1392,7 +1369,7 @@ void ED_keymap_paint(wmKeyConfig *keyconf)
   keymap->poll = image_texture_paint_poll;
 
   /* face-mask mode */
-  keymap = WM_keymap_ensure(keyconf, "Face Mask", 0, 0);
+  keymap = WM_keymap_ensure(keyconf, "Paint Face Mask (Weight, Vertex, Texture)", 0, 0);
   keymap->poll = facemask_paint_poll;
 
   /* paint stroke */

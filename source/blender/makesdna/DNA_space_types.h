@@ -676,7 +676,8 @@ typedef struct FileSelectParams {
   /** Text items name must match to be shown. */
   char filter_search[64];
   /** Same as filter, but for ID types (aka library groups). */
-  int filter_id;
+  int _pad0;
+  uint64_t filter_id;
 
   /** Active file used for keyboard navigation. */
   int active_file;
@@ -857,6 +858,7 @@ typedef enum eFileSel_File_Types {
   /** For all kinds of recognized import/export formats. No need for specialized types. */
   FILE_TYPE_OBJECT_IO = (1 << 17),
   FILE_TYPE_USD = (1 << 18),
+  FILE_TYPE_VOLUME = (1 << 19),
 
   /** An FS directory (i.e. S_ISDIR on its path is true). */
   FILE_TYPE_DIR = (1 << 30),

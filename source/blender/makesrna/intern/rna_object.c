@@ -234,6 +234,11 @@ const EnumPropertyItem rna_enum_object_type_items[] = {
     OBTYPE_CU_SURF,
     {OB_MBALL, "META", 0, "Meta", ""},
     OBTYPE_CU_FONT,
+#ifdef WITH_NEW_OBJECT_TYPES
+    {OB_HAIR, "HAIR", 0, "Hair", ""},
+    {OB_POINTCLOUD, "POINTCLOUD", 0, "PointCloud", ""},
+#endif
+    {OB_VOLUME, "VOLUME", 0, "Volume", ""},
     {0, "", 0, NULL, NULL},
     {OB_ARMATURE, "ARMATURE", 0, "Armature", ""},
     {OB_LATTICE, "LATTICE", 0, "Lattice", ""},
@@ -552,6 +557,14 @@ static StructRNA *rna_Object_data_typef(PointerRNA *ptr)
       return &RNA_LightProbe;
     case OB_GPENCIL:
       return &RNA_GreasePencil;
+#  ifdef WITH_NEW_OBJECT_TYPES
+    case OB_HAIR:
+      return &RNA_Hair;
+    case OB_POINTCLOUD:
+      return &RNA_PointCloud;
+#  endif
+    case OB_VOLUME:
+      return &RNA_Volume;
     default:
       return &RNA_ID;
   }
@@ -730,7 +743,7 @@ static void rna_VertexGroup_name_set(PointerRNA *ptr, const char *value)
   Object *ob = (Object *)ptr->owner_id;
   bDeformGroup *dg = (bDeformGroup *)ptr->data;
   BLI_strncpy_utf8(dg->name, value, sizeof(dg->name));
-  defgroup_unique_name(dg, ob);
+  BKE_object_defgroup_unique_name(dg, ob);
 }
 
 static int rna_VertexGroup_index_get(PointerRNA *ptr)
@@ -795,13 +808,13 @@ int rna_object_vgroup_name_index_length(PointerRNA *ptr, int index)
 void rna_object_vgroup_name_index_set(PointerRNA *ptr, const char *value, short *index)
 {
   Object *ob = (Object *)ptr->owner_id;
-  *index = defgroup_name_index(ob, value) + 1;
+  *index = BKE_object_defgroup_name_index(ob, value) + 1;
 }
 
 void rna_object_vgroup_name_set(PointerRNA *ptr, const char *value, char *result, int maxlen)
 {
   Object *ob = (Object *)ptr->owner_id;
-  bDeformGroup *dg = defgroup_find_name(ob, value);
+  bDeformGroup *dg = BKE_object_defgroup_find_name(ob, value);
   if (dg) {
     /* No need for BLI_strncpy_utf8, since this matches an existing group. */
     BLI_strncpy(result, value, maxlen);
@@ -3091,7 +3104,7 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "dtx", OB_USE_GPENCIL_LIGHTS);
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_ui_text(prop, "Use Lights", "Lights affect to grease pencil object");
+  RNA_def_property_ui_text(prop, "Use Lights", "Lights affect grease pencil object");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_GPencil_update");
 
   prop = RNA_def_property(srna, "show_transparent", PROP_BOOLEAN, PROP_NONE);

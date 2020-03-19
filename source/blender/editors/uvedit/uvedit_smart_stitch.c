@@ -1753,7 +1753,7 @@ static void stitch_draw_vbo(GPUVertBuf *vbo, GPUPrimType prim_type, const float 
 }
 
 /* TODO make things pretier : store batches inside StitchPreviewer instead of the bare verts pos */
-static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(ar), void *arg)
+static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(region), void *arg)
 {
 
   StitchStateContainer *ssc = (StitchStateContainer *)arg;
@@ -2254,8 +2254,8 @@ static bool goto_next_island(StitchStateContainer *ssc)
 
 static int stitch_init_all(bContext *C, wmOperator *op)
 {
-  ARegion *ar = CTX_wm_region(C);
-  if (!ar) {
+  ARegion *region = CTX_wm_region(C);
+  if (!region) {
     return 0;
   }
 
@@ -2399,7 +2399,8 @@ static int stitch_init_all(bContext *C, wmOperator *op)
 
   stitch_update_header(ssc, C);
 
-  ssc->draw_handle = ED_region_draw_cb_activate(ar->type, stitch_draw, ssc, REGION_DRAW_POST_VIEW);
+  ssc->draw_handle = ED_region_draw_cb_activate(
+      region->type, stitch_draw, ssc, REGION_DRAW_POST_VIEW);
 
   return 1;
 }
@@ -2548,10 +2549,10 @@ static StitchState *stitch_select(bContext *C,
   /* add uv under mouse to processed uv's */
   float co[2];
   UvNearestHit hit = UV_NEAREST_HIT_INIT;
-  ARegion *ar = CTX_wm_region(C);
+  ARegion *region = CTX_wm_region(C);
   Image *ima = CTX_data_edit_image(C);
 
-  UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
+  UI_view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
 
   if (ssc->mode == STITCH_VERT) {
     if (uv_find_nearest_vert_multi(scene, ima, ssc->objects, ssc->objects_len, co, 0.0f, &hit)) {
@@ -2607,13 +2608,13 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
       return OPERATOR_PASS_THROUGH;
 
       /* Cancel */
-    case ESCKEY:
+    case EVT_ESCKEY:
       stitch_cancel(C, op);
       return OPERATOR_CANCELLED;
 
     case LEFTMOUSE:
-    case PADENTER:
-    case RETKEY:
+    case EVT_PADENTER:
+    case EVT_RETKEY:
       if (event->val == KM_PRESS) {
         if (stitch_process_data(ssc, active_state, scene, true)) {
           stitch_exit(C, op, 1);
@@ -2628,7 +2629,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
         return OPERATOR_PASS_THROUGH;
       }
       /* Increase limit */
-    case PADPLUSKEY:
+    case EVT_PADPLUSKEY:
     case WHEELUPMOUSE:
       if (event->val == KM_PRESS && event->alt) {
         ssc->limit_dist += 0.01f;
@@ -2642,7 +2643,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
         return OPERATOR_PASS_THROUGH;
       }
       /* Decrease limit */
-    case PADMINUS:
+    case EVT_PADMINUS:
     case WHEELDOWNMOUSE:
       if (event->val == KM_PRESS && event->alt) {
         ssc->limit_dist -= 0.01f;
@@ -2658,7 +2659,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
       }
 
       /* Use Limit (Default off) */
-    case LKEY:
+    case EVT_LKEY:
       if (event->val == KM_PRESS) {
         ssc->use_limit = !ssc->use_limit;
         if (!stitch_process_data(ssc, active_state, scene, false)) {
@@ -2669,7 +2670,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
       }
       return OPERATOR_RUNNING_MODAL;
 
-    case IKEY:
+    case EVT_IKEY:
       if (event->val == KM_PRESS) {
         /* Move to next island and maybe next object */
 
@@ -2693,7 +2694,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
       }
       return OPERATOR_RUNNING_MODAL;
 
-    case MKEY:
+    case EVT_MKEY:
       if (event->val == KM_PRESS) {
         ssc->midpoints = !ssc->midpoints;
         if (!stitch_process_data(ssc, active_state, scene, false)) {
@@ -2721,7 +2722,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
       return OPERATOR_RUNNING_MODAL;
 
       /* snap islands on/off */
-    case SKEY:
+    case EVT_SKEY:
       if (event->val == KM_PRESS) {
         ssc->snap_islands = !ssc->snap_islands;
         if (!stitch_process_data(ssc, active_state, scene, false)) {
@@ -2735,7 +2736,7 @@ static int stitch_modal(bContext *C, wmOperator *op, const wmEvent *event)
       }
 
       /* switch between edge/vertex mode */
-    case TABKEY:
+    case EVT_TABKEY:
       if (event->val == KM_PRESS) {
         stitch_switch_selection_mode_all(ssc);
 

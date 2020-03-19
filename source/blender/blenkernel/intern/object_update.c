@@ -45,6 +45,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_effect.h"
 #include "BKE_gpencil_modifier.h"
+#include "BKE_hair.h"
 #include "BKE_image.h"
 #include "BKE_key.h"
 #include "BKE_layer.h"
@@ -56,8 +57,10 @@
 #include "BKE_object.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
+#include "BKE_pointcloud.h"
 #include "BKE_scene.h"
 #include "BKE_gpencil.h"
+#include "BKE_volume.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -225,6 +228,15 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
       BKE_gpencil_update_layer_parent(depsgraph, ob);
       break;
     }
+    case OB_HAIR:
+      BKE_hair_data_update(depsgraph, scene, ob);
+      break;
+    case OB_POINTCLOUD:
+      BKE_pointcloud_data_update(depsgraph, scene, ob);
+      break;
+    case OB_VOLUME:
+      BKE_volume_data_update(depsgraph, scene, ob);
+      break;
   }
 
   /* particles */
@@ -354,6 +366,15 @@ void BKE_object_batch_cache_dirty_tag(Object *ob)
     case OB_GPENCIL:
       BKE_gpencil_batch_cache_dirty_tag(ob->data);
       break;
+    case OB_HAIR:
+      BKE_hair_batch_cache_dirty_tag(ob->data, BKE_HAIR_BATCH_DIRTY_ALL);
+      break;
+    case OB_POINTCLOUD:
+      BKE_pointcloud_batch_cache_dirty_tag(ob->data, BKE_POINTCLOUD_BATCH_DIRTY_ALL);
+      break;
+    case OB_VOLUME:
+      BKE_volume_batch_cache_dirty_tag(ob->data, BKE_VOLUME_BATCH_DIRTY_ALL);
+      break;
   }
 }
 
@@ -407,8 +428,8 @@ void BKE_object_data_select_update(Depsgraph *depsgraph, ID *object_data)
 void BKE_object_select_update(Depsgraph *depsgraph, Object *object)
 {
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
-  if (object->type == OB_MESH && !object->runtime.is_mesh_eval_owned) {
-    Mesh *mesh_input = object->runtime.mesh_orig;
+  if (object->type == OB_MESH && !object->runtime.is_data_eval_owned) {
+    Mesh *mesh_input = (Mesh *)object->runtime.data_orig;
     Mesh_Runtime *mesh_runtime = &mesh_input->runtime;
     BLI_mutex_lock(mesh_runtime->eval_mutex);
     BKE_object_data_select_update(depsgraph, object->data);
