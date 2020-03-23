@@ -119,6 +119,8 @@ set(SRC
   intern/font.c
   intern/freestyle.c
   intern/gpencil.c
+  intern/gpencil_clip.c
+  intern/gpencil_geom.c
   intern/gpencil_modifier.c
   intern/hair.c
   intern/icons.c
@@ -299,6 +301,8 @@ set(SRC
   BKE_freestyle.h
   BKE_global.h
   BKE_gpencil.h
+  BKE_gpencil_clip.h
+  BKE_gpencil_geom.h
   BKE_gpencil_modifier.h
   BKE_hair.h
   BKE_icons.h
