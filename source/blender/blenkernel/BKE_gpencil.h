@@ -349,7 +349,7 @@ float* BKE_gpencil_stroke_perimeter_ex(const struct bGPdata *gpd,
 
 void BKE_gpencil_stroke_difference(struct bGPDstroke *gps_A, struct bGPDstroke *gps_B);
 
-int BKE_gpencil_stroke_resolve_self_overlapp(const struct RegionView3D *rv3d, struct bGPDstroke *gps);
+bool BKE_gpencil_stroke_resolve_self_overlapp(const struct RegionView3D *rv3d, struct bGPDstroke *gps);
 
 /* Iterator */
 /* frame & stroke are NULL if it is a layer callback. */

@@ -4490,27 +4490,86 @@ void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
  * A curve subchain is defined as a set of consecutive vertices having all the 
  * same type, where the type of a vertex can be convex or concave depending on 
  * whether it is left or right to the line that connects the vertex before and after.
+ * In short: the subchain curves in the same direction
  */
 typedef struct tCurveSubchain {
+  /* Listbase functonality */
   struct tCurveSubchain *next, *prev;
+  /* start and end index in flat float array */
   int idx_start, idx_end;
+  /* MER = minimal extreme ranges; angular range in wich the 
+   * sweep direction results in a minimum number of monotone chains */
   float mer_start, mer_end, mer_size;
 } tCurveSubchain;
 
 typedef struct tMonochainPoint {
+  /* Listbase functonality */
   struct tMonochainPoint *next, *prev;
+  /* 3d coords */
   float x, y, z;
-  int idx;
+  /* if point is an intersection, isect_pair points to
+   * the intersection point in the other chain, otherwise NULL */
+  struct tMonochainPoint *isect_pair;
 } tMonochainPoint;
 
 typedef struct tMonochain {
+  /* Listbase functonality */
   struct tMonochain *next, *prev;
+  /* Listbase of tMonochainPoint */
   ListBase points;
   int num_points;
   struct tMonochainPoint *front;
   int dir, idx_start, idx_end;
-  float min[2], max[2];
 } tMonochain;
+
+static short cmp_scl_tmonochain(void *data_a, void *data_b)
+{
+  tMonochain *c1 = (tMonochain *)data_a;
+  tMonochain *c2 = (tMonochain *)data_b;
+  if (c1->front->y > c2->front->y) {
+    return 1;
+  }
+  else if (c1->front->y < c2->front->y) {
+    return -1;
+  }
+  else {
+    return 0;
+  }
+}
+
+static bool isect_front_seg_tmonochains(ListBase *ovl, tMonochain *chain_a, tMonochain *chain_b)
+{
+  tMonochainPoint *p0_a = chain_a->front->prev;
+  tMonochainPoint *p1_a = chain_a->front;
+  tMonochainPoint *p0_b = chain_b->front->prev;
+  tMonochainPoint *p1_b = chain_b->front;
+
+  /* quick check: does the y-coordinate cross? */
+  if (((p0_a->y > p0_b->y) && (p1_a->y > p1_b->y)) ||
+      ((p0_a->y < p0_b->y) && (p1_a->y < p1_b->y))) {
+    return false;
+  }
+  
+  float isect_pt[2];
+  int status = isect_seg_seg_v2_point(&p0_a->x, &p1_a->x, &p0_b->x, &p1_b->x, isect_pt);
+  /* found intersection point */
+  if (status == 1) {
+    printf("Found intersection at: (%f, %f)\n", isect_pt[0], isect_pt[1]);
+    tMonochainPoint *new_pt_a = MEM_callocN(sizeof(tMonochainPoint), __func__);
+    copy_v2_v2(&new_pt_a->x, isect_pt);
+    new_pt_a->z = p0_a->z; //For now just copy on of the z values
+    BLI_addtail(ovl, new_pt_a);
+    tMonochainPoint *new_pt_b = MEM_dupallocN(new_pt_a);
+    new_pt_a->isect_pair = new_pt_b;
+    new_pt_b->isect_pair = new_pt_a;
+    BLI_insertlinkafter(&chain_a->points, p0_a, new_pt_a);
+    BLI_insertlinkafter(&chain_b->points, p0_b, new_pt_b);
+    chain_a->num_points++;
+    chain_b->num_points++;
+    return true;
+  }
+  return false;
+}
 
 /* Helper: check if point p is to the left of the line from prev to next */
 static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
@@ -4724,7 +4783,9 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
   int num_monochains = 0;
   int prev_dir = signum_i(points[3] - points[0]);
   /* cannot start with vertical direction, so force to one */
-  prev_dir = prev_dir == 0 ? 1 : prev_dir;
+  if (prev_dir == 0) {
+    prev_dir = 1;
+  }
 
   tMonochain *curr_chain = MEM_callocN(sizeof(tMonochain), __func__);
   curr_chain->idx_start = 0;
@@ -4733,15 +4794,13 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
   num_monochains++;
 
   tMonochainPoint *first_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
-  first_pt->idx = 0;
   copy_v3_v3(&first_pt->x, &points[0]);
   BLI_addtail(&curr_chain->points, first_pt);
-  curr_chain->min[1] = curr_chain->max[1] = first_pt->y;
+  //curr_chain->min[1] = curr_chain->max[1] = first_pt->y;
   curr_chain->num_points++;
 
   for (int i = 1; i < num_points - 1; i++) {
     tMonochainPoint *new_point = MEM_callocN(sizeof(tMonochainPoint), __func__);
-    new_point->idx = i*3;
     copy_v3_v3(&new_point->x, &points[i*3]);
 
     /* insert point so that monochain points are ordered in x direction */
@@ -4753,13 +4812,13 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
     }
     curr_chain->num_points++;
 
-    /* update y value of aabb of current chain */
-    if (new_point->y < curr_chain->min[1]) {
-      curr_chain->min[1] = new_point->y;
-    }
-    else if (new_point->y > curr_chain->max[1]) {
-      curr_chain->max[1] = new_point->y;
-    }
+    // /* update y value of aabb of current chain */
+    // if (new_point->y < curr_chain->min[1]) {
+    //   curr_chain->min[1] = new_point->y;
+    // }
+    // else if (new_point->y > curr_chain->max[1]) {
+    //   curr_chain->max[1] = new_point->y;
+    // }
 
     float curr_x = points[i*3];
     float next_x = points[(i+1)*3];
@@ -4773,12 +4832,12 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
 
       tMonochainPoint *first_point = MEM_dupallocN(new_point);
       BLI_addtail(&new_chain->points, first_point);
-      new_chain->min[1] = new_chain->max[1] = first_point->y;
+      // new_chain->min[1] = new_chain->max[1] = first_point->y;
       new_chain->num_points++;
 
       curr_chain->idx_end = i*3;
-      curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
-      curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
+      // curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
+      // curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
       curr_chain = new_chain;
     }
 
@@ -4786,7 +4845,6 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
   }
 
   tMonochainPoint *last_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
-  last_pt->idx = (num_points - 1)*3;
   copy_v3_v3(&last_pt->x, &points[(num_points - 1)*3]);
   if (curr_chain->dir == 1) {
     BLI_addtail(&curr_chain->points, last_pt);
@@ -4796,16 +4854,16 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
   }
   curr_chain->num_points++;
 
-  if (last_pt->y < curr_chain->min[1]) {
-    curr_chain->min[1] = last_pt->y;
-  }
-  else if (last_pt->y > curr_chain->max[1]) {
-    curr_chain->max[1] = last_pt->y;
-  }
+  // if (last_pt->y < curr_chain->min[1]) {
+  //   curr_chain->min[1] = last_pt->y;
+  // }
+  // else if (last_pt->y > curr_chain->max[1]) {
+  //   curr_chain->max[1] = last_pt->y;
+  // }
 
   curr_chain->idx_end = (num_points - 1)*3;
-  curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
-  curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
+  // curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
+  // curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
 
   return num_monochains;
 }
@@ -4813,7 +4871,7 @@ static int get_monochains(ListBase *monochain_list, float* points, int num_point
 void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, float sweep_angle)
 {
   ListBase monochains = {NULL, NULL};
-  float *rot_points = MEM_dupallocN(points);
+  float *rot_points =  MEM_dupallocN(points);
   rotate_stroke_points_by_angle(rot_points, num_points, sweep_angle);
   
   int num_monochains = get_monochains(&monochains, rot_points, num_points);
@@ -4822,11 +4880,18 @@ void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, flo
     printf("Monochain from %d to %d (%d)!\n", curr->idx_start, curr->idx_end, curr->num_points);
   }
 
+  /* at least 2 chains needed for potential intersection */
+  if (num_monochains <= 1) {
+    return;
+  }
+
+  /* Sweep-line algorithm */
   /* ACL = active chain list; set all monochains as active */
   Heap *acl = BLI_heap_new_ex(num_monochains);
   LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
-    curr->front = (tMonochainPoint *)curr->points.first;
-    BLI_heap_insert(acl, curr->min[0], curr);
+    /* use second vertex, as we iterate over the edges */
+    curr->front = ((tMonochainPoint *)(curr->points.first))->next;
+    BLI_heap_insert(acl, curr->front->x, curr);
   }
 
   /* SCL = Sweeping chain list; all chains that intersect the sweep line */
@@ -4834,30 +4899,70 @@ void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, flo
   /* OVL = output vertex list */
   ListBase ovl = {NULL, NULL};
 
-  /* while there is at least one active chain */
+  /* loop while there is at least one active chain */
   while(!BLI_heap_is_empty(acl)) {
     HeapNode *acl_top = BLI_heap_top(acl);
     tMonochain *active_chain = (tMonochain *)BLI_heap_node_ptr(acl_top);
-
-    /* advance front vertex of active chain */ 
-    active_chain->front = active_chain->front->next;
-
-    if (active_chain->front != NULL) {
-      BLI_heap_insert_or_update(acl, &acl_top, active_chain->front->x, active_chain);
+    printf("Monochain from %d to %d (%d)!\n", active_chain->idx_start, active_chain->idx_end, active_chain->num_points);
+    WAVL_Node *active_node = NULL;
+    if (active_chain->front->prev == active_chain->points.first) {
+      active_node = BLI_wavlTree_insert(scl, cmp_scl_tmonochain, active_chain);
     }
     else {
-      BLI_heap_remove(acl, acl_top);
+      active_node = BLI_wavlTree_search(scl, cmp_scl_tmonochain, active_chain);
+    }
+
+    /* get the segment above/below and test for intersection */
+    bool got_intersection = false;
+    WAVL_Node *above_node = BLI_wavlTree_successor_ex(active_node);
+    WAVL_Node *below_node = BLI_wavlTree_predecessor_ex(active_node);
+    if (above_node != NULL) {
+      tMonochain *above_chain = (tMonochain *)above_node->data;
+      if(isect_front_seg_tmonochains(&ovl, active_chain, above_chain)) {
+        /* swap data links */
+        tMonochain *tmp = (tMonochain *)above_node->data;
+        above_node->data = active_node->data;
+        active_node->data = tmp;
+        got_intersection = true;
+      }
+    }
+    if (below_node != NULL) {
+      tMonochain *below_chain = (tMonochain *)below_node->data;
+      if(isect_front_seg_tmonochains(&ovl, active_chain, below_chain)) {
+        /* swap data links */
+        tMonochain *tmp = (tMonochain *)below_node->data;
+        below_node->data = active_node->data;
+        active_node->data = tmp;
+        got_intersection = true;
+      }
+    }
+
+    if (!got_intersection) {
+      /* advance front vertex of active chain */
+      active_chain->front = active_chain->front->next;
+      if (active_chain->front != NULL) {
+      BLI_heap_insert_or_update(acl, &acl_top, active_chain->front->x, active_chain);
+      }
+      else {
+        /* end of chain: remove from heap and tree */
+        BLI_heap_remove(acl, acl_top);
+        BLI_wavlTree_delete_node(scl, NULL, active_node);
+      }
     }
   }
 
+  /* TODO: convert monochains back to stroke */
+
   // free temp data
   BLI_heap_free(acl, NULL);
+  BLI_wavlTree_free(scl, NULL);
   free_monochains(&monochains);
   MEM_freeN(rot_points);
 }
 
-int BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstroke *gps)
+bool BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstroke *gps)
 {
+  /* TODO: convert stroke to double linked list of 2d points */
   /* Get subchains */
   ListBase chain_list = {NULL, NULL};
   int num_points = gps->totpoints;
@@ -4865,10 +4970,10 @@ int BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstrok
   int num_chains;
   if ((num_chains = get_stroke_subchainlist(&chain_list, points, gps->totpoints)) == 0) {
     MEM_SAFE_FREE(points);
-    return 0;
+    return false;
   }
 
-  float sweep_angle = get_optimal_sweep_angle(&chain_list);
+  float sweep_angle = 0.0f;//get_optimal_sweep_angle(&chain_list);
   printf("Optimal angle: %f\n", sweep_angle);
 
   BKE_gpencil_stroke_find_intersections_ex(points, num_points, sweep_angle);
@@ -4882,7 +4987,7 @@ int BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstrok
   }
   BLI_freelistN(&chain_list);
   MEM_SAFE_FREE(points);
-  return 1;
+  return true;
 }
 
 /* -------------------------------------------------------------------- */
