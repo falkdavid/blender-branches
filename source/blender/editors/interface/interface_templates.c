@@ -19,34 +19,34 @@
  */
 
 #include <ctype.h>
-#include <stdlib.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_brush_types.h"
 #include "DNA_cachefile_types.h"
 #include "DNA_constraint_types.h"
-#include "DNA_node_types.h"
-#include "DNA_scene_types.h"
-#include "DNA_object_types.h"
-#include "DNA_object_force_types.h"
-#include "DNA_brush_types.h"
-#include "DNA_texture_types.h"
-#include "DNA_gpencil_modifier_types.h"
-#include "DNA_shader_fx_types.h"
 #include "DNA_curveprofile_types.h"
+#include "DNA_gpencil_modifier_types.h"
+#include "DNA_node_types.h"
+#include "DNA_object_force_types.h"
+#include "DNA_object_types.h"
+#include "DNA_scene_types.h"
+#include "DNA_shader_fx_types.h"
+#include "DNA_texture_types.h"
 
-#include "BLI_utildefines.h"
 #include "BLI_alloca.h"
-#include "BLI_string.h"
-#include "BLI_ghash.h"
-#include "BLI_rect.h"
-#include "BLI_math.h"
-#include "BLI_listbase.h"
 #include "BLI_fnmatch.h"
+#include "BLI_ghash.h"
+#include "BLI_listbase.h"
+#include "BLI_math.h"
 #include "BLI_path_util.h"
+#include "BLI_rect.h"
+#include "BLI_string.h"
 #include "BLI_timecode.h"
+#include "BLI_utildefines.h"
 
 #include "BLF_api.h"
 #include "BLT_translation.h"
@@ -56,10 +56,11 @@
 #include "BKE_colortools.h"
 #include "BKE_constraint.h"
 #include "BKE_context.h"
+#include "BKE_curveprofile.h"
 #include "BKE_global.h"
 #include "BKE_gpencil_modifier.h"
-#include "BKE_idcode.h"
 #include "BKE_idprop.h"
+#include "BKE_idtype.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_override.h"
@@ -70,7 +71,6 @@
 #include "BKE_packedFile.h"
 #include "BKE_paint.h"
 #include "BKE_particle.h"
-#include "BKE_curveprofile.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
@@ -80,9 +80,9 @@
 #include "DEG_depsgraph_build.h"
 
 #include "ED_fileselect.h"
-#include "ED_screen.h"
 #include "ED_object.h"
 #include "ED_render.h"
+#include "ED_screen.h"
 #include "ED_undo.h"
 
 #include "RNA_access.h"
@@ -687,7 +687,7 @@ static const char *template_id_browse_tip(const StructRNA *type)
 static const char *template_id_context(StructRNA *type)
 {
   if (type) {
-    return BKE_idcode_to_translation_context(RNA_type_to_ID_code(type));
+    return BKE_idtype_idcode_to_translation_context(RNA_type_to_ID_code(type));
   }
   return BLT_I18NCONTEXT_DEFAULT;
 }
@@ -2779,7 +2779,8 @@ void uiTemplatePreview(uiLayout *layout,
 
   if (!preview_id || (preview_id[0] == '\0')) {
     /* If no identifier given, generate one from ID type. */
-    BLI_snprintf(_preview_id, UI_MAX_NAME_STR, "uiPreview_%s", BKE_idcode_to_name(GS(id->name)));
+    BLI_snprintf(
+        _preview_id, UI_MAX_NAME_STR, "uiPreview_%s", BKE_idtype_idcode_to_name(GS(id->name)));
     preview_id = _preview_id;
   }
 

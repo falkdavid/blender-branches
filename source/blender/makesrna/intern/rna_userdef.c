@@ -21,22 +21,22 @@
 #include <limits.h>
 #include <stdlib.h>
 
+#include "DNA_brush_types.h"
 #include "DNA_curve_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
-#include "DNA_brush_types.h"
 #include "DNA_view3d_types.h"
-#include "DNA_scene_types.h"
 
-#include "BLI_utildefines.h"
 #include "BLI_math_base.h"
 #include "BLI_math_rotation.h"
+#include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
 
+#include "BKE_addon.h"
 #include "BKE_appdir.h"
 #include "BKE_sound.h"
-#include "BKE_addon.h"
 #include "BKE_studiolight.h"
 
 #include "RNA_access.h"
@@ -181,8 +181,8 @@ static const EnumPropertyItem rna_enum_userdef_viewport_aa_items[] = {
 #  include "BKE_idprop.h"
 #  include "BKE_main.h"
 #  include "BKE_mesh_runtime.h"
-#  include "BKE_pbvh.h"
 #  include "BKE_paint.h"
+#  include "BKE_pbvh.h"
 #  include "BKE_screen.h"
 
 #  include "DEG_depsgraph.h"
@@ -194,8 +194,8 @@ static const EnumPropertyItem rna_enum_userdef_viewport_aa_items[] = {
 
 #  include "BLI_path_util.h"
 
-#  include "MEM_guardedalloc.h"
 #  include "MEM_CacheLimiterC-Api.h"
+#  include "MEM_guardedalloc.h"
 
 #  include "UI_interface.h"
 
@@ -3729,12 +3729,12 @@ static void rna_def_userdef_themes(BlenderRNA *brna)
       {0, "USER_INTERFACE", ICON_WORKSPACE, "User Interface", ""},
       {19, "STYLE", ICON_FONTPREVIEW, "Text Style", ""},
       {18, "BONE_COLOR_SETS", ICON_COLOR, "Bone Color Sets", ""},
-      {1, "VIEW_3D", ICON_VIEW3D, "3D View", ""},
+      {1, "VIEW_3D", ICON_VIEW3D, "3D Viewport", ""},
       {3, "GRAPH_EDITOR", ICON_GRAPH, "Graph Editor", ""},
       {4, "DOPESHEET_EDITOR", ICON_ACTION, "Dope Sheet", ""},
       {5, "NLA_EDITOR", ICON_NLA, "Nonlinear Animation", ""},
       {6, "IMAGE_EDITOR", ICON_IMAGE, "UV/Image Editor", ""},
-      {7, "SEQUENCE_EDITOR", ICON_SEQUENCE, "Video Sequence Editor", ""},
+      {7, "SEQUENCE_EDITOR", ICON_SEQUENCE, "Video Sequencer", ""},
       {8, "TEXT_EDITOR", ICON_TEXT, "Text Editor", ""},
       {9, "NODE_EDITOR", ICON_NODETREE, "Node Editor", ""},
       {11, "PROPERTIES", ICON_PROPERTIES, "Properties", ""},
