@@ -20,19 +20,19 @@
 
 #include "MEM_guardedalloc.h"
 
-#include <stdlib.h>
 #include "BLI_listbase.h"
-#include "BLI_utildefines.h"
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
+#include "BLI_utildefines.h"
+#include <stdlib.h>
 
-#include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
+#include "IMB_imbuf_types.h"
 
+#include "DNA_brush_types.h"
 #include "DNA_customdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_brush_types.h"
 
 #include "BKE_brush.h"
 #include "BKE_context.h"
@@ -42,13 +42,13 @@
 #include "BKE_paint.h"
 #include "BKE_report.h"
 
+#include "ED_image.h"
 #include "ED_paint.h"
 #include "ED_screen.h"
-#include "ED_image.h"
 
 #include "WM_api.h"
-#include "WM_types.h"
 #include "WM_toolsystem.h"
+#include "WM_types.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -377,17 +377,6 @@ static void PALETTE_OT_extract_from_image(wmOperatorType *ot)
 }
 
 /* Sort Palette color by Hue and Saturation. */
-static bool palette_sort_poll(bContext *C)
-{
-  Paint *paint = BKE_paint_get_active_from_context(C);
-  Palette *palette = paint->palette;
-  if (palette) {
-    return true;
-  }
-
-  return false;
-}
-
 static int palette_sort_exec(bContext *C, wmOperator *op)
 {
   const int type = RNA_enum_get(op->ptr, "type");
@@ -477,7 +466,7 @@ static void PALETTE_OT_sort(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = palette_sort_exec;
-  ot->poll = palette_sort_poll;
+  ot->poll = palette_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -522,7 +511,7 @@ static void PALETTE_OT_color_move(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = palette_color_move_exec;
-  ot->poll = palette_sort_poll;
+  ot->poll = palette_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -531,17 +520,6 @@ static void PALETTE_OT_color_move(wmOperatorType *ot)
 }
 
 /* Join Palette swatches. */
-static bool palette_join_poll(bContext *C)
-{
-  Paint *paint = BKE_paint_get_active_from_context(C);
-  Palette *palette = paint->palette;
-  if (palette) {
-    return true;
-  }
-
-  return false;
-}
-
 static int palette_join_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -599,7 +577,7 @@ static void PALETTE_OT_join(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = palette_join_exec;
-  ot->poll = palette_join_poll;
+  ot->poll = palette_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -1035,14 +1013,14 @@ static int stencil_control_modal(bContext *C, wmOperator *op, const wmEvent *eve
     case MOUSEMOVE:
       stencil_control_calculate(scd, event->mval);
       break;
-    case ESCKEY:
+    case EVT_ESCKEY:
       if (event->val == KM_PRESS) {
         stencil_control_cancel(C, op);
         WM_event_add_notifier(C, NC_WINDOW, NULL);
         return OPERATOR_CANCELLED;
       }
       break;
-    case XKEY:
+    case EVT_XKEY:
       if (event->val == KM_PRESS) {
 
         if (scd->constrain_mode == STENCIL_CONSTRAINT_X) {
@@ -1055,7 +1033,7 @@ static int stencil_control_modal(bContext *C, wmOperator *op, const wmEvent *eve
         stencil_control_calculate(scd, event->mval);
       }
       break;
-    case YKEY:
+    case EVT_YKEY:
       if (event->val == KM_PRESS) {
         if (scd->constrain_mode == STENCIL_CONSTRAINT_Y) {
           scd->constrain_mode = 0;

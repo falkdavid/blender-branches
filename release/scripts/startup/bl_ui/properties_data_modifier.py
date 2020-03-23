@@ -665,7 +665,19 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "offset_v")
 
     def MULTIRES(self, layout, ob, md):
-        layout.row().prop(md, "subdivision_type", expand=True)
+        # Changing some of the properties can not be done once there is an
+        # actual displacement stored for this multires modifier. This check
+        # will disallow those properties from change.
+        # This is a bit stupid check but should be sufficient for the usual
+        # multires usage. It might become less strict and only disallow
+        # modifications if there is CD_MDISPS layer, or if there is actual
+        # non-zero displacement but such checks will be too slow to be done
+        # on every redraw.
+        have_displacement = (md.total_levels != 0)
+
+        row = layout.row()
+        row.enabled = not have_displacement
+        row.prop(md, "subdivision_type", expand=True)
 
         split = layout.split()
         col = split.column()
@@ -673,7 +685,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         # TODO(sergey): Expose it again after T58473 is solved.
         # col.prop(md, "sculpt_levels", text="Sculpt")
         col.prop(md, "render_levels", text="Render")
-        col.prop(md, "quality")
+
+        row = col.row()
+        row.enabled = not have_displacement
+        row.prop(md, "quality")
 
         col = split.column()
 
@@ -724,6 +739,19 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.prop(md, "resolution")
         col.prop(md, "size")
         col.prop(md, "spatial_size")
+
+        layout.separator()
+
+        layout.prop(md, "spectrum")
+
+        if md.spectrum in {'TEXEL_MARSEN_ARSLOE', 'JONSWAP'}:
+            split = layout.split()
+
+            col = split.column()
+            col.prop(md, "sharpen_peak_jonswap")
+
+            col = split.column()
+            col.prop(md, "fetch_jonswap")
 
         layout.label(text="Waves:")
 
@@ -1878,16 +1906,34 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         self.gpencil_masking(layout, ob, md, True, True)
 
     def GP_TINT(self, layout, ob, md):
-        split = layout.split()
+        layout.row().prop(md, "tint_type", expand=True)
 
-        col = split.column()
-        col.prop(md, "color")
-        col.prop(md, "factor")
+        if md.tint_type == 'UNIFORM':
+            col = layout.column()
+            col.prop(md, "color")
 
-        row = layout.row()
-        row.prop(md, "modify_color")
+            col.separator()
+            col.prop(md, "factor")
 
-        self.gpencil_masking(layout, ob, md, False, True)
+        if md.tint_type == 'GRADIENT':
+            col = layout.column()
+            col.label(text="Colors:")
+            col.template_color_ramp(md, "colors")
+
+            col.separator()
+
+            col.label(text="Object:")
+            col.prop(md, "object", text="")
+
+            col.separator()
+            row = col.row(align=True)
+            row.prop(md, "radius")
+            row.prop(md, "factor")
+
+        col.separator()
+        col.prop(md, "vertex_mode")
+
+        self.gpencil_masking(layout, ob, md, True, True)
 
     def GP_TIME(self, layout, ob, md):
         gpd = ob.data
@@ -1950,16 +1996,21 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         split = layout.split()
 
         col = split.column()
-        col.prop(md, "normalize_opacity")
-        if md.normalize_opacity is True:
-            text="Strength"
-        else:
-            text="Opacity Factor"
-
-        col.prop(md, "factor", text=text)
         col.prop(md, "modify_color")
 
-        self.gpencil_masking(layout, ob, md, True, True)
+        if md.modify_color == 'HARDENESS':
+            col.prop(md, "hardeness")
+            show = False
+        else:
+            col.prop(md, "normalize_opacity")
+            if md.normalize_opacity is True:
+                text="Strength"
+            else:
+                text="Opacity Factor"
+
+            col.prop(md, "factor", text=text)
+            show = True
+        self.gpencil_masking(layout, ob, md, show, show)
 
     def GP_ARRAY(self, layout, ob, md):
         col = layout.column()
@@ -2028,13 +2079,22 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
         sub.prop(md, "frame_start", text="Start")
         sub.prop(md, "frame_end", text="End")
 
-        col = layout.column()
-        col.separator()
-        col.label(text="Layer:")
-        row = col.row(align=True)
+        layout.label(text="Influence Filters:")
+
+        split = layout.split(factor=0.25)
+
+        col1 = split.column()
+
+        col1.label(text="Layer:")
+
+        col2 = split.column()
+
+        split = col2.split(factor=0.6)
+        row = split.row(align=True)
         row.prop_search(md, "layer", gpd, "layers", text="", icon='GREASEPENCIL')
         row.prop(md, "invert_layers", text="", icon='ARROW_LEFTRIGHT')
-        row = layout.row(align=True)
+
+        row = split.row(align=True)
         row.prop(md, "layer_pass", text="Pass")
         row.prop(md, "invert_layer_pass", text="", icon='ARROW_LEFTRIGHT')
 
@@ -2142,25 +2202,6 @@ class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
             subcol.prop(md, "fading_opacity", slider=True)
 
         self.gpencil_masking(layout, ob, md, False)
-
-    def GP_VERTEXCOLOR(self, layout, ob, md):
-        col = layout.column()
-        col.label(text="Object:")
-        col.prop(md, "object", text="")
-
-        col.separator()
-        row = col.row(align=True)
-        row.prop(md, "radius")
-        row.prop(md, "factor", text="Strength", slider=True)
-
-        col.separator()
-        col.label(text="Colors:")
-        col.template_color_ramp(md, "colors")
-
-        col.separator()
-        col.prop(md, "vertex_mode")
-
-        self.gpencil_masking(layout, ob, md, True, True)
 
 
 classes = (

@@ -33,8 +33,8 @@
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
-#include "BKE_material.h"
 #include "BKE_main.h"
+#include "BKE_material.h"
 #include "BKE_mball.h"
 #include "BKE_modifier.h"
 #include "BKE_multires.h"
@@ -105,8 +105,8 @@ static int foreach_libblock_remap_callback(LibraryIDLinkCallbackData *cb_data)
   ID *old_id = id_remap_data->old_id;
   ID *new_id = id_remap_data->new_id;
 
-  /* Those asserts ensure the general sanity of ID tags regarding 'embeded' ID data (root nodetrees
-   * and co). */
+  /* Those asserts ensure the general sanity of ID tags regarding 'embedded' ID data (root
+   * nodetrees and co). */
   BLI_assert(id_owner == id_remap_data->id_owner);
   BLI_assert(id_self == id_owner || (id_self->flag & LIB_EMBEDDED_DATA) != 0);
 
@@ -520,6 +520,9 @@ void BKE_libblock_remap_locked(Main *bmain, void *old_idv, void *new_idv, const 
     case ID_ME:
     case ID_CU:
     case ID_MB:
+    case ID_HA:
+    case ID_PT:
+    case ID_VO:
       if (new_id) { /* Only affects us in case obdata was relinked (changed). */
         for (Object *ob = bmain->objects.first; ob; ob = ob->id.next) {
           libblock_remap_data_postprocess_obdata_relink(bmain, ob, new_id);

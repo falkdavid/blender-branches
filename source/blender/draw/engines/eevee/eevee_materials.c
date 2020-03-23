@@ -22,9 +22,9 @@
 
 #include "DRW_render.h"
 
+#include "BLI_alloca.h"
 #include "BLI_dynstr.h"
 #include "BLI_ghash.h"
-#include "BLI_alloca.h"
 #include "BLI_math_bits.h"
 #include "BLI_rand.h"
 #include "BLI_string_utils.h"
@@ -32,9 +32,10 @@
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 
-#include "DNA_world_types.h"
+#include "DNA_hair_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_view3d_types.h"
+#include "DNA_world_types.h"
 
 #include "GPU_material.h"
 
@@ -89,6 +90,7 @@ extern char datatoc_common_hair_lib_glsl[];
 extern char datatoc_common_view_lib_glsl[];
 extern char datatoc_irradiance_lib_glsl[];
 extern char datatoc_octahedron_lib_glsl[];
+extern char datatoc_cubemap_lib_glsl[];
 extern char datatoc_lit_surface_frag_glsl[];
 extern char datatoc_lit_surface_vert_glsl[];
 extern char datatoc_raytrace_lib_glsl[];
@@ -618,6 +620,7 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
                                               datatoc_raytrace_lib_glsl,
                                               datatoc_ssr_lib_glsl,
                                               datatoc_octahedron_lib_glsl,
+                                              datatoc_cubemap_lib_glsl,
                                               datatoc_irradiance_lib_glsl,
                                               datatoc_lightprobe_lib_glsl,
                                               datatoc_ltc_lib_glsl,
@@ -641,6 +644,7 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
                                                 datatoc_bsdf_common_lib_glsl,
                                                 datatoc_ambient_occlusion_lib_glsl,
                                                 datatoc_octahedron_lib_glsl,
+                                                datatoc_cubemap_lib_glsl,
                                                 datatoc_irradiance_lib_glsl,
                                                 datatoc_lightprobe_lib_glsl,
                                                 datatoc_ltc_lib_glsl,
@@ -1018,7 +1022,7 @@ static struct DRWShadingGroup *EEVEE_default_shading_group_get(EEVEE_ViewLayerDa
 
   EEVEE_PassList *psl = vedata->psl;
 
-  BLI_assert(!is_hair || (ob && psys && md));
+  BLI_assert(!is_hair || (ob && ((psys && md) || ob->type == OB_HAIR)));
 
   SET_FLAG_FROM_TEST(options, is_hair, VAR_MAT_HAIR);
   SET_FLAG_FROM_TEST(options, holdout, VAR_MAT_HOLDOUT);
@@ -1263,7 +1267,7 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), NULL);
   }
 
-  if (LOOK_DEV_OVERLAY_ENABLED(draw_ctx->v3d)) {
+  if (eevee_hdri_preview_overlay_enabled(draw_ctx->v3d)) {
     DRWShadingGroup *shgrp;
 
     struct GPUBatch *sphere = DRW_cache_sphere_get();
@@ -1712,7 +1716,12 @@ BLI_INLINE Material *eevee_object_material_get(Object *ob, int slot)
 {
   Material *ma = BKE_object_material_get(ob, slot + 1);
   if (ma == NULL) {
-    ma = BKE_material_default_empty();
+    if (ob->type == OB_VOLUME) {
+      ma = BKE_material_default_volume();
+    }
+    else {
+      ma = BKE_material_default_empty();
+    }
   }
   return ma;
 }
@@ -2059,6 +2068,14 @@ void EEVEE_particle_hair_cache_populate(EEVEE_Data *vedata,
       }
     }
   }
+}
+
+void EEVEE_object_hair_cache_populate(EEVEE_Data *vedata,
+                                      EEVEE_ViewLayerData *sldata,
+                                      Object *ob,
+                                      bool *cast_shadow)
+{
+  eevee_hair_cache_populate(vedata, sldata, ob, NULL, NULL, HAIR_MATERIAL_NR, cast_shadow);
 }
 
 void EEVEE_materials_cache_finish(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
