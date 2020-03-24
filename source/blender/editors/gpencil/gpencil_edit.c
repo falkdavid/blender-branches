@@ -51,6 +51,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
+#include "BKE_gpencil_clip.h"
 #include "BKE_gpencil_geom.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
@@ -5029,12 +5030,33 @@ static int gp_stroke_clip_exec(bContext *C)
   }
 
   bool changed = false;
-  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (gps->flag & GP_STROKE_SELECT) {
-      changed = (bool)BKE_gpencil_stroke_resolve_self_overlapp(rv3d, gps);
+
+  const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+
+  CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
+    bGPDframe *init_gpf = (is_multiedit_) ? gpl->frames.first : gpl->actframe;
+
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && is_multiedit_)) {
+        /* loop over strokes */
+        bGPDstroke *gps, *gps_next;
+
+        for (gps = gpf->strokes.first; gps; gps = gps_next) {
+          gps_next = gps->next;
+
+          if (gps->flag & GP_STROKE_SELECT) {
+            bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline(rv3d, gpl, gps);
+            if (clipped_stroke != NULL) {
+              /* add to frame */
+              BLI_addhead(&gpf->strokes, clipped_stroke);
+              changed = true;
+            }
+          }
+        }
+      }
     }
   }
-  GP_EDITABLE_STROKES_END(gpstroke_iter);
+  CTX_DATA_END;
 
   /* notifiers */
   if (changed) {

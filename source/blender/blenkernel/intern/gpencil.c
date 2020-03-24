@@ -2505,512 +2505,512 @@ void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
   BKE_gpencil_stroke_geometry_update(gps_A);
 }
 
-/* ----------------------------------------------------------------------------- */
-/* Stroke clipping */
+// /* ----------------------------------------------------------------------------- */
+// /* Stroke clipping */
 
-/**
- * A curve subchain is defined as a set of consecutive vertices having all the 
- * same type, where the type of a vertex can be convex or concave depending on 
- * whether it is left or right to the line that connects the vertex before and after.
- * In short: the subchain curves in the same direction
- */
-typedef struct tCurveSubchain {
-  /* Listbase functonality */
-  struct tCurveSubchain *next, *prev;
-  /* start and end index in flat float array */
-  int idx_start, idx_end;
-  /* MER = minimal extreme ranges; angular range in wich the 
-   * sweep direction results in a minimum number of monotone chains */
-  float mer_start, mer_end, mer_size;
-} tCurveSubchain;
+// /**
+//  * A curve subchain is defined as a set of consecutive vertices having all the 
+//  * same type, where the type of a vertex can be convex or concave depending on 
+//  * whether it is left or right to the line that connects the vertex before and after.
+//  * In short: the subchain curves in the same direction
+//  */
+// typedef struct tCurveSubchain {
+//   /* Listbase functonality */
+//   struct tCurveSubchain *next, *prev;
+//   /* start and end index in flat float array */
+//   int idx_start, idx_end;
+//   /* MER = minimal extreme ranges; angular range in wich the 
+//    * sweep direction results in a minimum number of monotone chains */
+//   float mer_start, mer_end, mer_size;
+// } tCurveSubchain;
 
-typedef struct tMonochainPoint {
-  /* Listbase functonality */
-  struct tMonochainPoint *next, *prev;
-  /* 3d coords */
-  float x, y, z;
-  /* if point is an intersection, isect_pair points to
-   * the intersection point in the other chain, otherwise NULL */
-  struct tMonochainPoint *isect_pair;
-} tMonochainPoint;
+// typedef struct tMonochainPoint {
+//   /* Listbase functonality */
+//   struct tMonochainPoint *next, *prev;
+//   /* 3d coords */
+//   float x, y, z;
+//   /* if point is an intersection, isect_pair points to
+//    * the intersection point in the other chain, otherwise NULL */
+//   struct tMonochainPoint *isect_pair;
+// } tMonochainPoint;
 
-typedef struct tMonochain {
-  /* Listbase functonality */
-  struct tMonochain *next, *prev;
-  /* Listbase of tMonochainPoint */
-  ListBase points;
-  int num_points;
-  struct tMonochainPoint *front;
-  int dir, idx_start, idx_end;
-} tMonochain;
+// typedef struct tMonochain {
+//   /* Listbase functonality */
+//   struct tMonochain *next, *prev;
+//   /* Listbase of tMonochainPoint */
+//   ListBase points;
+//   int num_points;
+//   struct tMonochainPoint *front;
+//   int dir, idx_start, idx_end;
+// } tMonochain;
 
-static short cmp_scl_tmonochain(void *data_a, void *data_b)
-{
-  tMonochain *c1 = (tMonochain *)data_a;
-  tMonochain *c2 = (tMonochain *)data_b;
-  if (c1->front->y > c2->front->y) {
-    return 1;
-  }
-  else if (c1->front->y < c2->front->y) {
-    return -1;
-  }
-  else {
-    return 0;
-  }
-}
+// static short cmp_scl_tmonochain(void *data_a, void *data_b)
+// {
+//   tMonochain *c1 = (tMonochain *)data_a;
+//   tMonochain *c2 = (tMonochain *)data_b;
+//   if (c1->front->y > c2->front->y) {
+//     return 1;
+//   }
+//   else if (c1->front->y < c2->front->y) {
+//     return -1;
+//   }
+//   else {
+//     return 0;
+//   }
+// }
 
-static bool isect_front_seg_tmonochains(ListBase *ovl, tMonochain *chain_a, tMonochain *chain_b)
-{
-  tMonochainPoint *p0_a = chain_a->front->prev;
-  tMonochainPoint *p1_a = chain_a->front;
-  tMonochainPoint *p0_b = chain_b->front->prev;
-  tMonochainPoint *p1_b = chain_b->front;
+// static bool isect_front_seg_tmonochains(ListBase *ovl, tMonochain *chain_a, tMonochain *chain_b)
+// {
+//   tMonochainPoint *p0_a = chain_a->front->prev;
+//   tMonochainPoint *p1_a = chain_a->front;
+//   tMonochainPoint *p0_b = chain_b->front->prev;
+//   tMonochainPoint *p1_b = chain_b->front;
 
-  /* quick check: does the y-coordinate cross? */
-  if (((p0_a->y > p0_b->y) && (p1_a->y > p1_b->y)) ||
-      ((p0_a->y < p0_b->y) && (p1_a->y < p1_b->y))) {
-    return false;
-  }
+//   /* quick check: does the y-coordinate cross? */
+//   if (((p0_a->y > p0_b->y) && (p1_a->y > p1_b->y)) ||
+//       ((p0_a->y < p0_b->y) && (p1_a->y < p1_b->y))) {
+//     return false;
+//   }
   
-  float isect_pt[2];
-  int status = isect_seg_seg_v2_point(&p0_a->x, &p1_a->x, &p0_b->x, &p1_b->x, isect_pt);
-  /* found intersection point */
-  if (status == 1) {
-    printf("Found intersection at: (%f, %f)\n", isect_pt[0], isect_pt[1]);
-    tMonochainPoint *new_pt_a = MEM_callocN(sizeof(tMonochainPoint), __func__);
-    copy_v2_v2(&new_pt_a->x, isect_pt);
-    new_pt_a->z = p0_a->z; //For now just copy on of the z values
-    BLI_addtail(ovl, new_pt_a);
-    tMonochainPoint *new_pt_b = MEM_dupallocN(new_pt_a);
-    new_pt_a->isect_pair = new_pt_b;
-    new_pt_b->isect_pair = new_pt_a;
-    BLI_insertlinkafter(&chain_a->points, p0_a, new_pt_a);
-    BLI_insertlinkafter(&chain_b->points, p0_b, new_pt_b);
-    chain_a->num_points++;
-    chain_b->num_points++;
-    return true;
-  }
-  return false;
-}
+//   float isect_pt[2];
+//   int status = isect_seg_seg_v2_point(&p0_a->x, &p1_a->x, &p0_b->x, &p1_b->x, isect_pt);
+//   /* found intersection point */
+//   if (status == 1) {
+//     printf("Found intersection at: (%f, %f)\n", isect_pt[0], isect_pt[1]);
+//     tMonochainPoint *new_pt_a = MEM_callocN(sizeof(tMonochainPoint), __func__);
+//     copy_v2_v2(&new_pt_a->x, isect_pt);
+//     new_pt_a->z = p0_a->z; //For now just copy on of the z values
+//     BLI_addtail(ovl, new_pt_a);
+//     tMonochainPoint *new_pt_b = MEM_dupallocN(new_pt_a);
+//     new_pt_a->isect_pair = new_pt_b;
+//     new_pt_b->isect_pair = new_pt_a;
+//     BLI_insertlinkafter(&chain_a->points, p0_a, new_pt_a);
+//     BLI_insertlinkafter(&chain_b->points, p0_b, new_pt_b);
+//     chain_a->num_points++;
+//     chain_b->num_points++;
+//     return true;
+//   }
+//   return false;
+// }
 
-/* Helper: check if point p is to the left of the line from prev to next */
-static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
-{
-  float a = ((next[0] - p[0])*(p[1] - prev[1]) - (next[1] - p[1])*(p[0] - prev[0]));
-  if (a > 0.0f) {
-    return 1;
-  }
-  else if (a < 0.0f) {
-    return -1;
-  }
-  return 0; // point is on the line
-}
+// /* Helper: check if point p is to the left of the line from prev to next */
+// static int stroke_point_is_convex(float prev[2], float next[2], float p[2])
+// {
+//   float a = ((next[0] - p[0])*(p[1] - prev[1]) - (next[1] - p[1])*(p[0] - prev[0]));
+//   if (a > 0.0f) {
+//     return 1;
+//   }
+//   else if (a < 0.0f) {
+//     return -1;
+//   }
+//   return 0; // point is on the line
+// }
 
-/* Helper: the MER (minimal-extreme-range) is the angluar range in which
- * the sweeping direction results in a minimum amount of extremes and
- * therefor monotone chains for the specific subchain.
- **/
-static void calc_subchain_mer(float *points, tCurveSubchain *chain)
-{
-  float v1[2];
-  float v2[2];
-  sub_v2_v2v2(v1, &points[chain->idx_start + 3], &points[chain->idx_start]);
-  sub_v2_v2v2(v2, &points[chain->idx_end - 3], &points[chain->idx_end]);
+// /* Helper: the MER (minimal-extreme-range) is the angluar range in which
+//  * the sweeping direction results in a minimum amount of extremes and
+//  * therefor monotone chains for the specific subchain.
+//  **/
+// static void calc_subchain_mer(float *points, tCurveSubchain *chain)
+// {
+//   float v1[2];
+//   float v2[2];
+//   sub_v2_v2v2(v1, &points[chain->idx_start + 3], &points[chain->idx_start]);
+//   sub_v2_v2v2(v2, &points[chain->idx_end - 3], &points[chain->idx_end]);
 
-  float nv1[2];
-  float nv2[2];
-  ortho_v2_v2(nv1, v1);
-  ortho_v2_v2(nv2, v2);
+//   float nv1[2];
+//   float nv2[2];
+//   ortho_v2_v2(nv1, v1);
+//   ortho_v2_v2(nv2, v2);
 
-  float angle1 = atan2f(nv1[1], nv1[0]);
-  float angle2 = atan2f(nv2[1], nv2[0]);
-  float diff;
-  if (angle1 >= 0.0f) {
-    diff = angle2 + (M_PI - angle1);
-  }
-  else {
-    diff = angle2 - (M_PI + angle1);
-  }
+//   float angle1 = atan2f(nv1[1], nv1[0]);
+//   float angle2 = atan2f(nv2[1], nv2[0]);
+//   float diff;
+//   if (angle1 >= 0.0f) {
+//     diff = angle2 + (M_PI - angle1);
+//   }
+//   else {
+//     diff = angle2 - (M_PI + angle1);
+//   }
 
-  if ((diff >= 0.0f && diff < M_PI) || diff < -M_PI) {
-    chain->mer_start = angle2;
-    chain->mer_end = angle1;
-  }
-  else {
-    chain->mer_start = angle1;
-    chain->mer_end = angle2;
-  }
-  chain->mer_size = angle_v2v2(nv1, nv2);
-}
+//   if ((diff >= 0.0f && diff < M_PI) || diff < -M_PI) {
+//     chain->mer_start = angle2;
+//     chain->mer_end = angle1;
+//   }
+//   else {
+//     chain->mer_start = angle1;
+//     chain->mer_end = angle2;
+//   }
+//   chain->mer_size = angle_v2v2(nv1, nv2);
+// }
 
-static float *project_stroke_points_mat(const bGPDstroke *gps, const float proj_mat[4][4])
-{
-  float* points = MEM_callocN(sizeof(float[3]) * gps->totpoints, __func__);
+// static float *project_stroke_points_mat(const bGPDstroke *gps, const float proj_mat[4][4])
+// {
+//   float *points = MEM_callocN(sizeof(float[3]) * gps->totpoints, __func__);
 
-  float vec_tmp[4];
-  for (int i = 0; i < gps->totpoints; i++) {
-    bGPDspoint *pt = &gps->points[i];
-    gpencil_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
-    copy_v3_v3(&points[i*3], vec_tmp);
-  }
+//   float vec_tmp[4];
+//   for (int i = 0; i < gps->totpoints; i++) {
+//     bGPDspoint *pt = &gps->points[i];
+//     gpencil_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
+//     copy_v3_v3(&points[i*3], vec_tmp);
+//   }
 
-  return points;
-}
+//   return points;
+// }
 
-static void rotate_stroke_points_by_angle(float *points, int num_points, float angle)
-{
-  float vec_tmp[2];
-  for (int i = 0; i < num_points*3; i += 3) {
-    rotate_v2_v2fl(vec_tmp, &points[i], angle);
-    copy_v2_v2(&points[i], vec_tmp);
-  }
-}
+// static void rotate_stroke_points_by_angle(float *points, int num_points, float angle)
+// {
+//   float vec_tmp[2];
+//   for (int i = 0; i < num_points*3; i += 3) {
+//     rotate_v2_v2fl(vec_tmp, &points[i], angle);
+//     copy_v2_v2(&points[i], vec_tmp);
+//   }
+// }
 
-static int get_stroke_subchainlist(ListBase *list, float *points, int num_points)
-{
-  if (num_points < 3) {
-    return 0;
-  }
+// static int get_stroke_subchainlist(ListBase *list, float *points, int num_points)
+// {
+//   if (num_points < 3) {
+//     return 0;
+//   }
 
-  tCurveSubchain *first_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
-  BLI_addtail(list, first_chain);
+//   tCurveSubchain *first_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
+//   BLI_addtail(list, first_chain);
 
-  /* get the type for the first three points */
-  float *prev = &points[0];
-  float *p = &points[3];
-  float *next = &points[6];
-  int prev_type = stroke_point_is_convex(prev, next, p);
+//   /* get the type for the first three points */
+//   float *prev = &points[0];
+//   float *p = &points[3];
+//   float *next = &points[6];
+//   int prev_type = stroke_point_is_convex(prev, next, p);
   
-  int i, idx_start = 0, num_chains = 1;
-  tCurveSubchain *current = first_chain;
-  for (i = 2; i < num_points - 1; i++) {
-    float *prev = &points[(i-1)*3];
-    float *next = &points[(i+1)*3];
-    float *p = &points[i*3];
+//   int i, idx_start = 0, num_chains = 1;
+//   tCurveSubchain *current = first_chain;
+//   for (i = 2; i < num_points - 1; i++) {
+//     float *prev = &points[(i-1)*3];
+//     float *next = &points[(i+1)*3];
+//     float *p = &points[i*3];
 
-    int type = stroke_point_is_convex(prev, next, p);
-    if ((type == 1 && prev_type == -1) ||
-        (type == -1 && prev_type == 1)) { //type has swtiched 
-      tCurveSubchain *next_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
-      next_chain->idx_start = (i-1)*3;
-      BLI_addtail(list, next_chain);
-      num_chains++;
+//     int type = stroke_point_is_convex(prev, next, p);
+//     if ((type == 1 && prev_type == -1) ||
+//         (type == -1 && prev_type == 1)) { //type has swtiched 
+//       tCurveSubchain *next_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
+//       next_chain->idx_start = (i-1)*3;
+//       BLI_addtail(list, next_chain);
+//       num_chains++;
 
-      current->idx_end = i*3;
-      calc_subchain_mer(points, current);
+//       current->idx_end = i*3;
+//       calc_subchain_mer(points, current);
 
-      current = next_chain;
-      idx_start = i;
-    }
-    prev_type = type;
-  }
+//       current = next_chain;
+//       idx_start = i;
+//     }
+//     prev_type = type;
+//   }
 
-  current->idx_end = (i+1)*3;
-  calc_subchain_mer(points, current);
+//   current->idx_end = (i+1)*3;
+//   calc_subchain_mer(points, current);
 
-  return num_chains;
-}
+//   return num_chains;
+// }
 
-static int tcmp_mer_start(tCurveSubchain *a, tCurveSubchain *b) 
-{
-  return a->mer_start > b->mer_start;
-}
+// static int tcmp_mer_start(tCurveSubchain *a, tCurveSubchain *b) 
+// {
+//   return a->mer_start > b->mer_start;
+// }
 
-static int tcmp_mer_end(tCurveSubchain *a, tCurveSubchain *b) 
-{
-  return a->mer_end > b->mer_end;
-}
+// static int tcmp_mer_end(tCurveSubchain *a, tCurveSubchain *b) 
+// {
+//   return a->mer_end > b->mer_end;
+// }
 
-static void split_overflowing_subchain_mer(ListBase *chain_list) {
-  LISTBASE_FOREACH(tCurveSubchain *, curr, chain_list) {
-    if (curr->mer_start > 0.0f && (curr->mer_start + curr->mer_size) > M_PI) {
-      tCurveSubchain *split_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
-      BLI_insertlinkafter(chain_list, curr, split_chain);
-      split_chain->mer_start = -(float)M_PI;
-      split_chain->mer_end = curr->mer_end;
+// static void split_overflowing_subchain_mer(ListBase *chain_list) {
+//   LISTBASE_FOREACH(tCurveSubchain *, curr, chain_list) {
+//     if (curr->mer_start > 0.0f && (curr->mer_start + curr->mer_size) > M_PI) {
+//       tCurveSubchain *split_chain = MEM_callocN(sizeof(tCurveSubchain), __func__);
+//       BLI_insertlinkafter(chain_list, curr, split_chain);
+//       split_chain->mer_start = -(float)M_PI;
+//       split_chain->mer_end = curr->mer_end;
 
-      float new_size = (float)M_PI - curr->mer_start;
-      split_chain->mer_size = curr->mer_size - new_size;
+//       float new_size = (float)M_PI - curr->mer_start;
+//       split_chain->mer_size = curr->mer_size - new_size;
       
-      curr->mer_end = (float)M_PI;
-      curr->mer_size = new_size;
-    }
-  }
-}
+//       curr->mer_end = (float)M_PI;
+//       curr->mer_size = new_size;
+//     }
+//   }
+// }
 
-static float get_optimal_sweep_angle(ListBase *chain_list)
-{
-  /* split the angle ranges over the pi radians mark into two ranges */
-  split_overflowing_subchain_mer(chain_list);
+// static float get_optimal_sweep_angle(ListBase *chain_list)
+// {
+//   /* split the angle ranges over the pi radians mark into two ranges */
+//   split_overflowing_subchain_mer(chain_list);
 
-  ListBase start_list = {NULL, NULL};
-  ListBase end_list = {NULL, NULL};
-  BLI_duplicatelist(&start_list, chain_list);
-  BLI_duplicatelist(&end_list, chain_list);
+//   ListBase start_list = {NULL, NULL};
+//   ListBase end_list = {NULL, NULL};
+//   BLI_duplicatelist(&start_list, chain_list);
+//   BLI_duplicatelist(&end_list, chain_list);
 
-  /* TODO: Use qsort here, listbase_sort uses insertion sort */
-  BLI_listbase_sort(&start_list, tcmp_mer_start);
-  BLI_listbase_sort(&end_list, tcmp_mer_end);
+//   /* TODO: Use qsort here, listbase_sort uses insertion sort */
+//   BLI_listbase_sort(&start_list, tcmp_mer_start);
+//   BLI_listbase_sort(&end_list, tcmp_mer_end);
 
-  int num_operlapp = 1, max_num_overlapp = 1;
-  tCurveSubchain *curr_start = ((tCurveSubchain *)start_list.first)->next;
-  tCurveSubchain *curr_end = end_list.first;
-  float start_angle = curr_end->mer_start;
-  float end_angle = curr_end->mer_end;
+//   int num_operlapp = 1, max_num_overlapp = 1;
+//   tCurveSubchain *curr_start = ((tCurveSubchain *)start_list.first)->next;
+//   tCurveSubchain *curr_end = end_list.first;
+//   float start_angle = curr_end->mer_start;
+//   float end_angle = curr_end->mer_end;
 
-  /* find the maximum number of angle overlapps */
-  while (curr_start != NULL && curr_end != NULL) {
-    if (curr_start->mer_start <= curr_end->mer_end) {
-      num_operlapp++;
-      if (num_operlapp > max_num_overlapp) {
-        max_num_overlapp = num_operlapp;
-        start_angle = curr_start->mer_start;
-        end_angle = curr_end->mer_end;
-      }
-      curr_start = curr_start->next;
-    }
-    else {
-      num_operlapp--;
-      curr_end = curr_end->next;
-    }
-  }
+//   /* find the maximum number of angle overlapps */
+//   while (curr_start != NULL && curr_end != NULL) {
+//     if (curr_start->mer_start <= curr_end->mer_end) {
+//       num_operlapp++;
+//       if (num_operlapp > max_num_overlapp) {
+//         max_num_overlapp = num_operlapp;
+//         start_angle = curr_start->mer_start;
+//         end_angle = curr_end->mer_end;
+//       }
+//       curr_start = curr_start->next;
+//     }
+//     else {
+//       num_operlapp--;
+//       curr_end = curr_end->next;
+//     }
+//   }
 
-  /* Take the median value for the sweep angle */
-  float angle = fabsf(start_angle + fabsf(end_angle - start_angle) / 2.0f);
-  return angle;
-}
+//   /* Take the median value for the sweep angle */
+//   float angle = fabsf(start_angle + fabsf(end_angle - start_angle) / 2.0f);
+//   return angle;
+// }
 
-static bool isect_aabb_aabb_v2(const float min1[2],
-                               const float max1[2],
-                               const float min2[2],
-                               const float max2[2])
-{
-  return (min1[0] < max2[0] && min1[1] < max2[1] && min2[0] < max1[0] && min2[1] < max1[1]);
-}
+// static bool isect_aabb_aabb_v2(const float min1[2],
+//                                const float max1[2],
+//                                const float min2[2],
+//                                const float max2[2])
+// {
+//   return (min1[0] < max2[0] && min1[1] < max2[1] && min2[0] < max1[0] && min2[1] < max1[1]);
+// }
 
-static void free_monochains(ListBase *monochain_list)
-{
-  LISTBASE_FOREACH(tMonochain *, curr, monochain_list) {
-    BLI_freelistN(&curr->points);
-  }
-}
+// static void free_monochains(ListBase *monochain_list)
+// {
+//   LISTBASE_FOREACH(tMonochain *, curr, monochain_list) {
+//     BLI_freelistN(&curr->points);
+//   }
+// }
 
-/**
- * Helper: make a list of all the monochains in points and return the number 
- * of monochains found.
- **/
-static int get_monochains(ListBase *monochain_list, float* points, int num_points)
-{
-  printf("get_monochains\n\n");
-  int num_monochains = 0;
-  int prev_dir = signum_i(points[3] - points[0]);
-  /* cannot start with vertical direction, so force to one */
-  if (prev_dir == 0) {
-    prev_dir = 1;
-  }
+// /**
+//  * Helper: make a list of all the monochains in points and return the number 
+//  * of monochains found.
+//  **/
+// static int get_monochains(ListBase *monochain_list, float* points, int num_points)
+// {
+//   printf("get_monochains\n\n");
+//   int num_monochains = 0;
+//   int prev_dir = signum_i(points[3] - points[0]);
+//   /* cannot start with vertical direction, so force to one */
+//   if (prev_dir == 0) {
+//     prev_dir = 1;
+//   }
 
-  tMonochain *curr_chain = MEM_callocN(sizeof(tMonochain), __func__);
-  curr_chain->idx_start = 0;
-  curr_chain->dir = prev_dir;
-  BLI_addtail(monochain_list, curr_chain);
-  num_monochains++;
+//   tMonochain *curr_chain = MEM_callocN(sizeof(tMonochain), __func__);
+//   curr_chain->idx_start = 0;
+//   curr_chain->dir = prev_dir;
+//   BLI_addtail(monochain_list, curr_chain);
+//   num_monochains++;
 
-  tMonochainPoint *first_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
-  copy_v3_v3(&first_pt->x, &points[0]);
-  BLI_addtail(&curr_chain->points, first_pt);
-  //curr_chain->min[1] = curr_chain->max[1] = first_pt->y;
-  curr_chain->num_points++;
+//   tMonochainPoint *first_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
+//   copy_v3_v3(&first_pt->x, &points[0]);
+//   BLI_addtail(&curr_chain->points, first_pt);
+//   //curr_chain->min[1] = curr_chain->max[1] = first_pt->y;
+//   curr_chain->num_points++;
 
-  for (int i = 1; i < num_points - 1; i++) {
-    tMonochainPoint *new_point = MEM_callocN(sizeof(tMonochainPoint), __func__);
-    copy_v3_v3(&new_point->x, &points[i*3]);
+//   for (int i = 1; i < num_points - 1; i++) {
+//     tMonochainPoint *new_point = MEM_callocN(sizeof(tMonochainPoint), __func__);
+//     copy_v3_v3(&new_point->x, &points[i*3]);
 
-    /* insert point so that monochain points are ordered in x direction */
-    if (curr_chain->dir == 1) {
-      BLI_addtail(&curr_chain->points, new_point);
-    }
-    else {
-      BLI_addhead(&curr_chain->points, new_point);
-    }
-    curr_chain->num_points++;
+//     /* insert point so that monochain points are ordered in x direction */
+//     if (curr_chain->dir == 1) {
+//       BLI_addtail(&curr_chain->points, new_point);
+//     }
+//     else {
+//       BLI_addhead(&curr_chain->points, new_point);
+//     }
+//     curr_chain->num_points++;
 
-    // /* update y value of aabb of current chain */
-    // if (new_point->y < curr_chain->min[1]) {
-    //   curr_chain->min[1] = new_point->y;
-    // }
-    // else if (new_point->y > curr_chain->max[1]) {
-    //   curr_chain->max[1] = new_point->y;
-    // }
+//     // /* update y value of aabb of current chain */
+//     // if (new_point->y < curr_chain->min[1]) {
+//     //   curr_chain->min[1] = new_point->y;
+//     // }
+//     // else if (new_point->y > curr_chain->max[1]) {
+//     //   curr_chain->max[1] = new_point->y;
+//     // }
 
-    float curr_x = points[i*3];
-    float next_x = points[(i+1)*3];
-    int dir = signum_i(next_x - curr_x);
-    if (dir != 0 && prev_dir != 0 && dir != prev_dir) { // direction switched
-      tMonochain *new_chain = MEM_callocN(sizeof(tMonochain), __func__);
-      new_chain->idx_start = i*3;
-      new_chain->dir = dir;
-      BLI_addtail(monochain_list, new_chain);
-      num_monochains++;
+//     float curr_x = points[i*3];
+//     float next_x = points[(i+1)*3];
+//     int dir = signum_i(next_x - curr_x);
+//     if (dir != 0 && prev_dir != 0 && dir != prev_dir) { // direction switched
+//       tMonochain *new_chain = MEM_callocN(sizeof(tMonochain), __func__);
+//       new_chain->idx_start = i*3;
+//       new_chain->dir = dir;
+//       BLI_addtail(monochain_list, new_chain);
+//       num_monochains++;
 
-      tMonochainPoint *first_point = MEM_dupallocN(new_point);
-      BLI_addtail(&new_chain->points, first_point);
-      // new_chain->min[1] = new_chain->max[1] = first_point->y;
-      new_chain->num_points++;
+//       tMonochainPoint *first_point = MEM_dupallocN(new_point);
+//       BLI_addtail(&new_chain->points, first_point);
+//       // new_chain->min[1] = new_chain->max[1] = first_point->y;
+//       new_chain->num_points++;
 
-      curr_chain->idx_end = i*3;
-      // curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
-      // curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
-      curr_chain = new_chain;
-    }
+//       curr_chain->idx_end = i*3;
+//       // curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
+//       // curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
+//       curr_chain = new_chain;
+//     }
 
-    prev_dir = dir;
-  }
+//     prev_dir = dir;
+//   }
 
-  tMonochainPoint *last_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
-  copy_v3_v3(&last_pt->x, &points[(num_points - 1)*3]);
-  if (curr_chain->dir == 1) {
-    BLI_addtail(&curr_chain->points, last_pt);
-  }
-  else {
-    BLI_addhead(&curr_chain->points, last_pt);
-  }
-  curr_chain->num_points++;
+//   tMonochainPoint *last_pt = MEM_callocN(sizeof(tMonochainPoint), __func__);
+//   copy_v3_v3(&last_pt->x, &points[(num_points - 1)*3]);
+//   if (curr_chain->dir == 1) {
+//     BLI_addtail(&curr_chain->points, last_pt);
+//   }
+//   else {
+//     BLI_addhead(&curr_chain->points, last_pt);
+//   }
+//   curr_chain->num_points++;
 
-  // if (last_pt->y < curr_chain->min[1]) {
-  //   curr_chain->min[1] = last_pt->y;
-  // }
-  // else if (last_pt->y > curr_chain->max[1]) {
-  //   curr_chain->max[1] = last_pt->y;
-  // }
+//   // if (last_pt->y < curr_chain->min[1]) {
+//   //   curr_chain->min[1] = last_pt->y;
+//   // }
+//   // else if (last_pt->y > curr_chain->max[1]) {
+//   //   curr_chain->max[1] = last_pt->y;
+//   // }
 
-  curr_chain->idx_end = (num_points - 1)*3;
-  // curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
-  // curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
+//   curr_chain->idx_end = (num_points - 1)*3;
+//   // curr_chain->min[0] = ((tMonochainPoint *)curr_chain->points.first)->x;
+//   // curr_chain->max[0] = ((tMonochainPoint *)curr_chain->points.last)->x;
 
-  return num_monochains;
-}
+//   return num_monochains;
+// }
 
-void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, float sweep_angle)
-{
-  ListBase monochains = {NULL, NULL};
-  float *rot_points =  MEM_dupallocN(points);
-  rotate_stroke_points_by_angle(rot_points, num_points, sweep_angle);
+// void BKE_gpencil_stroke_find_intersections_ex(float* points, int num_points, float sweep_angle)
+// {
+//   ListBase monochains = {NULL, NULL};
+//   float *rot_points =  MEM_dupallocN(points);
+//   rotate_stroke_points_by_angle(rot_points, num_points, sweep_angle);
   
-  int num_monochains = get_monochains(&monochains, rot_points, num_points);
-  printf("Found %d monochains!\n", num_monochains);
-  LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
-    printf("Monochain from %d to %d (%d)!\n", curr->idx_start, curr->idx_end, curr->num_points);
-  }
+//   int num_monochains = get_monochains(&monochains, rot_points, num_points);
+//   printf("Found %d monochains!\n", num_monochains);
+//   LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
+//     printf("Monochain from %d to %d (%d)!\n", curr->idx_start, curr->idx_end, curr->num_points);
+//   }
 
-  /* at least 2 chains needed for potential intersection */
-  if (num_monochains <= 1) {
-    return;
-  }
+//   /* at least 2 chains needed for potential intersection */
+//   if (num_monochains <= 1) {
+//     return;
+//   }
 
-  /* Sweep-line algorithm */
-  /* ACL = active chain list; set all monochains as active */
-  Heap *acl = BLI_heap_new_ex(num_monochains);
-  LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
-    /* use second vertex, as we iterate over the edges */
-    curr->front = ((tMonochainPoint *)(curr->points.first))->next;
-    BLI_heap_insert(acl, curr->front->x, curr);
-  }
+//   /* Sweep-line algorithm */
+//   /* ACL = active chain list; set all monochains as active */
+//   Heap *acl = BLI_heap_new_ex(num_monochains);
+//   LISTBASE_FOREACH(tMonochain *, curr, &monochains) {
+//     /* use second vertex, as we iterate over the edges */
+//     curr->front = ((tMonochainPoint *)(curr->points.first))->next;
+//     BLI_heap_insert(acl, curr->front->x, curr);
+//   }
 
-  /* SCL = Sweeping chain list; all chains that intersect the sweep line */
-  WAVL_Tree *scl = BLI_wavlTree_new();
-  /* OVL = output vertex list */
-  ListBase ovl = {NULL, NULL};
+//   /* SCL = Sweeping chain list; all chains that intersect the sweep line */
+//   WAVL_Tree *scl = BLI_wavlTree_new();
+//   /* OVL = output vertex list */
+//   ListBase ovl = {NULL, NULL};
 
-  /* loop while there is at least one active chain */
-  while(!BLI_heap_is_empty(acl)) {
-    HeapNode *acl_top = BLI_heap_top(acl);
-    tMonochain *active_chain = (tMonochain *)BLI_heap_node_ptr(acl_top);
-    printf("Monochain from %d to %d (%d)!\n", active_chain->idx_start, active_chain->idx_end, active_chain->num_points);
-    WAVL_Node *active_node = NULL;
-    if (active_chain->front->prev == active_chain->points.first) {
-      active_node = BLI_wavlTree_insert(scl, cmp_scl_tmonochain, active_chain);
-    }
-    else {
-      active_node = BLI_wavlTree_search(scl, cmp_scl_tmonochain, active_chain);
-    }
+//   /* loop while there is at least one active chain */
+//   while(!BLI_heap_is_empty(acl)) {
+//     HeapNode *acl_top = BLI_heap_top(acl);
+//     tMonochain *active_chain = (tMonochain *)BLI_heap_node_ptr(acl_top);
+//     printf("Monochain from %d to %d (%d)!\n", active_chain->idx_start, active_chain->idx_end, active_chain->num_points);
+//     WAVL_Node *active_node = NULL;
+//     if (active_chain->front->prev == active_chain->points.first) {
+//       active_node = BLI_wavlTree_insert(scl, cmp_scl_tmonochain, active_chain);
+//     }
+//     else {
+//       active_node = BLI_wavlTree_search(scl, cmp_scl_tmonochain, active_chain);
+//     }
 
-    /* get the segment above/below and test for intersection */
-    bool got_intersection = false;
-    WAVL_Node *above_node = BLI_wavlTree_successor_ex(active_node);
-    WAVL_Node *below_node = BLI_wavlTree_predecessor_ex(active_node);
-    if (above_node != NULL) {
-      tMonochain *above_chain = (tMonochain *)above_node->data;
-      if(isect_front_seg_tmonochains(&ovl, active_chain, above_chain)) {
-        /* swap data links */
-        tMonochain *tmp = (tMonochain *)above_node->data;
-        above_node->data = active_node->data;
-        active_node->data = tmp;
-        got_intersection = true;
-      }
-    }
-    if (below_node != NULL) {
-      tMonochain *below_chain = (tMonochain *)below_node->data;
-      if(isect_front_seg_tmonochains(&ovl, active_chain, below_chain)) {
-        /* swap data links */
-        tMonochain *tmp = (tMonochain *)below_node->data;
-        below_node->data = active_node->data;
-        active_node->data = tmp;
-        got_intersection = true;
-      }
-    }
+//     /* get the segment above/below and test for intersection */
+//     bool got_intersection = false;
+//     WAVL_Node *above_node = BLI_wavlTree_successor_ex(active_node);
+//     WAVL_Node *below_node = BLI_wavlTree_predecessor_ex(active_node);
+//     if (above_node != NULL) {
+//       tMonochain *above_chain = (tMonochain *)above_node->data;
+//       if(isect_front_seg_tmonochains(&ovl, active_chain, above_chain)) {
+//         /* swap data links */
+//         tMonochain *tmp = (tMonochain *)above_node->data;
+//         above_node->data = active_node->data;
+//         active_node->data = tmp;
+//         got_intersection = true;
+//       }
+//     }
+//     if (below_node != NULL) {
+//       tMonochain *below_chain = (tMonochain *)below_node->data;
+//       if(isect_front_seg_tmonochains(&ovl, active_chain, below_chain)) {
+//         /* swap data links */
+//         tMonochain *tmp = (tMonochain *)below_node->data;
+//         below_node->data = active_node->data;
+//         active_node->data = tmp;
+//         got_intersection = true;
+//       }
+//     }
 
-    if (!got_intersection) {
-      /* advance front vertex of active chain */
-      active_chain->front = active_chain->front->next;
-      if (active_chain->front != NULL) {
-      BLI_heap_insert_or_update(acl, &acl_top, active_chain->front->x, active_chain);
-      }
-      else {
-        /* end of chain: remove from heap and tree */
-        BLI_heap_remove(acl, acl_top);
-        BLI_wavlTree_delete_node(scl, NULL, active_node);
-      }
-    }
-  }
+//     if (!got_intersection) {
+//       /* advance front vertex of active chain */
+//       active_chain->front = active_chain->front->next;
+//       if (active_chain->front != NULL) {
+//       BLI_heap_insert_or_update(acl, &acl_top, active_chain->front->x, active_chain);
+//       }
+//       else {
+//         /* end of chain: remove from heap and tree */
+//         BLI_heap_remove(acl, acl_top);
+//         BLI_wavlTree_delete_node(scl, NULL, active_node);
+//       }
+//     }
+//   }
 
-  /* TODO: convert monochains back to stroke */
+//   /* TODO: convert monochains back to stroke */
 
-  // free temp data
-  BLI_heap_free(acl, NULL);
-  BLI_wavlTree_free(scl, NULL);
-  free_monochains(&monochains);
-  MEM_freeN(rot_points);
-}
+//   // free temp data
+//   BLI_heap_free(acl, NULL);
+//   BLI_wavlTree_free(scl, NULL);
+//   free_monochains(&monochains);
+//   MEM_freeN(rot_points);
+// }
 
-bool BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstroke *gps)
-{
-  /* TODO: convert stroke to double linked list of 2d points */
-  /* Get subchains */
-  ListBase chain_list = {NULL, NULL};
-  int num_points = gps->totpoints;
-  float *points = project_stroke_points_mat(gps, rv3d->viewmat);
-  int num_chains;
-  if ((num_chains = get_stroke_subchainlist(&chain_list, points, gps->totpoints)) == 0) {
-    MEM_SAFE_FREE(points);
-    return false;
-  }
+// bool BKE_gpencil_stroke_resolve_self_overlapp(const RegionView3D *rv3d, bGPDstroke *gps)
+// {
+//   /* TODO: convert stroke to double linked list of 2d points */
+//   /* Get subchains */
+//   ListBase chain_list = {NULL, NULL};
+//   int num_points = gps->totpoints;
+//   float *points = project_stroke_points_mat(gps, rv3d->viewmat);
+//   int num_chains;
+//   if ((num_chains = get_stroke_subchainlist(&chain_list, points, gps->totpoints)) == 0) {
+//     MEM_SAFE_FREE(points);
+//     return false;
+//   }
 
-  float sweep_angle = 0.0f;//get_optimal_sweep_angle(&chain_list);
-  printf("Optimal angle: %f\n", sweep_angle);
+//   float sweep_angle = 0.0f;//get_optimal_sweep_angle(&chain_list);
+//   printf("Optimal angle: %f\n", sweep_angle);
 
-  BKE_gpencil_stroke_find_intersections_ex(points, num_points, sweep_angle);
+//   BKE_gpencil_stroke_find_intersections_ex(points, num_points, sweep_angle);
 
-  rotate_stroke_points_by_angle(points, num_points, sweep_angle);
-  float vec_tmp[4];
-  for (int i = 0; i < num_points; i++) {
-    bGPDspoint *pt = &gps->points[i];
-    gpencil_point3d_to_proj_space(rv3d->viewinv, &points[i*3], vec_tmp);
-    copy_v3_v3(&pt->x, vec_tmp);
-  }
-  BLI_freelistN(&chain_list);
-  MEM_SAFE_FREE(points);
-  return true;
-}
+//   rotate_stroke_points_by_angle(points, num_points, sweep_angle);
+//   float vec_tmp[4];
+//   for (int i = 0; i < num_points; i++) {
+//     bGPDspoint *pt = &gps->points[i];
+//     gpencil_point3d_to_proj_space(rv3d->viewinv, &points[i*3], vec_tmp);
+//     copy_v3_v3(&pt->x, vec_tmp);
+//   }
+//   BLI_freelistN(&chain_list);
+//   MEM_SAFE_FREE(points);
+//   return true;
+// }
 
 /* -------------------------------------------------------------------- */
 /** \name Iterators
