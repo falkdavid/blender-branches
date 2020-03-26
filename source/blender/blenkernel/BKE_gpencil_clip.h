@@ -31,10 +31,13 @@ extern "C" {
 bool BKE_gpencil_stroke_find_intersections(const struct RegionView3D *rv3d, struct bGPDstroke *gps);
 struct bGPDstroke *BKE_gpencil_stroke_clip_self(const struct RegionView3D *rv3d,
                                                 const struct bGPDlayer *gpl,
-                                                const struct bGPDstroke *gps);
+                                                struct bGPDstroke *gps);
 struct bGPDstroke *BKE_gpencil_fill_stroke_to_outline(const struct RegionView3D *rv3d,
                                                       const struct bGPDlayer *gpl,
-                                                      const struct bGPDstroke *gps);
+                                                      struct bGPDstroke *gps);
+struct bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const struct RegionView3D *rv3d,
+                                                                 const struct bGPDlayer *gpl,
+                                                                 struct bGPDstroke *gps);
 
 #ifdef __cplusplus
 }

@@ -4911,10 +4911,13 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
 
-          /* add to frame */
-          BLI_addhead(&gpf->strokes, perimeter_stroke);
-
-          changed = true;
+          BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, 0.0f, false);
+          bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline_with_holes(rv3d, gpl, perimeter_stroke);
+          if (clipped_stroke != NULL) {
+            /* add to frame */
+            BLI_addhead(&gpf->strokes, clipped_stroke);
+            changed = true;
+          }
         }
       }
     }
@@ -5044,8 +5047,10 @@ static int gp_stroke_clip_exec(bContext *C)
         for (gps = gpf->strokes.first; gps; gps = gps_next) {
           gps_next = gps->next;
 
-          if (gps->flag & GP_STROKE_SELECT) {
-            bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline(rv3d, gpl, gps);
+          if ((gps->flag & GP_STROKE_SELECT) && (gps->flag & GP_STROKE_CYCLIC)) {
+            /* preprocess, merge all duplicates */
+            BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0f, false);
+            bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline_with_holes(rv3d, gpl, gps);
             if (clipped_stroke != NULL) {
               /* add to frame */
               BLI_addhead(&gpf->strokes, clipped_stroke);
