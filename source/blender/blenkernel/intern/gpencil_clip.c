@@ -73,6 +73,7 @@ typedef enum tClipPointFlag {
   CP_VISITED = 1,
   CP_CHECKED = 2,
   CP_OUTER_EDGE = 3,
+  CP_INNER_EDGE = 4,
 } tClipPointFlag;
 
 typedef struct t2dStrokeEdge {
@@ -84,15 +85,58 @@ typedef struct t2dStrokeEdge {
   float min[2], max[2];
 } t2dStrokeEdge;
 
+static void debug_print_clip_point(tClipPoint *cp)
+{
+  printf("tClipPoint: %p\n", cp);
+  printf("x: %f, y: %f, z: %f\n", cp->x, cp->y, cp->z);
+  if (cp->isect_link != NULL) {
+    if (cp->isect_type == 0) {
+      printf("isect type: left\n");
+    }
+    else {
+      printf("isect type: right\n");
+    }
+  }
+  else {
+    printf("isect type: None\n");
+  }
+  printf("flag: ");
+  switch (cp->flag)
+  {
+  case CP_UNVISITED:
+    printf("CP_UNVISITED");
+    break;
+  case CP_VISITED:
+    printf("CP_VISITED");
+    break;
+  case CP_CHECKED:
+    printf("CP_CHECKED");
+    break;
+  case CP_OUTER_EDGE:
+    printf("CP_OUTER_EDGE");
+    break;
+  case CP_INNER_EDGE:
+    printf("CP_INNER_EDGE");
+    break;
+  default:
+    break;
+  }
+  printf("\n");
+}
+
 /* Helper: given that A and B intersect, returns the intersection type */
 static bool gp_clip_point_isect_type(const t2dStrokeEdge *A, const t2dStrokeEdge *B)
 {
-  double v1[2];
-  double v2[2];
-  sub_v2_v2v2_db(v1, (double *)&A->end->x, (double *)&A->start->x);
-  sub_v2_v2v2_db(v2, (double *)&B->end->x, (double *)&A->start->x);
+  double a_start[2], a_end[2];
+  double b_end[2];
+  double v1[2], v2[2];
+  copy_v2db_v2fl(a_start, &A->start->x);
+  copy_v2db_v2fl(a_end, &A->end->x);
+  copy_v2db_v2fl(b_end, &B->end->x);
+  sub_v2_v2v2_db(v1, a_end, a_start);
+  sub_v2_v2v2_db(v2, b_end, a_start);
   /* 0 = left; 1 = right */
-  return (-v1[0]*v2[1] + v1[1]*v2[0]) < 0.0;
+  return (-v1[0]*v2[1] + v1[1]*v2[0]) > 0.0;
 }
 
 static t2dStrokeEdge *gp_add_edge_from_clip_points(tClipPoint* A, tClipPoint *B)
@@ -147,30 +191,71 @@ static void gp_stroke_to_points_and_edges(const bGPDstroke *gps, const float pro
   }
 }
 
-/* TODO: find a better position to insert hole */
-static void gp_insert_hole_into_outer_edge(ListBase *outer_edge, ListBase *hole)
+static tClipPoint *gp_find_best_insert_point(ListBase *outer_edge, tClipPoint *target)
 {
-  tClipPoint *outer_edge_last = (tClipPoint *)(((LinkData *)outer_edge->last)->data);
-  tClipPoint *hole_first = (tClipPoint *)(((LinkData *)hole->first)->data);
+  tClipPoint *best_incert_cp = outer_edge->first;
+  float best_dist = len_squared_v2v2(&best_incert_cp->x, &target->x);;
+
+  /* search clostest to the left */
+  LISTBASE_FOREACH(tClipPoint *, curr, outer_edge) {
+    if (curr->x > target->x) {
+      continue;
+    }
+    float dist = len_squared_v2v2(&curr->x, &target->x);
+    if (dist < best_dist) {
+      best_dist = dist;
+      best_incert_cp = curr;
+    }
+  }
+
+  return best_incert_cp;
+}
+
+static void gp_insert_hole_into_outer_edge(ListBase *outer_edge, ListBase *hole, tClipPoint *insert_cp)
+{
+  tClipPoint *hole_first = hole->first;
 
   tClipPoint *hole_exit_start = MEM_dupallocN(hole_first);
-  tClipPoint *hole_exit_end = MEM_dupallocN(outer_edge_last);
+  tClipPoint *hole_exit_end = MEM_dupallocN(insert_cp);
 
-  BLI_addtail(hole, BLI_genericNodeN(hole_exit_start));
-  BLI_addtail(hole, BLI_genericNodeN(hole_exit_end));
+  BLI_addtail(hole, hole_exit_start);
+  BLI_addtail(hole, hole_exit_end);
 
   /* add hole to outer edge */
-  BLI_movelisttolist(outer_edge, hole);  
+  if (insert_cp->next != NULL) {
+    tClipPoint *hole_exit_end_next = insert_cp->next;
+    insert_cp->next = hole_first;
+    hole_first->prev = insert_cp;
+
+    hole_exit_end->next = hole_exit_end_next;
+    hole_exit_end_next->prev = hole_exit_end;
+  }
+  else {
+    BLI_movelisttolist(outer_edge, hole);
+  }
 }
 
 static ListBase *gp_get_inner_edge(tClipPoint *cpt_start, int *r_num_inner_points)
 {
   int num_points = 1;
+  float min_x = FLT_MAX;
+
   ListBase *inner_edge = MEM_callocN(sizeof(ListBase), __func__);
-  BLI_addtail(inner_edge, BLI_genericNodeN(cpt_start));
+  LinkData *cpt_start_link = BLI_genericNodeN(cpt_start);
+  BLI_addtail(inner_edge, cpt_start_link);
+
+  LinkData *cpt_min_link = cpt_start_link;
   tClipPoint *cpt_curr = cpt_start->isect_link->next;
   while (cpt_curr != cpt_start) {
-    BLI_addtail(inner_edge, BLI_genericNodeN(cpt_curr));
+    LinkData *cpt_curr_link = BLI_genericNodeN(cpt_curr);
+    BLI_addtail(inner_edge, cpt_curr_link);
+    cpt_curr->flag = CP_INNER_EDGE;
+
+    if (cpt_curr->x < min_x) {
+      min_x = cpt_curr->x;
+      cpt_min_link = cpt_curr_link;
+    }
+
     if(cpt_curr->isect_link != NULL) {
       cpt_curr = cpt_curr->isect_link->next;
     }
@@ -180,9 +265,20 @@ static ListBase *gp_get_inner_edge(tClipPoint *cpt_start, int *r_num_inner_point
     num_points++;
   }
 
+  /* turn min x point into first */
+  BLI_listbase_rotate_first(inner_edge, cpt_min_link);
+
   *r_num_inner_points += num_points;
-  
   return inner_edge;
+}
+
+static void gp_copy_links_from_link_data(ListBase *points)
+{
+  LISTBASE_FOREACH(LinkData *, _curr, points) {
+    tClipPoint *curr = (tClipPoint *)_curr->data;
+    curr->prev = _curr->prev != NULL ? _curr->prev->data : NULL;
+    curr->next = _curr->next != NULL ? _curr->next->data : NULL;
+  }
 }
 
 static tClipPoint *gp_next_isect(const tClipPoint *cpt, bool flag_visited)
@@ -206,7 +302,8 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   int point_count = 0;
   ListBase outer_edge = {NULL, NULL};
   ListBase outer_isect_points = {NULL, NULL};
-  ListBase holes = {NULL, NULL};
+  /* sort found holes by their min x value */
+  Heap *inner_edges = BLI_heap_new();
 
   /* Find min x point on outer edge */
   tClipPoint *cpt_min = NULL;
@@ -217,7 +314,8 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
       cpt_min = curr;
     }
   }
-  
+  BLI_listbase_rotate_first(points, cpt_min);
+
   /* link ends together */
   tClipPoint *cpt_first = points->first;
   tClipPoint *cpt_last = points->last;
@@ -226,11 +324,10 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
 
   /* Find outer edge */
   int num_outer_points = 1;
-  tClipPoint *cpt_start = cpt_min;
-  BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_start));
-  cpt_start->flag = CP_OUTER_EDGE;
-  tClipPoint *cpt_curr = cpt_start->next;
-  while (cpt_curr != cpt_start) {
+  BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_first));
+  cpt_first->flag = CP_OUTER_EDGE;
+  tClipPoint *cpt_curr = cpt_first->next;
+  while (cpt_curr != cpt_first) {
     BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_curr));
     cpt_curr->flag = CP_OUTER_EDGE;
     if(cpt_curr->isect_link != NULL) {
@@ -247,70 +344,111 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
 
   int num_inner_points = 0;
   LISTBASE_FOREACH(LinkData *, _curr_outer, &outer_isect_points) {
+    printf("\nNext outer intersection point!\n");
     tClipPoint *curr_outer = (tClipPoint *)_curr_outer->data;
+    printf("curr_outer\n");
+    debug_print_clip_point(curr_outer);
+    /* get the next intersection point inside the outline */
     tClipPoint *cpt_dfs_source = gp_next_isect(curr_outer, true);
-    if (cpt_dfs_source->flag == CP_OUTER_EDGE) {
+    printf("cpt_dfs_source\n");
+    debug_print_clip_point(cpt_dfs_source);
+    if (cpt_dfs_source->flag == CP_OUTER_EDGE || cpt_dfs_source->flag == CP_INNER_EDGE ||
+        cpt_dfs_source->flag == CP_CHECKED) {
       continue;
     }
+    /* depth first search for holes */
+
+    /* stack with intersection points */
     ListBase cpt_stack = {NULL, NULL};
     BLI_addtail(&cpt_stack, BLI_genericNodeN(cpt_dfs_source));
     int stack_size = 1;
+    bool backtracking = false;
     while (stack_size > 0) {
-      LinkData *curr_isect_link = (LinkData *)BLI_poptail(&cpt_stack);
+      LinkData *curr_isect_link = cpt_stack.last;
       tClipPoint *curr_isect = (tClipPoint *)curr_isect_link->data;
-      stack_size--;
+      printf("\ncurr_isect\n");
+      debug_print_clip_point(curr_isect);
 
       /* search ends if we hit the outer edge or checked node */
       if (curr_isect->flag == CP_OUTER_EDGE || curr_isect->flag == CP_CHECKED) {
+        /* backtrack */
+        backtracking = true;
+        BLI_poptail(&cpt_stack);
+        stack_size--;
         continue;
       }
 
       /* inner edge found */
-      if (curr_isect->flag == CP_VISITED) {
+      if (curr_isect->flag == CP_VISITED && backtracking == false) {
+        printf("Inner edge found!\n");
         ListBase *inner_edge = gp_get_inner_edge(curr_isect, &num_inner_points);
-        BLI_addtail(&holes, BLI_genericNodeN(inner_edge));
+        BLI_heap_insert(inner_edges, ((tClipPoint *)inner_edge->first)->x, inner_edge);
+        /* backtrack */
+        backtracking = true;
+        BLI_poptail(&cpt_stack);
+        stack_size--;
         continue;
       }
 
       /* check intersection type */
       if (curr_isect->isect_type == ISECT_LEFT) {
-        if (curr_isect->isect_link->next->flag == CP_VISITED) {
+        if (curr_isect->isect_link->next->flag == CP_VISITED || 
+            curr_isect->isect_link->next->flag == CP_INNER_EDGE) {
           /* if next candidate has been visited, try alternative, else
            * mark point as checked */
           if (curr_isect->next->flag == CP_UNVISITED) {
+            printf("Left is visited, go forward!\n");
             tClipPoint *next_isect = gp_next_isect(curr_isect, true);
             BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
             stack_size++;
+            backtracking = false;
           }
           else {
+            printf("Both visited, backtrack!\n");
             curr_isect->flag = curr_isect->isect_link->flag = CP_CHECKED;
+            /* backtrack */
+            backtracking = true;
+            BLI_poptail(&cpt_stack);
+            stack_size--;
             continue;
           }
         }
         else {
+          printf("Left is unvisited, go left!\n");
           curr_isect = curr_isect->isect_link;
           tClipPoint *next_isect = gp_next_isect(curr_isect, true);
           BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
           stack_size++;
+          backtracking = false;
         }
       }
       else {
-        if (curr_isect->next->flag == CP_VISITED) {
+        if (curr_isect->next->flag == CP_VISITED ||
+            curr_isect->next->flag == CP_INNER_EDGE) {
           curr_isect = curr_isect->isect_link;
           if (curr_isect->next->flag == CP_UNVISITED) {
+            printf("Forward is visited, go right!\n");
             tClipPoint *next_isect = gp_next_isect(curr_isect, true);
             BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
             stack_size++;
+            backtracking = false;
           }
           else {
+            printf("Both visited, backtrack!\n");
             curr_isect->flag = curr_isect->isect_link->flag = CP_CHECKED;
+            /* backtrack */
+            backtracking = true;
+            BLI_poptail(&cpt_stack);
+            stack_size--;
             continue;
           }
         }
         else {
+          printf("Forward is unvisited, go forward!\n");
           tClipPoint *next_isect = gp_next_isect(curr_isect, true);
           BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
           stack_size++;
+          backtracking = false;
         }
       }
 
@@ -319,30 +457,38 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
     BLI_freelistN(&cpt_stack);
   }
   printf("Num inner points: %d\n", num_inner_points);
-
   point_count = num_outer_points + num_inner_points;
+
+  /* remove link data of outer edge */
+  gp_copy_links_from_link_data(&outer_edge);
+  BLI_freelistN(&outer_edge);
+  outer_edge.first = cpt_first;
+  outer_edge.last = cpt_last;
+
   /* form single outline by connecting holes to outer edge */
-  LISTBASE_FOREACH(LinkData *, _curr_hole, &holes) {
-    ListBase *curr_hole = (ListBase *)_curr_hole->data;
-    gp_insert_hole_into_outer_edge(&outer_edge, curr_hole);
+  while(!BLI_heap_is_empty(inner_edges)) {
+    ListBase *curr_link_hole = BLI_heap_pop_min(inner_edges);
+    gp_copy_links_from_link_data(curr_link_hole);
+    ListBase curr_hole = {((LinkData *)curr_link_hole->first)->data,
+                          ((LinkData *)curr_link_hole->last)->data};
+    BLI_freelistN(curr_link_hole);
+
+    tClipPoint *best_incert_cp = gp_find_best_insert_point(&outer_edge, curr_hole.first);
+    gp_insert_hole_into_outer_edge(&outer_edge, &curr_hole, best_incert_cp);
     point_count += 2;
   }
   printf("Num points: %d\n", point_count);
 
   ListBase *result_list = MEM_callocN(sizeof(ListBase), __func__);
-  LISTBASE_FOREACH_MUTABLE(LinkData *, _curr, &outer_edge) {
-    tClipPoint *curr = (tClipPoint *)_curr->data;
-    BLI_addtail(result_list,  MEM_dupallocN(curr));
-  }
+  result_list->first = cpt_first;
+  result_list->last = cpt_last;
 
-  /* unlink ends */
   cpt_first->prev = NULL;
   cpt_last->next = NULL;
 
   /* free temp data */
   BLI_freelistN(&outer_isect_points);
-  BLI_freelistN(&outer_edge);
-  BLI_freelistN(&holes);
+  BLI_heap_free(inner_edges, NULL);
 
   *r_num_points = point_count;
 
@@ -559,20 +705,24 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const RegionView3D *rv
   bGPDstroke *outline_stroke = NULL;
   ListBase clip_points = {NULL, NULL};
   ListBase edges = {NULL, NULL};
+  /* convert stroke to point and edge data strusture */
   gp_stroke_to_points_and_edges(gps, rv3d->viewmat, &edges, &clip_points);
 
-  int num_isect_points = naive_intersection_algorithm(&edges, &clip_points);
+  /* intersection algorithm */
+  // TODO: this algorithm has a time complexity of O(n^2), this can be improved
+  int num_isect_points = naive_intersection_algorithm(&edges, &clip_points); 
   if (num_isect_points == 0) {
-    return outline_stroke;
+    return NULL;
   }
 
   int num_outline_points = 0;
   int tot_points = gps->totpoints + 2*num_isect_points;
+  /* find outer edge and holes and combine them into single outline */
   ListBase *outline_points = gp_clipPointList_to_outline_and_holes_list(&clip_points, tot_points, &num_outline_points);
-  printf("length: %d\n", BLI_listbase_count(outline_points));
   /* create new stroke */
   outline_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_outline_points, 1);
 
+  /* copy data to new stroke */
   float vec_p[4];
   vec_p[3] = 1.0f;
   tClipPoint *cpt_curr = outline_points->first;
@@ -585,7 +735,6 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const RegionView3D *rv
     /* Set pressure to zero and strength to one */
     pt->pressure = 0.0f;
     pt->strength = 1.0f;
-
     pt->flag |= GP_SPOINT_SELECT;
 
     cpt_curr = cpt_curr->next;
@@ -594,7 +743,6 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const RegionView3D *rv
   /* free temp data */
   BLI_freelistN(&edges);
   BLI_freelistN(&clip_points);
-  BLI_freelistN(outline_points);
 
   /* triangles cache needs to be recalculated */
   BKE_gpencil_stroke_geometry_update(outline_stroke);
