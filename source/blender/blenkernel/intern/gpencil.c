@@ -2613,6 +2613,9 @@ void BKE_gpencil_visible_stroke_iter(
       }
 
       LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+        if (gps->totpoints == 0) {
+          continue;
+        }
         stroke_cb(gpl, gpf, gps, thunk);
       }
     }
@@ -2626,6 +2629,9 @@ void BKE_gpencil_visible_stroke_iter(
       }
 
       LISTBASE_FOREACH (bGPDstroke *, gps, &act_gpf->strokes) {
+        if (gps->totpoints == 0) {
+          continue;
+        }
         stroke_cb(gpl, act_gpf, gps, thunk);
       }
     }
