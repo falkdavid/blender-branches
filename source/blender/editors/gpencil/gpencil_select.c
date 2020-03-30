@@ -43,6 +43,7 @@
 
 #include "BKE_context.h"
 #include "BKE_gpencil.h"
+#include "BKE_material.h"
 #include "BKE_report.h"
 
 #include "UI_interface.h"
@@ -66,6 +67,45 @@
 /* -------------------------------------------------------------------- */
 /** \name Shared Utilities
  * \{ */
+
+/* Check if mouse inside stroke. */
+static bool gpencil_point_inside_stroke(bGPDstroke *gps,
+                                        GP_SpaceConversion *gsc,
+                                        int mouse[2],
+                                        const float diff_mat[4][4])
+{
+  bool hit = false;
+  if (gps->totpoints == 0) {
+    return hit;
+  }
+
+  int(*mcords)[2] = NULL;
+  int len = gps->totpoints;
+  mcords = MEM_mallocN(sizeof(int) * 2 * len, __func__);
+
+  /* Convert stroke to 2D array of points. */
+  bGPDspoint *pt;
+  int i;
+  for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
+    bGPDspoint pt2;
+    gp_point_to_parent_space(pt, diff_mat, &pt2);
+    gp_point_to_xy(gsc, gps, &pt2, &mcords[i][0], &mcords[i][1]);
+  }
+
+  /* Compute boundbox of lasso (for faster testing later). */
+  rcti rect;
+  BLI_lasso_boundbox(&rect, mcords, len);
+
+  /* Test if point inside stroke. */
+  hit = ((!ELEM(V2D_IS_CLIPPED, mouse[0], mouse[1])) &&
+         BLI_rcti_isect_pt(&rect, mouse[0], mouse[1]) &&
+         BLI_lasso_is_point_inside(mcords, len, mouse[0], mouse[1], INT_MAX));
+
+  /* Free memory. */
+  MEM_SAFE_FREE(mcords);
+
+  return hit;
+}
 
 /* Convert sculpt mask mode to Select mode */
 static int gpencil_select_mode_from_sculpt(eGP_Sculpt_SelectMaskFlag mode)
@@ -919,13 +959,12 @@ static bool gp_stroke_do_circle_sel(bGPdata *UNUSED(gpd),
       if (((!ELEM(V2D_IS_CLIPPED, x0, y0)) && BLI_rcti_isect_pt(rect, x0, y0)) ||
           ((!ELEM(V2D_IS_CLIPPED, x1, y1)) && BLI_rcti_isect_pt(rect, x1, y1))) {
         float mval[2] = {(float)mx, (float)my};
-        float mvalo[2] = {(float)mx, (float)my}; /* dummy - this isn't used... */
 
         /* check if point segment of stroke had anything to do with
          * eraser region  (either within stroke painted, or on its lines)
          * - this assumes that linewidth is irrelevant
          */
-        if (gp_stroke_inside_circle(mval, mvalo, radius, x0, y0, x1, y1)) {
+        if (gp_stroke_inside_circle(mval, radius, x0, y0, x1, y1)) {
           /* change selection of stroke, and then of both points
            * (as the last point otherwise wouldn't get selected
            * as we only do n-1 loops through).
@@ -1052,8 +1091,7 @@ static int gpencil_circle_select_exec(bContext *C, wmOperator *op)
   rect.ymax = my + radius;
 
   /* find visible strokes, and select if hit */
-  GP_EVALUATED_STROKES_BEGIN(gpstroke_iter, C, gpl, gps)
-  {
+  GP_EVALUATED_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
     changed |= gp_stroke_do_circle_sel(gpd,
                                        gpl,
                                        gps,
@@ -1120,10 +1158,8 @@ typedef bool (*GPencilTestFn)(bGPDstroke *gps,
                               const float diff_mat[4][4],
                               void *user_data);
 
-static int gpencil_generic_select_exec(bContext *C,
-                                       wmOperator *op,
-                                       GPencilTestFn is_inside_fn,
-                                       void *user_data)
+static int gpencil_generic_select_exec(
+    bContext *C, wmOperator *op, GPencilTestFn is_inside_fn, rcti box, void *user_data)
 {
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = ED_gpencil_data_get_active(C);
@@ -1164,7 +1200,7 @@ static int gpencil_generic_select_exec(bContext *C,
   gp_point_conversion_init(C, &gsc);
 
   /* deselect all strokes first? */
-  if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
+  if (SEL_OP_USE_PRE_DESELECT(sel_op) || (GPENCIL_PAINT_MODE(gpd))) {
 
     CTX_DATA_BEGIN (C, bGPDstroke *, gps, editable_gpencil_strokes) {
       bGPDspoint *pt;
@@ -1180,9 +1216,9 @@ static int gpencil_generic_select_exec(bContext *C,
   }
 
   /* select/deselect points */
-  GP_EVALUATED_STROKES_BEGIN(gpstroke_iter, C, gpl, gps)
-  {
+  GP_EVALUATED_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
     bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
+    bool whole = false;
 
     bGPDspoint *pt;
     int i;
@@ -1219,10 +1255,25 @@ static int gpencil_generic_select_exec(bContext *C,
       }
     }
 
-    /* if stroke mode expand selection */
-    if (strokemode) {
-      const bool is_select = BKE_gpencil_stroke_select_check(gps_active);
-      const bool is_inside = hit;
+    /* If nothing hit, check if the mouse is inside a filled stroke using the center or
+     * Box or lasso area. */
+    if ((!hit) && (!changed)) {
+      /* Only check filled strokes. */
+      MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
+      if ((gp_style->flag & GP_MATERIAL_FILL_SHOW) == 0) {
+        continue;
+      }
+      int mval[2];
+      mval[0] = (box.xmax + box.xmin) / 2;
+      mval[1] = (box.ymax + box.ymin) / 2;
+
+      whole = gpencil_point_inside_stroke(gps_active, &gsc, mval, gpstroke_iter.diff_mat);
+    }
+
+    /* if stroke mode expand selection. */
+    if ((strokemode) || (whole)) {
+      const bool is_select = BKE_gpencil_stroke_select_check(gps_active) || whole;
+      const bool is_inside = hit || whole;
       const int sel_op_result = ED_select_op_action_deselected(sel_op, is_select, is_inside);
       if (sel_op_result != -1) {
         for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
@@ -1248,7 +1299,7 @@ static int gpencil_generic_select_exec(bContext *C,
   GP_EVALUATED_STROKES_END(gpstroke_iter);
 
   /* if paint mode,delete selected points */
-  if (gpd->flag & GP_DATA_STROKE_PAINTMODE) {
+  if (GPENCIL_PAINT_MODE(gpd)) {
     gp_delete_selected_point_wrap(C);
     changed = true;
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
@@ -1296,7 +1347,8 @@ static int gpencil_box_select_exec(bContext *C, wmOperator *op)
 {
   struct GP_SelectBoxUserData data = {0};
   WM_operator_properties_border_to_rcti(op, &data.rect);
-  return gpencil_generic_select_exec(C, op, gpencil_test_box, &data);
+  rcti rect = data.rect;
+  return gpencil_generic_select_exec(C, op, gpencil_test_box, rect, &data);
 }
 
 void GPENCIL_OT_select_box(wmOperatorType *ot)
@@ -1363,7 +1415,8 @@ static int gpencil_lasso_select_exec(bContext *C, wmOperator *op)
   /* Compute boundbox of lasso (for faster testing later). */
   BLI_lasso_boundbox(&data.rect, data.mcords, data.mcords_len);
 
-  int ret = gpencil_generic_select_exec(C, op, gpencil_test_lasso, &data);
+  rcti rect = data.rect;
+  int ret = gpencil_generic_select_exec(C, op, gpencil_test_lasso, rect, &data);
 
   MEM_freeN((void *)data.mcords);
 
@@ -1427,7 +1480,7 @@ static int gpencil_select_exec(bContext *C, wmOperator *op)
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
   /* "radius" is simply a threshold (screen space) to make it easier to test with a tolerance */
-  const float radius = 0.50f * U.widget_unit;
+  const float radius = 0.4f * U.widget_unit;
   const int radius_squared = (int)(radius * radius);
 
   const bool use_shift_extend = RNA_boolean_get(op->ptr, "use_shift_extend");
@@ -1472,12 +1525,18 @@ static int gpencil_select_exec(bContext *C, wmOperator *op)
   RNA_int_get_array(op->ptr, "location", mval);
 
   /* First Pass: Find stroke point which gets hit */
-  /* XXX: maybe we should go from the top of the stack down instead... */
-  GP_EVALUATED_STROKES_BEGIN(gpstroke_iter, C, gpl, gps)
-  {
+  GP_EVALUATED_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
     bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
     bGPDspoint *pt;
     int i;
+
+    /* Check boundbox to speedup. */
+    float fmval[2];
+    copy_v2fl_v2i(fmval, mval);
+    if (!ED_gpencil_stroke_check_collision(
+            &gsc, gps_active, fmval, radius, gpstroke_iter.diff_mat)) {
+      continue;
+    }
 
     /* firstly, check for hit-point */
     for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
@@ -1506,11 +1565,27 @@ static int gpencil_select_exec(bContext *C, wmOperator *op)
         }
       }
     }
+    if (ELEM(NULL, hit_stroke, hit_point)) {
+      /* If nothing hit, check if the mouse is inside any filled stroke.
+       * Only check filling materials. */
+      MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
+      if ((gp_style->flag & GP_MATERIAL_FILL_SHOW) == 0) {
+        continue;
+      }
+      bool hit_fill = gpencil_point_inside_stroke(gps, &gsc, mval, gpstroke_iter.diff_mat);
+      if (hit_fill) {
+        hit_stroke = gps_active;
+        hit_point = &gps_active->points[0];
+        /* Extend selection to all stroke. */
+        whole = true;
+      }
+    }
   }
   GP_EVALUATED_STROKES_END(gpstroke_iter);
 
   /* Abort if nothing hit... */
   if (ELEM(NULL, hit_stroke, hit_point)) {
+
     if (deselect_all) {
       /* since left mouse select change, deselect all if click outside any hit */
       deselect_all_selected(C);
