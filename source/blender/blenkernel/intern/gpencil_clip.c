@@ -101,26 +101,16 @@ static void debug_print_clip_point(tClipPoint *cp)
     printf("isect type: None\n");
   }
   printf("flag: ");
-  switch (cp->flag)
-  {
-  case CP_UNVISITED:
-    printf("CP_UNVISITED");
-    break;
-  case CP_VISITED:
-    printf("CP_VISITED");
-    break;
-  case CP_CHECKED:
-    printf("CP_CHECKED");
-    break;
-  case CP_OUTER_EDGE:
-    printf("CP_OUTER_EDGE");
-    break;
-  case CP_INNER_EDGE:
-    printf("CP_INNER_EDGE");
-    break;
-  default:
-    break;
-  }
+  if(cp->flag == CP_UNVISITED)
+    printf("CP_UNVISITED ");
+  if(cp->flag & CP_VISITED)
+    printf("CP_VISITED ");
+  if(cp->flag & CP_CHECKED)
+    printf("CP_CHECKED ");
+  if(cp->flag & CP_OUTER_EDGE)
+    printf("CP_OUTER_EDGE ");
+  if(cp->flag & CP_INNER_EDGE)
+    printf("CP_INNER_EDGE ");
   printf("\n");
 }
 
@@ -250,7 +240,7 @@ static ListBase *gp_get_inner_edge(tClipPoint *cpt_start, int *r_num_inner_point
   while (cpt_curr != cpt_start) {
     LinkData *cpt_curr_link = BLI_genericNodeN(cpt_curr);
     BLI_addtail(inner_edge, cpt_curr_link);
-    cpt_curr->flag = CP_INNER_EDGE;
+    cpt_curr->flag |= CP_INNER_EDGE;
 
     if (cpt_curr->x < min_x) {
       min_x = cpt_curr->x;
@@ -264,6 +254,10 @@ static ListBase *gp_get_inner_edge(tClipPoint *cpt_start, int *r_num_inner_point
       cpt_curr = cpt_curr->next;
     }
     num_points++;
+  }
+
+  if (num_points <= 2) {
+    return NULL;
   }
 
   /* turn min x point into first */
@@ -287,7 +281,7 @@ static tClipPoint *gp_next_isect(const tClipPoint *cpt, bool flag_visited)
   tClipPoint *cpt_curr = cpt->next;
   while (cpt_curr->isect_link == NULL) {
     if (flag_visited == true) {
-      cpt_curr->flag = CP_VISITED;
+      cpt_curr->flag |= CP_VISITED;
     }
     cpt_curr = cpt_curr->next;
   }
@@ -303,7 +297,7 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   int point_count = 0;
   ListBase outer_edge = {NULL, NULL};
   ListBase outer_isect_points = {NULL, NULL};
-  /* sort found holes by their min x value */
+  /* sort found inner edges (holes) by their min x value */
   Heap *inner_edges = BLI_heap_new();
 
   /* Find min x point on outer edge */
@@ -315,6 +309,7 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
       cpt_min = curr;
     }
   }
+  /* make min x point first */
   BLI_listbase_rotate_first(points, cpt_min);
 
   /* link ends together */
@@ -326,13 +321,17 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   /* Find outer edge */
   int num_outer_points = 1;
   BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_first));
-  cpt_first->flag = CP_OUTER_EDGE;
+  cpt_first->flag |= CP_OUTER_EDGE;
+  if(cpt_first->isect_link != NULL) {
+    cpt_first->isect_link->flag |= CP_OUTER_EDGE;
+    BLI_addtail(&outer_isect_points, BLI_genericNodeN(cpt_first));
+  }
   tClipPoint *cpt_curr = cpt_first->next;
   while (cpt_curr != cpt_first) {
     BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_curr));
-    cpt_curr->flag = CP_OUTER_EDGE;
+    cpt_curr->flag |= CP_OUTER_EDGE;
     if(cpt_curr->isect_link != NULL) {
-      cpt_curr->isect_link->flag = CP_OUTER_EDGE;
+      cpt_curr->isect_link->flag |= CP_OUTER_EDGE;
       BLI_addtail(&outer_isect_points, BLI_genericNodeN(cpt_curr));
       cpt_curr = cpt_curr->isect_link->next;
     }
@@ -343,7 +342,10 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   }
   printf("Num outer points: %d\n", num_outer_points);
 
+  /* Find inner edges */
   int num_inner_points = 0;
+  /* We loop over all the outer intersection points and do a depth first search
+   * inwards to find inner edges.  */
   LISTBASE_FOREACH(LinkData *, _curr_outer, &outer_isect_points) {
     printf("\nNext outer intersection point!\n");
     tClipPoint *curr_outer = (tClipPoint *)_curr_outer->data;
@@ -353,41 +355,45 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
     tClipPoint *cpt_dfs_source = gp_next_isect(curr_outer, true);
     printf("cpt_dfs_source\n");
     debug_print_clip_point(cpt_dfs_source);
-    if (cpt_dfs_source->flag == CP_OUTER_EDGE || cpt_dfs_source->flag == CP_INNER_EDGE ||
-        cpt_dfs_source->flag == CP_CHECKED) {
+    if (cpt_dfs_source->flag & CP_OUTER_EDGE || cpt_dfs_source->flag & CP_CHECKED) {
       continue;
     }
-    /* depth first search for holes */
 
-    /* stack with intersection points */
+    /* DFS stack with intersection points */
     ListBase cpt_stack = {NULL, NULL};
     BLI_addtail(&cpt_stack, BLI_genericNodeN(cpt_dfs_source));
     int stack_size = 1;
-    bool backtracking = false;
+
+    /* loop list to keep track of intersection points in current loop */
+    ListBase cpt_loop = {NULL, NULL};
+
     while (stack_size > 0) {
       LinkData *curr_isect_link = cpt_stack.last;
       tClipPoint *curr_isect = (tClipPoint *)curr_isect_link->data;
       printf("\ncurr_isect\n");
       debug_print_clip_point(curr_isect);
-      printf("backtrack: %s\n", backtracking ? "true" : "false");
 
       /* search ends if we hit the outer edge or checked node */
-      if (curr_isect->flag == CP_OUTER_EDGE || curr_isect->flag == CP_CHECKED) {
+      if (curr_isect->flag & CP_OUTER_EDGE || curr_isect->flag & CP_CHECKED) {
         printf("Hit outer edge or checked!\n");
+        BLI_freelistN(&cpt_loop);
         /* backtrack */
-        backtracking = true;
         BLI_poptail(&cpt_stack);
         stack_size--;
         continue;
       }
 
       /* inner edge found */
-      if (curr_isect->flag == CP_VISITED && backtracking == false) {
+      if (curr_isect->flag & CP_VISITED && 
+          BLI_findptr(&cpt_loop, curr_isect->isect_link, offsetof(LinkData, data)) != NULL) {
         printf("Inner edge found!\n");
         ListBase *inner_edge = gp_get_inner_edge(curr_isect, &num_inner_points);
-        BLI_heap_insert(inner_edges, ((tClipPoint *)inner_edge->first)->x, inner_edge);
+        if (inner_edge != NULL) {
+          BLI_heap_insert(inner_edges, ((tClipPoint *)inner_edge->first)->x, inner_edge);
+        }
+
+        BLI_freelistN(&cpt_loop);
         /* backtrack */
-        backtracking = true;
         BLI_poptail(&cpt_stack);
         stack_size--;
         continue;
@@ -395,71 +401,75 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
 
       /* check intersection type */
       if (curr_isect->isect_type == ISECT_LEFT) {
-        if (curr_isect->isect_link->next->flag == CP_VISITED || 
-            curr_isect->isect_link->next->flag == CP_INNER_EDGE ||
-            curr_isect->isect_link->next->flag == CP_CHECKED) {
-          /* if next candidate has been visited, try alternative, else
-           * mark point as checked */
+        /* If the intersection points to the left, we follow it,
+         * unless it has already been visited. */
+        if (curr_isect->isect_link->next->flag & CP_VISITED) {
+          /* left has been visited so clear loop */
+          BLI_freelistN(&cpt_loop);
           if (curr_isect->next->flag == CP_UNVISITED) {
             printf("Left is visited, go forward!\n");
             tClipPoint *next_isect = gp_next_isect(curr_isect, true);
             BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
             stack_size++;
-            backtracking = true;
           }
           else {
             printf("Both visited, backtrack!\n");
-            curr_isect->flag = curr_isect->isect_link->flag = CP_CHECKED;
+            curr_isect->flag |= CP_CHECKED;
+            curr_isect->isect_link->flag |= CP_CHECKED;
             /* backtrack */
-            backtracking = true;
             BLI_poptail(&cpt_stack);
             stack_size--;
             continue;
           }
+
         }
         else {
           printf("Left is unvisited, go left!\n");
-          curr_isect = curr_isect->isect_link;
-          tClipPoint *next_isect = gp_next_isect(curr_isect, true);
+          BLI_addtail(&cpt_loop, BLI_genericNodeN(curr_isect));
+
+          tClipPoint *next_isect = gp_next_isect(curr_isect->isect_link, true);
           BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
           stack_size++;
-          backtracking = false;
         }
       }
       else {
-        if (curr_isect->next->flag == CP_VISITED ||
-            curr_isect->next->flag == CP_INNER_EDGE ||
-            curr_isect->next->flag == CP_CHECKED) {
-          curr_isect = curr_isect->isect_link;
-          if (curr_isect->next->flag == CP_UNVISITED) {
+        /* If the intersection points to the right, we continue on this path,
+         * unless it has already been visited. */
+        if (curr_isect->next->flag & CP_VISITED) {
+
+          BLI_freelistN(&cpt_loop);
+          if (curr_isect->isect_link->next->flag == CP_UNVISITED) {
             printf("Forward is visited, go right!\n");
-            tClipPoint *next_isect = gp_next_isect(curr_isect, true);
+            tClipPoint *next_isect = gp_next_isect(curr_isect->isect_link, true);
             BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
             stack_size++;
-            backtracking = true;
           }
           else {
             printf("Both visited, backtrack!\n");
-            curr_isect->flag = curr_isect->isect_link->flag = CP_CHECKED;
+            curr_isect->flag |= CP_CHECKED;
+            curr_isect->isect_link->flag |= CP_CHECKED;
             /* backtrack */
-            backtracking = true;
             BLI_poptail(&cpt_stack);
             stack_size--;
             continue;
           }
+
         }
         else {
           printf("Forward is unvisited, go forward!\n");
+          BLI_addtail(&cpt_loop, BLI_genericNodeN(curr_isect));
+
           tClipPoint *next_isect = gp_next_isect(curr_isect, true);
           BLI_addtail(&cpt_stack, BLI_genericNodeN(next_isect));
           stack_size++;
-          backtracking = false;
         }
       }
 
-      curr_isect->flag = curr_isect->isect_link->flag = CP_VISITED;
+      curr_isect->flag |= CP_VISITED;
+      curr_isect->isect_link->flag |= CP_VISITED;
     }
     BLI_freelistN(&cpt_stack);
+    BLI_freelistN(&cpt_loop);
   }
   printf("Num inner points: %d\n", num_inner_points);
   point_count = num_outer_points + num_inner_points;
@@ -562,7 +572,9 @@ static int naive_intersection_algorithm(ListBase *edges, ListBase *clip_points)
           tClipPoint *cpt_isectA = MEM_callocN(sizeof(tClipPoint), __func__);
           copy_v2_v2(&cpt_isectA->x, isect_pt);
           cpt_isectA->isect_type = gp_clip_point_isect_type(edgeA, edgeB);
+
           tClipPoint *cpt_isectB = MEM_dupallocN(cpt_isectA);
+          cpt_isectB->isect_type = !cpt_isectA->isect_type;
 
           cpt_isectA->z = edgeA->start->z;
           cpt_isectA->isect_dist = len_v2v2(p0_a, p1_a) / len_v2v2(p0_a, isect_pt);
