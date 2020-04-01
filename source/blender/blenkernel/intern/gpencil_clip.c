@@ -240,7 +240,7 @@ static ListBase *gp_get_inner_edge(tClipPoint *cpt_start, int *r_num_inner_point
   while (cpt_curr != cpt_start) {
     LinkData *cpt_curr_link = BLI_genericNodeN(cpt_curr);
     BLI_addtail(inner_edge, cpt_curr_link);
-    cpt_curr->flag |= CP_INNER_EDGE;
+    cpt_curr->flag |= (CP_INNER_EDGE | CP_VISITED);
 
     if (cpt_curr->x < min_x) {
       min_x = cpt_curr->x;
@@ -321,17 +321,17 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   /* Find outer edge */
   int num_outer_points = 1;
   BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_first));
-  cpt_first->flag |= CP_OUTER_EDGE;
+  cpt_first->flag |= (CP_OUTER_EDGE | CP_VISITED);
   if(cpt_first->isect_link != NULL) {
-    cpt_first->isect_link->flag |= CP_OUTER_EDGE;
+    cpt_first->isect_link->flag |= (CP_OUTER_EDGE | CP_VISITED);
     BLI_addtail(&outer_isect_points, BLI_genericNodeN(cpt_first));
   }
   tClipPoint *cpt_curr = cpt_first->next;
   while (cpt_curr != cpt_first) {
     BLI_addtail(&outer_edge, BLI_genericNodeN(cpt_curr));
-    cpt_curr->flag |= CP_OUTER_EDGE;
+    cpt_curr->flag |= (CP_OUTER_EDGE | CP_VISITED);
     if(cpt_curr->isect_link != NULL) {
-      cpt_curr->isect_link->flag |= CP_OUTER_EDGE;
+      cpt_curr->isect_link->flag |= (CP_OUTER_EDGE | CP_VISITED);
       BLI_addtail(&outer_isect_points, BLI_genericNodeN(cpt_curr));
       cpt_curr = cpt_curr->isect_link->next;
     }
@@ -414,8 +414,8 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
           }
           else {
             printf("Both visited, backtrack!\n");
-            curr_isect->flag |= CP_CHECKED;
-            curr_isect->isect_link->flag |= CP_CHECKED;
+            curr_isect->flag |= (CP_CHECKED | CP_VISITED);
+            curr_isect->isect_link->flag |= (CP_CHECKED | CP_VISITED);
             /* backtrack */
             BLI_poptail(&cpt_stack);
             stack_size--;
@@ -446,8 +446,8 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
           }
           else {
             printf("Both visited, backtrack!\n");
-            curr_isect->flag |= CP_CHECKED;
-            curr_isect->isect_link->flag |= CP_CHECKED;
+            curr_isect->flag |= (CP_CHECKED | CP_VISITED);
+            curr_isect->isect_link->flag |= (CP_CHECKED | CP_VISITED);
             /* backtrack */
             BLI_poptail(&cpt_stack);
             stack_size--;
