@@ -2438,9 +2438,9 @@ float *BKE_gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   generate_perimeter_cap(last_pt_vs, last_prev_pt_vs, last_radius, perimeter_right_side, subdivisions, gps->caps[1]);
 
   /* merge both sides to one list */
-  reverse_perimeter_list(perimeter_left_side);
-  extend_perimeter_list(perimeter_right_side, perimeter_left_side); // perimeter_right_side contains entire list
-  tPerimeterPointList* perimeter_list = perimeter_right_side;
+  reverse_perimeter_list(perimeter_right_side);
+  extend_perimeter_list(perimeter_left_side, perimeter_right_side); // perimeter_right_side contains entire list
+  tPerimeterPointList* perimeter_list = perimeter_left_side;
 
   /* close by creating a point close to the first (make a small gap) */
   float close_pt[3];
