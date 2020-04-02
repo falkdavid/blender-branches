@@ -634,6 +634,41 @@ void BKE_gpencil_brush_preset_set(Main *bmain, Brush *brush, const short type)
       zero_v3(brush->secondary_rgb);
       break;
     }
+    case GP_BRUSH_PRESET_PEN_OUTLINE: {
+      brush->size = 30.0f;
+      brush->gpencil_settings->flag |= GP_BRUSH_USE_PRESSURE;
+
+      brush->gpencil_settings->draw_strength = 1.0f;
+      brush->gpencil_settings->flag |= GP_BRUSH_USE_STENGTH_PRESSURE;
+
+      brush->gpencil_settings->input_samples = 10;
+      brush->gpencil_settings->active_smooth = ACTIVE_SMOOTH;
+      brush->gpencil_settings->draw_angle = 0.0f;
+      brush->gpencil_settings->draw_angle_factor = 0.0f;
+      brush->gpencil_settings->hardeness = 1.0f;
+      copy_v2_fl(brush->gpencil_settings->aspect_ratio, 1.0f);
+
+      brush->gpencil_settings->flag |= GP_BRUSH_GROUP_SETTINGS;
+      brush->gpencil_settings->draw_smoothfac = 0.0f;
+      brush->gpencil_settings->draw_smoothlvl = 1;
+      brush->gpencil_settings->draw_subdivide = 1;
+      brush->gpencil_settings->simplify_f = 0.002f;
+
+      brush->gpencil_settings->draw_random_press = 0.0f;
+      brush->gpencil_settings->draw_random_strength = 0.0f;
+      brush->gpencil_settings->draw_jitter = 0.0f;
+      brush->gpencil_settings->flag |= GP_BRUSH_USE_JITTER_PRESSURE;
+
+      brush->gpencil_settings->icon_id = GP_BRUSH_ICON_PEN;
+      brush->gpencil_tool = GPAINT_TOOL_DRAW;
+
+      brush->gpencil_settings->draw_cap_subdivisions = 3;
+      brush->gpencil_settings->draw_sample_length = 0.02f;
+      brush->gpencil_settings->flag |= GP_BRUSH_GROUP_OUTLINE;
+
+      zero_v3(brush->secondary_rgb);
+      break;
+    }
     case GP_BRUSH_PRESET_PENCIL_SOFT: {
       brush->size = 80.0f;
       brush->gpencil_settings->flag |= GP_BRUSH_USE_PRESSURE;
@@ -1023,6 +1058,10 @@ void BKE_brush_gpencil_paint_presets(Main *bmain, ToolSettings *ts)
   /* Pen brush. */
   brush = gpencil_brush_ensure(bmain, ts, "Pen", OB_MODE_PAINT_GPENCIL);
   BKE_gpencil_brush_preset_set(bmain, brush, GP_BRUSH_PRESET_PEN);
+
+  /* Pen outline brush. */
+  brush = gpencil_brush_ensure(bmain, ts, "Pen Outline", OB_MODE_PAINT_GPENCIL);
+  BKE_gpencil_brush_preset_set(bmain, brush, GP_BRUSH_PRESET_PEN_OUTLINE);
 
   /* Pencil Soft brush. */
   brush = gpencil_brush_ensure(bmain, ts, "Pencil Soft", OB_MODE_PAINT_GPENCIL);
