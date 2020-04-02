@@ -165,7 +165,7 @@ static void gp_stroke_to_points_and_edges(const bGPDstroke *gps, const float pro
   float vec_tmp[4];
   gpencil_point3d_to_proj_space(proj_mat, &pt_first->x, vec_tmp);
   copy_v3_v3(&cpt_first->x, vec_tmp);
-  BLI_addhead(clip_points, cpt_first);
+  BLI_addtail(clip_points, cpt_first);
 
   tClipPoint *cpt_prev = cpt_first;
   for (int i = 1; i < gps->totpoints; i++) {
@@ -616,6 +616,40 @@ static int naive_intersection_algorithm(ListBase *edges, ListBase *clip_points)
   return num_intersections;
 }
 
+static bGPDstroke *gp_clipPointList_to_gp_stroke(ListBase *points, int num_points, const float invmat[4][4], int mat_idx, bool select)
+{
+  bGPDstroke *clip_stroke = BKE_gpencil_stroke_new(mat_idx, num_points, 1);
+
+  float vec_p[4];
+  vec_p[3] = 1.0f;
+  tClipPoint *cpt_curr = points->first;
+  for(int i = 0; i < num_points; i++) {
+    bGPDspoint *pt = &clip_stroke->points[i];
+    copy_v3_v3(vec_p, &cpt_curr->x);
+    mul_m4_v4(invmat, vec_p);
+    copy_v3_v3(&pt->x, vec_p);
+
+    /* Set pressure to zero and strength to one */
+    pt->pressure = 0.0f;
+    pt->strength = 1.0f;
+
+    if (select) {
+      pt->flag |= GP_SPOINT_SELECT;
+    }
+
+    cpt_curr = cpt_curr->next;
+  }
+
+  /* triangles cache needs to be recalculated */
+  BKE_gpencil_stroke_geometry_update(clip_stroke);
+
+  if (select) {
+    clip_stroke->flag |= GP_STROKE_SELECT;
+  }
+
+  return clip_stroke;
+}
+
 bGPDstroke *BKE_gpencil_stroke_clip_self(const RegionView3D *rv3d,
                                          const bGPDlayer *gpl,
                                          bGPDstroke *gps)
@@ -627,39 +661,18 @@ bGPDstroke *BKE_gpencil_stroke_clip_self(const RegionView3D *rv3d,
 
   int num_isect_points = naive_intersection_algorithm(&edges, &clip_points);
   if (num_isect_points == 0) {
-    return clip_stroke;
+    BLI_freelistN(&edges);
+    BLI_freelistN(&clip_points);
+    return gps;
   }
 
   /* create new stroke */
   int tot_points = gps->totpoints + 2*num_isect_points;
-  clip_stroke = BKE_gpencil_stroke_new(gps->mat_nr, tot_points, 1);
-
-  float vec_p[4];
-  vec_p[3] = 1.0f;
-  tClipPoint *cpt_curr = clip_points.first;
-  for(int i = 0; i < tot_points; i++) {
-    bGPDspoint *pt = &clip_stroke->points[i];
-    copy_v3_v3(vec_p, &cpt_curr->x);
-    mul_m4_v4(rv3d->viewinv, vec_p);
-    copy_v3_v3(&pt->x, vec_p);
-
-    /* Set pressure to zero and strength to one */
-    pt->pressure = 0.0f;
-    pt->strength = 1.0f;
-
-    pt->flag |= GP_SPOINT_SELECT;
-
-    cpt_curr = cpt_curr->next;
-  }
+  clip_stroke = gp_clipPointList_to_gp_stroke(&clip_points, tot_points, rv3d->viewinv, gps->mat_nr, true);
 
   /* free temp data */
   BLI_freelistN(&edges);
   BLI_freelistN(&clip_points);
-
-  /* triangles cache needs to be recalculated */
-  BKE_gpencil_stroke_geometry_update(clip_stroke);
-
-  clip_stroke->flag |= GP_STROKE_SELECT;
 
   /* Delete the old stroke */
   BLI_remlink(&gpl->actframe->strokes, gps);
@@ -679,42 +692,23 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline(const RegionView3D *rv3d,
 
   int num_isect_points = naive_intersection_algorithm(&edges, &clip_points);
   if (num_isect_points == 0) {
-    return outline_stroke;
+    BLI_freelistN(&edges);
+    BLI_freelistN(&clip_points);
+    return gps;
   }
 
   ListBase outline_points = {NULL, NULL};
   int num_outline_points = gp_outline_walk_algorithm(&clip_points, &outline_points);
 
   /* create new stroke */
-  outline_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_outline_points, 1);
-
-  float vec_p[4];
-  vec_p[3] = 1.0f;
-  tClipPoint *cpt_curr = outline_points.first;
-  for(int i = 0; i < num_outline_points; i++) {
-    bGPDspoint *pt = &outline_stroke->points[i];
-    copy_v3_v3(vec_p, &cpt_curr->x);
-    mul_m4_v4(rv3d->viewinv, vec_p);
-    copy_v3_v3(&pt->x, vec_p);
-
-    /* Set pressure to zero and strength to one */
-    pt->pressure = 0.0f;
-    pt->strength = 1.0f;
-
-    pt->flag |= GP_SPOINT_SELECT;
-
-    cpt_curr = cpt_curr->next;
-  }
+  outline_stroke = gp_clipPointList_to_gp_stroke(&outline_points, num_outline_points, rv3d->viewinv, gps->mat_nr, true);
 
   /* free temp data */
   BLI_freelistN(&edges);
   BLI_freelistN(&clip_points);
   BLI_freelistN(&outline_points);
 
-  /* triangles cache needs to be recalculated */
-  BKE_gpencil_stroke_geometry_update(outline_stroke);
-
-  outline_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+  outline_stroke->flag |= GP_STROKE_CYCLIC;
 
   /* Delete the old stroke */
   BLI_remlink(&gpl->actframe->strokes, gps);
