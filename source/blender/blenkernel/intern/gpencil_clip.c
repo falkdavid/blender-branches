@@ -267,15 +267,6 @@ static ListBase *gp_get_inner_edge(tClipPoint *cpt_start, int *r_num_inner_point
   return inner_edge;
 }
 
-static void gp_copy_links_from_link_data(ListBase *points)
-{
-  LISTBASE_FOREACH(LinkData *, _curr, points) {
-    tClipPoint *curr = (tClipPoint *)_curr->data;
-    curr->prev = _curr->prev != NULL ? _curr->prev->data : NULL;
-    curr->next = _curr->next != NULL ? _curr->next->data : NULL;
-  }
-}
-
 static tClipPoint *gp_next_isect(const tClipPoint *cpt, bool flag_visited)
 {
   tClipPoint *cpt_curr = cpt->next;
@@ -474,25 +465,43 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   printf("Num inner points: %d\n", num_inner_points);
   point_count = num_outer_points + num_inner_points;
 
-  /* remove link data of outer edge */
-  gp_copy_links_from_link_data(&outer_edge);
-  BLI_freelistN(&outer_edge);
-
   ListBase *result_list = MEM_callocN(sizeof(ListBase), __func__);
-  result_list->first = cpt_first;
-  result_list->last = cpt_last;
+  /* duplicate all edge points */
+  tClipPoint *out_start = MEM_dupallocN(cpt_first);
+  BLI_addtail(result_list, out_start);
+  LinkData *cpt_curr_link = ((LinkData *)outer_edge.first)->next;
+  while (cpt_curr_link != NULL) {
+    cpt_curr = cpt_curr_link->data;
+    tClipPoint *out_curr = MEM_dupallocN(cpt_curr);
+    BLI_addtail(result_list, out_curr);
+    cpt_curr_link = cpt_curr_link->next;
+  }
+
+  BLI_freelistN(&outer_edge);
 
   /* form single outline by connecting holes to outer edge */
   while(!BLI_heap_is_empty(inner_edges)) {
     ListBase *curr_link_hole = BLI_heap_pop_min(inner_edges);
-    gp_copy_links_from_link_data(curr_link_hole);
-    ListBase curr_hole = {((LinkData *)curr_link_hole->first)->data,
-                          ((LinkData *)curr_link_hole->last)->data};
-    BLI_freelistN(curr_link_hole);
+
+    ListBase curr_hole = {NULL, NULL};
+    tClipPoint *hole_start = ((LinkData *)curr_link_hole->first)->data;
+    
+    /* duplicate all edge points */
+    tClipPoint *inner_start = MEM_dupallocN(hole_start);
+    BLI_addtail(&curr_hole, inner_start);
+    cpt_curr_link = ((LinkData *)curr_link_hole->first)->next;
+    while (cpt_curr_link != NULL) {
+      cpt_curr = cpt_curr_link->data;
+      tClipPoint *inner_curr = MEM_dupallocN(cpt_curr);
+      BLI_addtail(&curr_hole, inner_curr);
+      cpt_curr_link = cpt_curr_link->next;
+    }
 
     tClipPoint *best_incert_cp = gp_find_best_insert_point(result_list, curr_hole.first);
     gp_insert_hole_into_outer_edge(result_list, &curr_hole, best_incert_cp);
     point_count += 2;
+
+    BLI_freelistN(curr_link_hole);
   }
   printf("Num points: %d\n", point_count);
 
@@ -500,8 +509,9 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   cpt_last->next = NULL;
 
   /* free temp data */
+  BLI_freelistN(points);
   BLI_freelistN(&outer_isect_points);
-  BLI_heap_free(inner_edges, NULL);
+  BLI_heap_free(inner_edges, BLI_freelistN);
 
   *r_num_points = point_count;
 
@@ -727,13 +737,16 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const RegionView3D *rv
   // TODO: this algorithm has a time complexity of O(n^2), this can be improved
   int num_isect_points = naive_intersection_algorithm(&edges, &clip_points); 
   if (num_isect_points == 0) {
-    return NULL;
+    return gps;
   }
 
   int num_outline_points = 0;
   int tot_points = gps->totpoints + 2*num_isect_points;
   /* find outer edge and holes and combine them into single outline */
   ListBase *outline_points = gp_clipPointList_to_outline_and_holes_list(&clip_points, tot_points, &num_outline_points);
+  if (outline_points == NULL) {
+    return gps;
+  }
   /* create new stroke */
   outline_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_outline_points, 1);
 
