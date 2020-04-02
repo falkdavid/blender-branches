@@ -96,6 +96,8 @@
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
+#include "UI_interface.h"
+
 #include "WM_api.h"
 #include "WM_types.h"
 
@@ -2220,6 +2222,13 @@ static int convert_exec(bContext *C, wmOperator *op)
   Object *gpencil_ob = NULL;
   const short target = RNA_enum_get(op->ptr, "target");
   bool keep_original = RNA_boolean_get(op->ptr, "keep_original");
+
+  const float angle = RNA_float_get(op->ptr, "angle");
+  const int thickness = RNA_int_get(op->ptr, "thickness");
+  const bool use_seams = RNA_boolean_get(op->ptr, "seams");
+  const bool use_faces = RNA_boolean_get(op->ptr, "faces");
+  const float offset = RNA_float_get(op->ptr, "offset");
+
   int a, mballConverted = 0;
   bool gpencilConverted = false;
 
@@ -2337,6 +2346,7 @@ static int convert_exec(bContext *C, wmOperator *op)
       /* Create a new grease pencil object and copy transformations. */
       ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uuid : 0;
       float loc[3], size[3], rot[3][3], eul[3];
+      float matrix[4][4];
       mat4_to_loc_rot_size(loc, rot, size, ob->obmat);
       mat3_to_eul(eul, rot);
 
@@ -2344,9 +2354,34 @@ static int convert_exec(bContext *C, wmOperator *op)
       copy_v3_v3(gpencil_ob->loc, loc);
       copy_v3_v3(gpencil_ob->rot, eul);
       copy_v3_v3(gpencil_ob->scale, size);
-
-      BKE_gpencil_convert_mesh(bmain, depsgraph, scene, gpencil_ob, ob, false, true);
+      unit_m4(matrix);
+      BKE_gpencil_convert_mesh(bmain,
+                               depsgraph,
+                               scene,
+                               gpencil_ob,
+                               ob,
+                               angle,
+                               thickness,
+                               offset,
+                               matrix,
+                               use_seams,
+                               use_faces);
       gpencilConverted = true;
+
+      /* Remove unused materials. */
+      int actcol = gpencil_ob->actcol;
+      for (int slot = 1; slot <= gpencil_ob->totcol; slot++) {
+        while (slot <= gpencil_ob->totcol &&
+               !BKE_object_material_slot_used(gpencil_ob->data, slot)) {
+          gpencil_ob->actcol = slot;
+          BKE_object_material_slot_remove(CTX_data_main(C), gpencil_ob);
+
+          if (actcol >= slot) {
+            actcol--;
+          }
+        }
+      }
+      gpencil_ob->actcol = actcol;
     }
     else if (ob->type == OB_MESH) {
       ob->flag |= OB_DONE;
@@ -2625,8 +2660,28 @@ static int convert_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static void convert_ui(bContext *C, wmOperator *op)
+{
+  uiLayout *layout = op->layout;
+  PointerRNA ptr;
+
+  RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
+  uiItemR(layout, &ptr, "target", 0, NULL, ICON_NONE);
+  uiItemR(layout, &ptr, "keep_original", 0, NULL, ICON_NONE);
+
+  if (RNA_enum_get(&ptr, "target") == OB_GPENCIL) {
+    uiItemR(layout, &ptr, "angle", 0, NULL, ICON_NONE);
+    uiItemR(layout, &ptr, "thickness", 0, NULL, ICON_NONE);
+    uiItemR(layout, &ptr, "offset", 0, NULL, ICON_NONE);
+    uiItemR(layout, &ptr, "faces", 0, NULL, ICON_NONE);
+    uiItemR(layout, &ptr, "seams", 0, NULL, ICON_NONE);
+  }
+}
+
 void OBJECT_OT_convert(wmOperatorType *ot)
 {
+  PropertyRNA *prop;
+
   /* identifiers */
   ot->name = "Convert to";
   ot->description = "Convert selected objects to another type";
@@ -2636,6 +2691,7 @@ void OBJECT_OT_convert(wmOperatorType *ot)
   ot->invoke = WM_menu_invoke;
   ot->exec = convert_exec;
   ot->poll = convert_poll;
+  ot->ui = convert_ui;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2648,6 +2704,31 @@ void OBJECT_OT_convert(wmOperatorType *ot)
                   0,
                   "Keep Original",
                   "Keep original objects instead of replacing them");
+
+  prop = RNA_def_float_rotation(ot->srna,
+                                "angle",
+                                0,
+                                NULL,
+                                DEG2RADF(0.0f),
+                                DEG2RADF(180.0f),
+                                "Threshold Angle",
+                                "Threshold to determine ends of the strokes",
+                                DEG2RADF(0.0f),
+                                DEG2RADF(180.0f));
+  RNA_def_property_float_default(prop, DEG2RADF(70.0f));
+
+  RNA_def_int(ot->srna, "thickness", 5, 1, 100, "Thickness", "", 1, 100);
+  RNA_def_boolean(ot->srna, "seams", 0, "Only Seam Edges", "Convert only seam edges");
+  RNA_def_boolean(ot->srna, "faces", 1, "Export Faces", "Export faces as filled strokes");
+  RNA_def_float_distance(ot->srna,
+                         "offset",
+                         0.01f,
+                         0.0,
+                         OBJECT_ADD_SIZE_MAXF,
+                         "Offset",
+                         "Offset strokes from fill",
+                         0.0,
+                         100.00);
 }
 
 /** \} */

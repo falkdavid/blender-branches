@@ -4541,6 +4541,13 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
             brush->gpencil_weight_tool = brush->gpencil_settings->brush_type;
           }
         }
+        /* Tint brush. */
+        Brush *brush = BLI_findstring(&bmain->brushes, "Tint", offsetof(ID, name) + 2);
+        if (brush == NULL) {
+          brush = BKE_brush_add(bmain, "Tint", OB_MODE_PAINT_GPENCIL);
+          BKE_brush_init_gpencil_settings(brush);
+        }
+        BKE_gpencil_brush_preset_set(bmain, brush, GP_BRUSH_PRESET_TINT);
 
         BKE_paint_toolslots_init_from_main(bmain);
       }
@@ -4878,5 +4885,18 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
    */
   {
     /* Keep this block, even when empty. */
+
+    /* Remesh Modifier Voxel Mode. */
+    if (!DNA_struct_elem_find(fd->filesdna, "RemeshModifierData", "float", "voxel_size")) {
+      for (Object *ob = bmain->objects.first; ob; ob = ob->id.next) {
+        for (ModifierData *md = ob->modifiers.first; md; md = md->next) {
+          if (md->type == eModifierType_Remesh) {
+            RemeshModifierData *rmd = (RemeshModifierData *)md;
+            rmd->voxel_size = 0.1f;
+            rmd->adaptivity = 0.0f;
+          }
+        }
+      }
+    }
   }
 }

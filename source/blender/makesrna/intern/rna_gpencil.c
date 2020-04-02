@@ -642,7 +642,6 @@ static void rna_GPencil_stroke_point_add(
     /* Calc geometry data. */
     BKE_gpencil_stroke_geometry_update(stroke);
 
-    gpd->flag |= GP_DATA_PYTHON_UPDATED;
     DEG_id_tag_update(&gpd->id,
                       ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
 
@@ -704,7 +703,6 @@ static void rna_GPencil_stroke_point_pop(ID *id,
   /* Calc geometry data. */
   BKE_gpencil_stroke_geometry_update(stroke);
 
-  gpd->flag |= GP_DATA_PYTHON_UPDATED;
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_COPY_ON_WRITE);
 
   WM_main_add_notifier(NC_GPENCIL | NA_EDITED, NULL);
@@ -712,10 +710,7 @@ static void rna_GPencil_stroke_point_pop(ID *id,
 
 static bGPDstroke *rna_GPencil_stroke_new(bGPDframe *frame)
 {
-  bGPDstroke *stroke = MEM_callocN(sizeof(bGPDstroke), "gp_stroke");
-  stroke->hardeness = 1.0f;
-  ARRAY_SET_ITEMS(stroke->aspect_ratio, 1.0f, 1.0f);
-  stroke->uv_scale = 1.0f;
+  bGPDstroke *stroke = BKE_gpencil_stroke_new(0, 0, 1.0f);
   BLI_addtail(&frame->strokes, stroke);
 
   return stroke;
@@ -1201,11 +1196,11 @@ static void rna_def_gpencil_stroke(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 
   /* gradient control along y */
-  prop = RNA_def_property(srna, "hardeness", PROP_FLOAT, PROP_FACTOR);
+  prop = RNA_def_property(srna, "hardness", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "hardeness");
   RNA_def_property_range(prop, 0.001f, 1.0f);
   RNA_def_property_float_default(prop, 1.0f);
-  RNA_def_property_ui_text(prop, "Hardeness", "Amount of gradient along section of stroke");
+  RNA_def_property_ui_text(prop, "Hardness", "Amount of gradient along section of stroke");
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, 0);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
 

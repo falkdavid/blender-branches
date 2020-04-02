@@ -383,6 +383,25 @@ int BKE_pbvh_count_grid_quads(BLI_bitmap **grid_hidden,
   return totquad;
 }
 
+void BKE_pbvh_sync_face_sets_to_grids(PBVH *bvh)
+{
+  const int gridsize = bvh->gridkey.grid_size;
+  for (int i = 0; i < bvh->totgrid; i++) {
+    BLI_bitmap *gh = bvh->grid_hidden[i];
+    const int face_index = BKE_subdiv_cgg_grid_to_face_index(bvh->subdiv_ccg, i);
+    if (!gh && bvh->face_sets[face_index] < 0) {
+      gh = bvh->grid_hidden[i] = BLI_BITMAP_NEW(bvh->gridkey.grid_area, "partialvis_update_grids");
+    }
+    if (gh) {
+      for (int y = 0; y < gridsize; y++) {
+        for (int x = 0; x < gridsize; x++) {
+          BLI_BITMAP_SET(gh, y * gridsize + x, bvh->face_sets[face_index] < 0);
+        }
+      }
+    }
+  }
+}
+
 static void build_grid_leaf_node(PBVH *bvh, PBVHNode *node)
 {
   int totquads = BKE_pbvh_count_grid_quads(
@@ -1289,10 +1308,14 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
     switch (bvh->type) {
       case PBVH_GRIDS:
         GPU_pbvh_grid_buffers_update(node->draw_buffers,
+                                     bvh->subdiv_ccg,
                                      bvh->grids,
                                      bvh->grid_flag_mats,
                                      node->prim_indices,
                                      node->totprim,
+                                     bvh->face_sets,
+                                     bvh->face_sets_color_seed,
+                                     bvh->face_sets_color_default,
                                      &bvh->gridkey,
                                      update_flags);
         break;
@@ -2098,6 +2121,7 @@ static bool pbvh_faces_node_raycast(PBVH *bvh,
                                     struct IsectRayPrecalc *isect_precalc,
                                     float *depth,
                                     int *r_active_vertex_index,
+                                    int *r_active_face_index,
                                     float *r_face_normal)
 {
   const MVert *vert = bvh->verts;
@@ -2143,6 +2167,7 @@ static bool pbvh_faces_node_raycast(PBVH *bvh,
           if (len_squared_v3v3(location, co[j]) < len_squared_v3v3(location, nearest_vertex_co)) {
             copy_v3_v3(nearest_vertex_co, co[j]);
             *r_active_vertex_index = mloop[lt->tri[j]].v;
+            *r_active_face_index = lt->poly;
           }
         }
       }
@@ -2160,6 +2185,7 @@ static bool pbvh_grids_node_raycast(PBVH *bvh,
                                     struct IsectRayPrecalc *isect_precalc,
                                     float *depth,
                                     int *r_active_vertex_index,
+                                    int *r_active_grid_index,
                                     float *r_face_normal)
 {
   const int totgrid = node->totprim;
@@ -2213,14 +2239,22 @@ static bool pbvh_grids_node_raycast(PBVH *bvh,
           if (r_active_vertex_index) {
             float location[3] = {0.0};
             madd_v3_v3v3fl(location, ray_start, ray_normal, *depth);
+
+            const int x_it[4] = {0, 1, 1, 0};
+            const int y_it[4] = {0, 0, 1, 1};
+
             for (int j = 0; j < 4; j++) {
               if (len_squared_v3v3(location, co[j]) <
                   len_squared_v3v3(location, nearest_vertex_co)) {
                 copy_v3_v3(nearest_vertex_co, co[j]);
-                *r_active_vertex_index = gridkey->grid_area * grid_index + y * gridkey->grid_size +
-                                         x;
+
+                *r_active_vertex_index = gridkey->grid_area * grid_index +
+                                         (y + y_it[j]) * gridkey->grid_size + (x + x_it[j]);
               }
             }
+          }
+          if (r_active_grid_index) {
+            *r_active_grid_index = grid_index;
           }
         }
       }
@@ -2243,6 +2277,7 @@ bool BKE_pbvh_node_raycast(PBVH *bvh,
                            struct IsectRayPrecalc *isect_precalc,
                            float *depth,
                            int *active_vertex_index,
+                           int *active_face_grid_index,
                            float *face_normal)
 {
   bool hit = false;
@@ -2261,6 +2296,7 @@ bool BKE_pbvh_node_raycast(PBVH *bvh,
                                      isect_precalc,
                                      depth,
                                      active_vertex_index,
+                                     active_face_grid_index,
                                      face_normal);
       break;
     case PBVH_GRIDS:
@@ -2272,6 +2308,7 @@ bool BKE_pbvh_node_raycast(PBVH *bvh,
                                      isect_precalc,
                                      depth,
                                      active_vertex_index,
+                                     active_face_grid_index,
                                      face_normal);
       break;
     case PBVH_BMESH:
@@ -2973,4 +3010,14 @@ MVert *BKE_pbvh_get_verts(const PBVH *bvh)
 {
   BLI_assert(bvh->type == PBVH_FACES);
   return bvh->verts;
+}
+
+void BKE_pbvh_subdiv_cgg_set(PBVH *bvh, SubdivCCG *subdiv_ccg)
+{
+  bvh->subdiv_ccg = subdiv_ccg;
+}
+
+void BKE_pbvh_face_sets_set(PBVH *bvh, int *face_sets)
+{
+  bvh->face_sets = face_sets;
 }
