@@ -114,6 +114,14 @@ static void debug_print_clip_point(tClipPoint *cp)
   printf("\n");
 }
 
+static bool isect_aabb_aabb_v2(const float min1[2],
+                               const float max1[2],
+                               const float min2[2],
+                               const float max2[2])
+{
+  return (min1[0] < max2[0] && min1[1] < max2[1] && min2[0] < max1[0] && min2[1] < max1[1]);
+}
+
 /* Helper: given that A and B intersect, returns the intersection type */
 static bool gp_clip_point_isect_type(const t2dStrokeEdge *A, const t2dStrokeEdge *B)
 {
@@ -129,6 +137,14 @@ static bool gp_clip_point_isect_type(const t2dStrokeEdge *A, const t2dStrokeEdge
   return (-v1[0]*v2[1] + v1[1]*v2[0]) > 0.0;
 }
 
+/* Helper: get 3d point into proj space */
+static void gp_point3d_to_proj_space(const float mat[4][4], const float p[3], float r[4])
+{
+  copy_v3_v3(r, p);
+  r[3] = 1.0f;
+  mul_m4_v4(mat, r);
+}
+
 static t2dStrokeEdge *gp_new_edge_from_clip_points(tClipPoint* A, tClipPoint *B)
 {
   t2dStrokeEdge *new_edge = MEM_callocN(sizeof(t2dStrokeEdge), __func__);
@@ -141,29 +157,13 @@ static t2dStrokeEdge *gp_new_edge_from_clip_points(tClipPoint* A, tClipPoint *B)
   return new_edge;
 }
 
-/* Helper: get 3d point into proj space */
-static void gpencil_point3d_to_proj_space(const float mat[4][4], const float p[3], float r[4])
-{
-  copy_v3_v3(r, p);
-  r[3] = 1.0f;
-  mul_m4_v4(mat, r);
-}
-
-static bool isect_aabb_aabb_v2(const float min1[2],
-                               const float max1[2],
-                               const float min2[2],
-                               const float max2[2])
-{
-  return (min1[0] < max2[0] && min1[1] < max2[1] && min2[0] < max1[0] && min2[1] < max1[1]);
-}
-
 static void gp_stroke_to_points_and_edges(const bGPDstroke *gps, const float proj_mat[4][4],
                                           ListBase *edges, ListBase *clip_points)
 {
   tClipPoint *cpt_first = MEM_callocN(sizeof(tClipPoint), __func__);
   bGPDspoint *pt_first = &gps->points[0];
   float vec_tmp[4];
-  gpencil_point3d_to_proj_space(proj_mat, &pt_first->x, vec_tmp);
+  gp_point3d_to_proj_space(proj_mat, &pt_first->x, vec_tmp);
   copy_v3_v3(&cpt_first->x, vec_tmp);
   BLI_addtail(clip_points, cpt_first);
 
@@ -171,7 +171,7 @@ static void gp_stroke_to_points_and_edges(const bGPDstroke *gps, const float pro
   for (int i = 1; i < gps->totpoints; i++) {
     tClipPoint *cpt_curr = MEM_callocN(sizeof(tClipPoint), __func__);
     bGPDspoint *pt = &gps->points[i];
-    gpencil_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
+    gp_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
     copy_v3_v3(&cpt_curr->x, vec_tmp);
     BLI_addtail(clip_points, cpt_curr);
 
@@ -518,7 +518,7 @@ static ListBase *gp_clipPointList_to_outline_and_holes_list(ListBase *points, in
   return result_list;
 }
 
-static int gp_outline_walk_algorithm(ListBase *points, ListBase *outline_points)
+static int gp_get_outer_edge(ListBase *points, ListBase *outline_points)
 {
   int num_outline_points = 1;
   /* find point on the outer edge first */
@@ -561,7 +561,11 @@ static int gp_outline_walk_algorithm(ListBase *points, ListBase *outline_points)
   return num_outline_points;
 }
 
-static int naive_intersection_algorithm(ListBase *edges, ListBase *clip_points)
+/*
+ * TODO: This is the most primitive way of finding line segment intersections.
+ * We will need to implement a more efficient algorithm down the line.
+ */
+static int gp_edge_intersection_algorithm(ListBase *edges, ListBase *clip_points)
 {
   int num_intersections = 0;
   /* check every pair for intersection */
@@ -616,7 +620,7 @@ static int naive_intersection_algorithm(ListBase *edges, ListBase *clip_points)
   return num_intersections;
 }
 
-static bGPDstroke *gp_clipPointList_to_gp_stroke(ListBase *points, int num_points, const float invmat[4][4], int mat_idx, bool select)
+static bGPDstroke *gp_clip_points_to_gp_stroke(ListBase *points, int num_points, const float invmat[4][4], int mat_idx, bool select)
 {
   bGPDstroke *clip_stroke = BKE_gpencil_stroke_new(mat_idx, num_points, 1);
 
@@ -659,7 +663,7 @@ bGPDstroke *BKE_gpencil_stroke_clip_self(const RegionView3D *rv3d,
   ListBase edges = {NULL, NULL};
   gp_stroke_to_points_and_edges(gps, rv3d->viewmat, &edges, &clip_points);
 
-  int num_isect_points = naive_intersection_algorithm(&edges, &clip_points);
+  int num_isect_points = gp_edge_intersection_algorithm(&edges, &clip_points);
   if (num_isect_points == 0) {
     BLI_freelistN(&edges);
     BLI_freelistN(&clip_points);
@@ -668,7 +672,7 @@ bGPDstroke *BKE_gpencil_stroke_clip_self(const RegionView3D *rv3d,
 
   /* create new stroke */
   int tot_points = gps->totpoints + 2*num_isect_points;
-  clip_stroke = gp_clipPointList_to_gp_stroke(&clip_points, tot_points, rv3d->viewinv, gps->mat_nr, true);
+  clip_stroke = gp_clip_points_to_gp_stroke(&clip_points, tot_points, rv3d->viewinv, gps->mat_nr, true);
 
   /* free temp data */
   BLI_freelistN(&edges);
@@ -690,7 +694,7 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline(const RegionView3D *rv3d,
   ListBase edges = {NULL, NULL};
   gp_stroke_to_points_and_edges(gps, rv3d->viewmat, &edges, &clip_points);
 
-  int num_isect_points = naive_intersection_algorithm(&edges, &clip_points);
+  int num_isect_points = gp_edge_intersection_algorithm(&edges, &clip_points);
   if (num_isect_points == 0) {
     BLI_freelistN(&edges);
     BLI_freelistN(&clip_points);
@@ -698,10 +702,10 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline(const RegionView3D *rv3d,
   }
 
   ListBase outline_points = {NULL, NULL};
-  int num_outline_points = gp_outline_walk_algorithm(&clip_points, &outline_points);
+  int num_outline_points = gp_get_outer_edge(&clip_points, &outline_points);
 
   /* create new stroke */
-  outline_stroke = gp_clipPointList_to_gp_stroke(&outline_points, num_outline_points, rv3d->viewinv, gps->mat_nr, true);
+  outline_stroke = gp_clip_points_to_gp_stroke(&outline_points, num_outline_points, rv3d->viewinv, gps->mat_nr, true);
 
   /* free temp data */
   BLI_freelistN(&edges);
@@ -729,51 +733,74 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const RegionView3D *rv
 
   /* intersection algorithm */
   // TODO: this algorithm has a time complexity of O(n^2), this can be improved
-  int num_isect_points = naive_intersection_algorithm(&edges, &clip_points); 
+  int num_isect_points = gp_edge_intersection_algorithm(&edges, &clip_points); 
   if (num_isect_points == 0) {
+    BLI_freelistN(&edges);
+    BLI_freelistN(&clip_points);
     return gps;
   }
 
-  int num_outline_points = 0;
   int tot_points = gps->totpoints + 2*num_isect_points;
+  int num_outline_points = 0;
   /* find outer edge and holes and combine them into single outline */
   ListBase *outline_points = gp_clipPointList_to_outline_and_holes_list(&clip_points, tot_points, &num_outline_points);
-  if (outline_points == NULL) {
-    return gps;
-  }
+
   /* create new stroke */
-  outline_stroke = BKE_gpencil_stroke_new(gps->mat_nr, num_outline_points, 1);
-
-  /* copy data to new stroke */
-  float vec_p[4];
-  vec_p[3] = 1.0f;
-  tClipPoint *cpt_curr = outline_points->first;
-  for(int i = 0; i < num_outline_points; i++) {
-    bGPDspoint *pt = &outline_stroke->points[i];
-    copy_v3_v3(vec_p, &cpt_curr->x);
-    mul_m4_v4(rv3d->viewinv, vec_p);
-    copy_v3_v3(&pt->x, vec_p);
-
-    /* Set pressure to zero and strength to one */
-    pt->pressure = 0.0f;
-    pt->strength = 1.0f;
-    pt->flag |= GP_SPOINT_SELECT;
-
-    cpt_curr = cpt_curr->next;
-  }
+  outline_stroke = gp_clip_points_to_gp_stroke(outline_points, num_outline_points, rv3d->viewinv, gps->mat_nr, true);
 
   /* free temp data */
   BLI_freelistN(&edges);
   BLI_freelistN(&clip_points);
 
-  /* triangles cache needs to be recalculated */
-  BKE_gpencil_stroke_geometry_update(outline_stroke);
-
-  outline_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+  outline_stroke->flag |= GP_STROKE_CYCLIC;
 
   /* Delete the old stroke */
   BLI_remlink(&gpl->actframe->strokes, gps);
   BKE_gpencil_free_stroke(gps);
+
+  return outline_stroke;
+}
+
+/*
+ * Takes two stroke outlines and applies a union boolean operation.
+ * Returns either the unified stroke or NULL if the strokes do not intersect.
+ */
+bGPDstroke *BKE_gpencil_stroke_outline_union(const RegionView3D *rv3d,
+                                             const bGPDlayer *gpl,
+                                             bGPDstroke *gps_A,
+                                             bGPDstroke *gps_B)
+{
+  ListBase clip_points = {NULL, NULL};
+  ListBase edges = {NULL, NULL};
+  /* convert stroke to point and edge data strusture */
+  gp_stroke_to_points_and_edges(gps_A, rv3d->viewmat, &edges, &clip_points);
+  gp_stroke_to_points_and_edges(gps_B, rv3d->viewmat, &edges, &clip_points);
+  int num_isect_points = gp_edge_intersection_algorithm(&edges, &clip_points); 
+  if (num_isect_points == 0) {
+    BLI_freelistN(&edges);
+    BLI_freelistN(&clip_points);
+    return NULL;
+  }
+
+  /* walk along the outline */
+  ListBase outline_points = {NULL, NULL};
+  int num_outline_points = gp_get_outer_edge(&clip_points, &outline_points);
+
+  /* create new stroke */
+  bGPDstroke *outline_stroke = gp_clip_points_to_gp_stroke(&outline_points, num_outline_points, rv3d->viewinv, gps_A->mat_nr, true);
+
+  /* free temp data */
+  BLI_freelistN(&edges);
+  BLI_freelistN(&clip_points);
+  BLI_freelistN(&outline_points);
+
+  outline_stroke->flag |= GP_STROKE_CYCLIC;
+
+  /* Delete the old strokes */
+  BLI_remlink(&gpl->actframe->strokes, gps_A);
+  BLI_remlink(&gpl->actframe->strokes, gps_B);
+  BKE_gpencil_free_stroke(gps_A);
+  BKE_gpencil_free_stroke(gps_B);
 
   return outline_stroke;
 }
