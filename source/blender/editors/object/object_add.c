@@ -53,8 +53,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_action.h"
-#include "BKE_anim.h"
-#include "BKE_animsys.h"
+#include "BKE_anim_data.h"
 #include "BKE_armature.h"
 #include "BKE_camera.h"
 #include "BKE_collection.h"
@@ -62,6 +61,7 @@
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_displist.h"
+#include "BKE_duplilist.h"
 #include "BKE_effect.h"
 #include "BKE_font.h"
 #include "BKE_gpencil_geom.h"
@@ -1740,10 +1740,10 @@ static void copy_object_set_idnew(bContext *C)
  * In other words, we consider each group of objects from a same item as being
  * the 'local group' where to check for parents.
  */
-static unsigned int dupliobject_hash(const void *ptr)
+static uint dupliobject_hash(const void *ptr)
 {
   const DupliObject *dob = ptr;
-  unsigned int hash = BLI_ghashutil_ptrhash(dob->ob);
+  uint hash = BLI_ghashutil_ptrhash(dob->ob);
 
   if (dob->type == OB_DUPLICOLLECTION) {
     for (int i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
@@ -1762,10 +1762,10 @@ static unsigned int dupliobject_hash(const void *ptr)
  * since its a unique index and we only want to know if the group objects are from the same
  * dupli-group instance.
  */
-static unsigned int dupliobject_instancer_hash(const void *ptr)
+static uint dupliobject_instancer_hash(const void *ptr)
 {
   const DupliObject *dob = ptr;
-  unsigned int hash = BLI_ghashutil_inthash(dob->persistent_id[0]);
+  uint hash = BLI_ghashutil_inthash(dob->persistent_id[0]);
   for (int i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
     hash ^= (dob->persistent_id[i] ^ i);
   }
@@ -2219,7 +2219,7 @@ static int convert_exec(bContext *C, wmOperator *op)
   Nurb *nu;
   MetaBall *mb;
   Mesh *me;
-  Object *gpencil_ob = NULL;
+  Object *ob_gpencil = NULL;
   const short target = RNA_enum_get(op->ptr, "target");
   bool keep_original = RNA_boolean_get(op->ptr, "keep_original");
 
@@ -2264,7 +2264,7 @@ static int convert_exec(bContext *C, wmOperator *op)
    * needed since re-evaluating single modifiers causes bugs if they depend
    * on other objects data masks too, see: T50950. */
   {
-    for (CollectionPointerLink *link = selected_editable_bases.first; link; link = link->next) {
+    LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_editable_bases) {
       Base *base = link->ptr.data;
       Object *ob = base->object;
 
@@ -2291,7 +2291,7 @@ static int convert_exec(bContext *C, wmOperator *op)
     scene->customdata_mask = customdata_mask_prev;
   }
 
-  for (CollectionPointerLink *link = selected_editable_bases.first; link; link = link->next) {
+  LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_editable_bases) {
     Object *newob = NULL;
     Base *base = link->ptr.data;
     Object *ob = base->object;
@@ -2350,38 +2350,43 @@ static int convert_exec(bContext *C, wmOperator *op)
       mat4_to_loc_rot_size(loc, rot, size, ob->obmat);
       mat3_to_eul(eul, rot);
 
-      gpencil_ob = ED_gpencil_add_object(C, loc, local_view_bits);
-      copy_v3_v3(gpencil_ob->loc, loc);
-      copy_v3_v3(gpencil_ob->rot, eul);
-      copy_v3_v3(gpencil_ob->scale, size);
+      ob_gpencil = ED_gpencil_add_object(C, loc, local_view_bits);
+      copy_v3_v3(ob_gpencil->loc, loc);
+      copy_v3_v3(ob_gpencil->rot, eul);
+      copy_v3_v3(ob_gpencil->scale, size);
       unit_m4(matrix);
+      /* Set object in 3D mode. */
+      bGPdata *gpd = (bGPdata *)ob_gpencil->data;
+      gpd->draw_mode = GP_DRAWMODE_3D;
+
       BKE_gpencil_convert_mesh(bmain,
                                depsgraph,
                                scene,
-                               gpencil_ob,
+                               ob_gpencil,
                                ob,
                                angle,
                                thickness,
                                offset,
                                matrix,
+                               0,
                                use_seams,
                                use_faces);
       gpencilConverted = true;
 
       /* Remove unused materials. */
-      int actcol = gpencil_ob->actcol;
-      for (int slot = 1; slot <= gpencil_ob->totcol; slot++) {
-        while (slot <= gpencil_ob->totcol &&
-               !BKE_object_material_slot_used(gpencil_ob->data, slot)) {
-          gpencil_ob->actcol = slot;
-          BKE_object_material_slot_remove(CTX_data_main(C), gpencil_ob);
+      int actcol = ob_gpencil->actcol;
+      for (int slot = 1; slot <= ob_gpencil->totcol; slot++) {
+        while (slot <= ob_gpencil->totcol &&
+               !BKE_object_material_slot_used(ob_gpencil->data, slot)) {
+          ob_gpencil->actcol = slot;
+          BKE_object_material_slot_remove(CTX_data_main(C), ob_gpencil);
 
           if (actcol >= slot) {
             actcol--;
           }
         }
       }
-      gpencil_ob->actcol = actcol;
+      ob_gpencil->actcol = actcol;
     }
     else if (ob->type == OB_MESH) {
       ob->flag |= OB_DONE;
@@ -2522,10 +2527,10 @@ static int convert_exec(bContext *C, wmOperator *op)
            * Nurbs Surface are not supported.
            */
           ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uuid : 0;
-          gpencil_ob = ED_gpencil_add_object(C, ob->loc, local_view_bits);
-          copy_v3_v3(gpencil_ob->rot, ob->rot);
-          copy_v3_v3(gpencil_ob->scale, ob->scale);
-          BKE_gpencil_convert_curve(bmain, scene, gpencil_ob, ob, false, false, true);
+          ob_gpencil = ED_gpencil_add_object(C, ob->loc, local_view_bits);
+          copy_v3_v3(ob_gpencil->rot, ob->rot);
+          copy_v3_v3(ob_gpencil->scale, ob->scale);
+          BKE_gpencil_convert_curve(bmain, scene, ob_gpencil, ob, false, false, true);
           gpencilConverted = true;
         }
       }
@@ -2670,11 +2675,11 @@ static void convert_ui(bContext *C, wmOperator *op)
   uiItemR(layout, &ptr, "keep_original", 0, NULL, ICON_NONE);
 
   if (RNA_enum_get(&ptr, "target") == OB_GPENCIL) {
-    uiItemR(layout, &ptr, "angle", 0, NULL, ICON_NONE);
     uiItemR(layout, &ptr, "thickness", 0, NULL, ICON_NONE);
+    uiItemR(layout, &ptr, "angle", 0, NULL, ICON_NONE);
     uiItemR(layout, &ptr, "offset", 0, NULL, ICON_NONE);
-    uiItemR(layout, &ptr, "faces", 0, NULL, ICON_NONE);
     uiItemR(layout, &ptr, "seams", 0, NULL, ICON_NONE);
+    uiItemR(layout, &ptr, "faces", 0, NULL, ICON_NONE);
   }
 }
 
@@ -2725,7 +2730,7 @@ void OBJECT_OT_convert(wmOperatorType *ot)
                          0.01f,
                          0.0,
                          OBJECT_ADD_SIZE_MAXF,
-                         "Offset",
+                         "Stroke Offset",
                          "Offset strokes from fill",
                          0.0,
                          100.00);

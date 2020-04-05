@@ -48,6 +48,7 @@ struct RegionView3D;
 struct ReportList;
 struct Scene;
 struct ScrArea;
+struct SnapObjectContext;
 struct ToolSettings;
 struct View3D;
 struct ViewLayer;
@@ -61,6 +62,22 @@ struct bAnimContext;
 
 struct wmKeyConfig;
 struct wmOperator;
+
+/* Reproject stroke modes. */
+typedef enum eGP_ReprojectModes {
+  /* Axis */
+  GP_REPROJECT_FRONT = 0,
+  GP_REPROJECT_SIDE,
+  GP_REPROJECT_TOP,
+  /* On same plane, parallel to view-plane. */
+  GP_REPROJECT_VIEW,
+  /* Reprojected on to the scene geometry */
+  GP_REPROJECT_SURFACE,
+  /* Reprojected on 3D cursor orientation */
+  GP_REPROJECT_CURSOR,
+  /* Keep equals (used in some operators) */
+  GP_REPROJECT_KEEP,
+} eGP_ReprojectModes;
 
 /* ------------- Grease-Pencil Runtime Data ---------------- */
 
@@ -88,20 +105,20 @@ struct bGPdata *ED_gpencil_data_get_active(const struct bContext *C);
 struct bGPdata *ED_gpencil_data_get_active_evaluated(const struct bContext *C);
 
 /* Context independent (i.e. each required part is passed in instead) */
-struct bGPdata **ED_gpencil_data_get_pointers_direct(struct ScrArea *sa,
+struct bGPdata **ED_gpencil_data_get_pointers_direct(struct ScrArea *area,
                                                      struct Object *ob,
                                                      struct PointerRNA *r_ptr);
-struct bGPdata *ED_gpencil_data_get_active_direct(struct ScrArea *sa, struct Object *ob);
+struct bGPdata *ED_gpencil_data_get_active_direct(struct ScrArea *area, struct Object *ob);
 
 struct bGPdata *ED_annotation_data_get_active(const struct bContext *C);
 struct bGPdata **ED_annotation_data_get_pointers(const struct bContext *C,
                                                  struct PointerRNA *r_ptr);
 struct bGPdata **ED_annotation_data_get_pointers_direct(struct ID *screen_id,
-                                                        struct ScrArea *sa,
+                                                        struct ScrArea *area,
                                                         struct Scene *scene,
                                                         struct PointerRNA *r_ptr);
 struct bGPdata *ED_annotation_data_get_active_direct(struct ID *screen_id,
-                                                     struct ScrArea *sa,
+                                                     struct ScrArea *area,
                                                      struct Scene *scene);
 
 bool ED_gpencil_data_owner_is_annotation(struct PointerRNA *owner_ptr);
@@ -111,7 +128,7 @@ bool ED_gpencil_has_keyframe_v3d(struct Scene *scene, struct Object *ob, int cfr
 
 /* ----------- Stroke Editing Utilities ---------------- */
 
-bool ED_gpencil_stroke_can_use_direct(const struct ScrArea *sa, const struct bGPDstroke *gps);
+bool ED_gpencil_stroke_can_use_direct(const struct ScrArea *area, const struct bGPDstroke *gps);
 bool ED_gpencil_stroke_can_use(const struct bContext *C, const struct bGPDstroke *gps);
 bool ED_gpencil_stroke_color_use(struct Object *ob,
                                  const struct bGPDlayer *gpl,
@@ -238,6 +255,15 @@ void ED_gpencil_drawing_reference_get(const struct Scene *scene,
 void ED_gpencil_project_stroke_to_view(struct bContext *C,
                                        struct bGPDlayer *gpl,
                                        struct bGPDstroke *gps);
+
+void ED_gpencil_stroke_reproject(struct Depsgraph *depsgraph,
+                                 const struct GP_SpaceConversion *gsc,
+                                 struct SnapObjectContext *sctx,
+                                 struct bGPDlayer *gpl,
+                                 struct bGPDframe *gpf,
+                                 struct bGPDstroke *gps,
+                                 const eGP_ReprojectModes mode,
+                                 const bool keep_original);
 
 /* set sculpt cursor */
 void ED_gpencil_toggle_brush_cursor(struct bContext *C, bool enable, void *customdata);

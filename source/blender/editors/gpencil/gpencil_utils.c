@@ -74,6 +74,7 @@
 #include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_select_utils.h"
+#include "ED_transform_snap_object_context.h"
 #include "ED_view3d.h"
 
 #include "GPU_immediate.h"
@@ -93,13 +94,13 @@
  * and an RNA-pointer to trace back to whatever owns it,
  * when context info is not available.
  */
-bGPdata **ED_gpencil_data_get_pointers_direct(ScrArea *sa, Object *ob, PointerRNA *r_ptr)
+bGPdata **ED_gpencil_data_get_pointers_direct(ScrArea *area, Object *ob, PointerRNA *r_ptr)
 {
   /* if there's an active area, check if the particular editor may
    * have defined any special Grease Pencil context for editing...
    */
-  if (sa) {
-    switch (sa->spacetype) {
+  if (area) {
+    switch (area->spacetype) {
       case SPACE_PROPERTIES: /* properties */
       case SPACE_INFO:       /* header info */
       case SPACE_TOPBAR:     /* Topbar */
@@ -132,16 +133,16 @@ bGPdata **ED_gpencil_data_get_pointers_direct(ScrArea *sa, Object *ob, PointerRN
  * when context info is not available.
  */
 bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
-                                                 ScrArea *sa,
+                                                 ScrArea *area,
                                                  Scene *scene,
                                                  PointerRNA *r_ptr)
 {
   /* If there's an active area, check if the particular editor may
    * have defined any special Grease Pencil context for editing. */
-  if (sa) {
-    SpaceLink *sl = sa->spacedata.first;
+  if (area) {
+    SpaceLink *sl = area->spacedata.first;
 
-    switch (sa->spacetype) {
+    switch (area->spacetype) {
       case SPACE_PROPERTIES: /* properties */
       case SPACE_INFO:       /* header info */
       {
@@ -236,10 +237,10 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
  * and an RNA-pointer to trace back to whatever owns it. */
 bGPdata **ED_gpencil_data_get_pointers(const bContext *C, PointerRNA *r_ptr)
 {
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
   Object *ob = CTX_data_active_object(C);
 
-  return ED_gpencil_data_get_pointers_direct(sa, ob, r_ptr);
+  return ED_gpencil_data_get_pointers_direct(area, ob, r_ptr);
 }
 
 /* Get pointer to active Grease Pencil datablock,
@@ -248,23 +249,23 @@ bGPdata **ED_annotation_data_get_pointers(const bContext *C, PointerRNA *r_ptr)
 {
   ID *screen_id = (ID *)CTX_wm_screen(C);
   Scene *scene = CTX_data_scene(C);
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
 
-  return ED_annotation_data_get_pointers_direct(screen_id, sa, scene, r_ptr);
+  return ED_annotation_data_get_pointers_direct(screen_id, area, scene, r_ptr);
 }
 /* -------------------------------------------------------- */
 
 /* Get the active Grease Pencil datablock, when context is not available */
-bGPdata *ED_gpencil_data_get_active_direct(ScrArea *sa, Object *ob)
+bGPdata *ED_gpencil_data_get_active_direct(ScrArea *area, Object *ob)
 {
-  bGPdata **gpd_ptr = ED_gpencil_data_get_pointers_direct(sa, ob, NULL);
+  bGPdata **gpd_ptr = ED_gpencil_data_get_pointers_direct(area, ob, NULL);
   return (gpd_ptr) ? *(gpd_ptr) : NULL;
 }
 
 /* Get the active Grease Pencil datablock, when context is not available */
-bGPdata *ED_annotation_data_get_active_direct(ID *screen_id, ScrArea *sa, Scene *scene)
+bGPdata *ED_annotation_data_get_active_direct(ID *screen_id, ScrArea *area, Scene *scene)
 {
-  bGPdata **gpd_ptr = ED_annotation_data_get_pointers_direct(screen_id, sa, scene, NULL);
+  bGPdata **gpd_ptr = ED_annotation_data_get_pointers_direct(screen_id, area, scene, NULL);
   return (gpd_ptr) ? *(gpd_ptr) : NULL;
 }
 
@@ -299,13 +300,13 @@ bGPdata *ED_annotation_data_get_active(const bContext *C)
  */
 bGPdata *ED_gpencil_data_get_active_evaluated(const bContext *C)
 {
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
 
   const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = CTX_data_active_object(C);
   Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
 
-  return ED_gpencil_data_get_active_direct(sa, ob_eval);
+  return ED_gpencil_data_get_active_direct(area, ob_eval);
 }
 
 /* -------------------------------------------------------- */
@@ -513,25 +514,25 @@ bool gp_stroke_inside_circle(const float mval[2], int rad, int x0, int y0, int x
 
 /* Check whether given stroke can be edited given the supplied context */
 /* TODO: do we need additional flags for screenspace vs dataspace? */
-bool ED_gpencil_stroke_can_use_direct(const ScrArea *sa, const bGPDstroke *gps)
+bool ED_gpencil_stroke_can_use_direct(const ScrArea *area, const bGPDstroke *gps)
 {
   /* sanity check */
-  if (ELEM(NULL, sa, gps)) {
+  if (ELEM(NULL, area, gps)) {
     return false;
   }
 
   /* filter stroke types by flags + spacetype */
   if (gps->flag & GP_STROKE_3DSPACE) {
     /* 3D strokes - only in 3D view */
-    return ((sa->spacetype == SPACE_VIEW3D) || (sa->spacetype == SPACE_PROPERTIES));
+    return ((area->spacetype == SPACE_VIEW3D) || (area->spacetype == SPACE_PROPERTIES));
   }
   else if (gps->flag & GP_STROKE_2DIMAGE) {
     /* Special "image" strokes - only in Image Editor */
-    return (sa->spacetype == SPACE_IMAGE);
+    return (area->spacetype == SPACE_IMAGE);
   }
   else if (gps->flag & GP_STROKE_2DSPACE) {
     /* 2D strokes (dataspace) - for any 2D view (i.e. everything other than 3D view) */
-    return (sa->spacetype != SPACE_VIEW3D);
+    return (area->spacetype != SPACE_VIEW3D);
   }
   else {
     /* view aligned - anything goes */
@@ -542,8 +543,8 @@ bool ED_gpencil_stroke_can_use_direct(const ScrArea *sa, const bGPDstroke *gps)
 /* Check whether given stroke can be edited in the current context */
 bool ED_gpencil_stroke_can_use(const bContext *C, const bGPDstroke *gps)
 {
-  ScrArea *sa = CTX_wm_area(C);
-  return ED_gpencil_stroke_can_use_direct(sa, gps);
+  ScrArea *area = CTX_wm_area(C);
+  return ED_gpencil_stroke_can_use_direct(area, gps);
 }
 
 /* Check whether given stroke can be edited for the current color */
@@ -574,7 +575,7 @@ bool ED_gpencil_stroke_color_use(Object *ob, const bGPDlayer *gpl, const bGPDstr
  */
 void gp_point_conversion_init(bContext *C, GP_SpaceConversion *r_gsc)
 {
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
 
   /* zero out the storage (just in case) */
@@ -585,12 +586,12 @@ void gp_point_conversion_init(bContext *C, GP_SpaceConversion *r_gsc)
   r_gsc->scene = CTX_data_scene(C);
   r_gsc->ob = CTX_data_active_object(C);
 
-  r_gsc->sa = sa;
+  r_gsc->area = area;
   r_gsc->region = region;
   r_gsc->v2d = &region->v2d;
 
   /* init region-specific stuff */
-  if (sa->spacetype == SPACE_VIEW3D) {
+  if (area->spacetype == SPACE_VIEW3D) {
     wmWindow *win = CTX_wm_window(C);
     Scene *scene = CTX_data_scene(C);
     struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -685,8 +686,8 @@ void gp_point_to_xy(
   int xyval[2];
 
   /* sanity checks */
-  BLI_assert(!(gps->flag & GP_STROKE_3DSPACE) || (gsc->sa->spacetype == SPACE_VIEW3D));
-  BLI_assert(!(gps->flag & GP_STROKE_2DSPACE) || (gsc->sa->spacetype != SPACE_VIEW3D));
+  BLI_assert(!(gps->flag & GP_STROKE_3DSPACE) || (gsc->area->spacetype == SPACE_VIEW3D));
+  BLI_assert(!(gps->flag & GP_STROKE_2DSPACE) || (gsc->area->spacetype != SPACE_VIEW3D));
 
   if (gps->flag & GP_STROKE_3DSPACE) {
     if (ED_view3d_project_int_global(region, &pt->x, xyval, V3D_PROJ_TEST_NOP) ==
@@ -743,8 +744,8 @@ void gp_point_to_xy_fl(const GP_SpaceConversion *gsc,
   float xyval[2];
 
   /* sanity checks */
-  BLI_assert(!(gps->flag & GP_STROKE_3DSPACE) || (gsc->sa->spacetype == SPACE_VIEW3D));
-  BLI_assert(!(gps->flag & GP_STROKE_2DSPACE) || (gsc->sa->spacetype != SPACE_VIEW3D));
+  BLI_assert(!(gps->flag & GP_STROKE_3DSPACE) || (gsc->area->spacetype == SPACE_VIEW3D));
+  BLI_assert(!(gps->flag & GP_STROKE_2DSPACE) || (gsc->area->spacetype != SPACE_VIEW3D));
 
   if (gps->flag & GP_STROKE_3DSPACE) {
     if (ED_view3d_project_float_global(region, &pt->x, xyval, V3D_PROJ_TEST_NOP) ==
@@ -802,7 +803,7 @@ void gp_point_3d_to_xy(const GP_SpaceConversion *gsc,
   float xyval[2];
 
   /* sanity checks */
-  BLI_assert((gsc->sa->spacetype == SPACE_VIEW3D));
+  BLI_assert((gsc->area->spacetype == SPACE_VIEW3D));
 
   if (flag & GP_STROKE_3DSPACE) {
     if (ED_view3d_project_float_global(region, pt, xyval, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) {
@@ -1075,6 +1076,137 @@ void ED_gp_project_stroke_to_plane(const Scene *scene,
     /* if the line never intersect, the point is not changed */
     if (isect_line_plane_v3(rpoint, &pt->x, ray, origin, plane_normal)) {
       copy_v3_v3(&pt->x, rpoint);
+    }
+  }
+}
+
+/* Reproject selected strokes */
+void ED_gpencil_stroke_reproject(Depsgraph *depsgraph,
+                                 const GP_SpaceConversion *gsc,
+                                 SnapObjectContext *sctx,
+                                 bGPDlayer *gpl,
+                                 bGPDframe *gpf,
+                                 bGPDstroke *gps,
+                                 const eGP_ReprojectModes mode,
+                                 const bool keep_original)
+{
+  ToolSettings *ts = gsc->scene->toolsettings;
+  ARegion *region = gsc->region;
+  RegionView3D *rv3d = region->regiondata;
+
+  float diff_mat[4][4], inverse_diff_mat[4][4];
+  BKE_gpencil_parent_matrix_get(depsgraph, gsc->ob, gpl, diff_mat);
+  invert_m4_m4(inverse_diff_mat, diff_mat);
+
+  float origin[3];
+  if (mode != GP_REPROJECT_CURSOR) {
+    ED_gpencil_drawing_reference_get(gsc->scene, gsc->ob, ts->gpencil_v3d_align, origin);
+  }
+  else {
+    copy_v3_v3(origin, gsc->scene->cursor.location);
+  }
+
+  bGPDspoint *pt;
+  int i;
+
+  /* If keep original, do a copy. */
+  bGPDstroke *gps_active = gps;
+  /* if duplicate, deselect all points. */
+  if (keep_original) {
+    gps_active = BKE_gpencil_stroke_duplicate(gps, true);
+    gps_active->flag &= ~GP_STROKE_SELECT;
+    for (i = 0, pt = gps_active->points; i < gps_active->totpoints; i++, pt++) {
+      pt->flag &= ~GP_SPOINT_SELECT;
+    }
+    /* Add to frame. */
+    BLI_addtail(&gpf->strokes, gps_active);
+  }
+
+  /* Adjust each point */
+  for (i = 0, pt = gps_active->points; i < gps_active->totpoints; i++, pt++) {
+    float xy[2];
+
+    /* 3D to Screen-space */
+    /* Note: We can't use gp_point_to_xy() here because that uses ints for the screen-space
+     * coordinates, resulting in lost precision, which in turn causes stair-stepping
+     * artifacts in the final points. */
+
+    bGPDspoint pt2;
+    gp_point_to_parent_space(pt, diff_mat, &pt2);
+    gp_point_to_xy_fl(gsc, gps_active, &pt2, &xy[0], &xy[1]);
+
+    /* Project stroke in one axis */
+    if (ELEM(mode, GP_REPROJECT_FRONT, GP_REPROJECT_SIDE, GP_REPROJECT_TOP, GP_REPROJECT_CURSOR)) {
+      int axis = 0;
+      switch (mode) {
+        case GP_REPROJECT_FRONT: {
+          axis = 1;
+          break;
+        }
+        case GP_REPROJECT_SIDE: {
+          axis = 0;
+          break;
+        }
+        case GP_REPROJECT_TOP: {
+          axis = 2;
+          break;
+        }
+        case GP_REPROJECT_CURSOR: {
+          axis = 3;
+          break;
+        }
+        default: {
+          axis = 1;
+          break;
+        }
+      }
+
+      ED_gp_project_point_to_plane(gsc->scene, gsc->ob, rv3d, origin, axis, &pt2);
+
+      copy_v3_v3(&pt->x, &pt2.x);
+
+      /* apply parent again */
+      gp_apply_parent_point(depsgraph, gsc->ob, gpl, pt);
+    }
+    /* Project screen-space back to 3D space (from current perspective)
+     * so that all points have been treated the same way. */
+    else if (mode == GP_REPROJECT_VIEW) {
+      /* Planar - All on same plane parallel to the view-plane. */
+      gp_point_xy_to_3d(gsc, gsc->scene, xy, &pt->x);
+    }
+    else {
+      /* Geometry - Snap to surfaces of visible geometry */
+      float ray_start[3];
+      float ray_normal[3];
+      /* magic value for initial depth copied from the default
+       * value of Python's Scene.ray_cast function
+       */
+      float depth = 1.70141e+38f;
+      float location[3] = {0.0f, 0.0f, 0.0f};
+      float normal[3] = {0.0f, 0.0f, 0.0f};
+
+      ED_view3d_win_to_ray(region, xy, &ray_start[0], &ray_normal[0]);
+      if (ED_transform_snap_object_project_ray(sctx,
+                                               depsgraph,
+                                               &(const struct SnapObjectParams){
+                                                   .snap_select = SNAP_ALL,
+                                               },
+                                               &ray_start[0],
+                                               &ray_normal[0],
+                                               &depth,
+                                               &location[0],
+                                               &normal[0])) {
+        copy_v3_v3(&pt->x, location);
+      }
+      else {
+        /* Default to planar */
+        gp_point_xy_to_3d(gsc, gsc->scene, xy, &pt->x);
+      }
+    }
+
+    /* Unapply parent corrections */
+    if (!ELEM(mode, GP_REPROJECT_FRONT, GP_REPROJECT_SIDE, GP_REPROJECT_TOP)) {
+      mul_m4_v3(inverse_diff_mat, &pt->x);
     }
   }
 }
@@ -1563,7 +1695,7 @@ void ED_gpencil_vgroup_deselect(bContext *C, Object *ob)
 static bool gp_check_cursor_region(bContext *C, int mval_i[2])
 {
   ARegion *region = CTX_wm_region(C);
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
   Object *ob = CTX_data_active_object(C);
 
   if ((ob == NULL) || (!ELEM(ob->mode,
@@ -1575,7 +1707,7 @@ static bool gp_check_cursor_region(bContext *C, int mval_i[2])
   }
 
   /* TODO: add more spacetypes */
-  if (!ELEM(sa->spacetype, SPACE_VIEW3D)) {
+  if (!ELEM(area->spacetype, SPACE_VIEW3D)) {
     return false;
   }
   if ((region) && (region->regiontype != RGN_TYPE_WINDOW)) {
@@ -2187,7 +2319,7 @@ int ED_gpencil_select_stroke_segment(bGPDlayer *gpl,
 
   /* Save list of strokes to check */
   int totstrokes = 0;
-  for (bGPDstroke *gps_iter = gpf->strokes.first; gps_iter; gps_iter = gps_iter->next) {
+  LISTBASE_FOREACH (bGPDstroke *, gps_iter, &gpf->strokes) {
     if (gps_iter->totpoints < 2) {
       continue;
     }

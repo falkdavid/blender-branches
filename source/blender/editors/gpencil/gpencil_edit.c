@@ -1334,7 +1334,7 @@ static int gp_strokes_copy_exec(bContext *C, wmOperator *op)
   if (gp_strokes_copypastebuf.first) {
     gp_strokes_copypastebuf_colors = BLI_ghash_int_new("GPencil CopyBuf Colors");
     GHash *ma_to_name = gp_strokes_copypastebuf_colors_material_to_name_create(bmain);
-    for (bGPDstroke *gps = gp_strokes_copypastebuf.first; gps; gps = gps->next) {
+    LISTBASE_FOREACH (bGPDstroke *, gps, &gp_strokes_copypastebuf) {
       if (ED_gpencil_stroke_can_use(C, gps)) {
         Material *ma = BKE_object_material_get(ob, gps->mat_nr + 1);
         /* Avoid default material. */
@@ -1380,8 +1380,8 @@ void GPENCIL_OT_copy(wmOperatorType *ot)
 
 static bool gp_strokes_paste_poll(bContext *C)
 {
-  ScrArea *sa = CTX_wm_area(C);
-  if (!((sa != NULL) && (sa->spacetype == SPACE_VIEW3D))) {
+  ScrArea *area = CTX_wm_area(C);
+  if (!((area != NULL) && (area->spacetype == SPACE_VIEW3D))) {
     return false;
   }
   /* 1) Must have GP datablock to paste to
@@ -2607,11 +2607,11 @@ void GPENCIL_OT_dissolve(wmOperatorType *ot)
  */
 static bool gp_snap_poll(bContext *C)
 {
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
   Object *ob = CTX_data_active_object(C);
 
   return (ob != NULL) && (ob->type == OB_GPENCIL) &&
-         ((sa != NULL) && (sa->spacetype == SPACE_VIEW3D));
+         ((area != NULL) && (area->spacetype == SPACE_VIEW3D));
 }
 
 /* --------------------------------- */
@@ -3241,9 +3241,9 @@ static void gpencil_stroke_join_strokes(bGPDstroke *gps_a,
   }
 
   /* define start and end points of each stroke */
-  float sa[3], sb[3], ea[3], eb[3];
+  float area[3], sb[3], ea[3], eb[3];
   pt = &gps_a->points[0];
-  copy_v3_v3(sa, &pt->x);
+  copy_v3_v3(area, &pt->x);
 
   pt = &gps_a->points[gps_a->totpoints - 1];
   copy_v3_v3(ea, &pt->x);
@@ -3483,43 +3483,25 @@ void GPENCIL_OT_stroke_flip(wmOperatorType *ot)
 
 /* ***************** Reproject Strokes ********************** */
 
-typedef enum eGP_ReprojectModes {
-  /* Axis */
-  GP_REPROJECT_FRONT = 0,
-  GP_REPROJECT_SIDE,
-  GP_REPROJECT_TOP,
-  /* On same plane, parallel to view-plane. */
-  GP_REPROJECT_VIEW,
-  /* Reprojected on to the scene geometry */
-  GP_REPROJECT_SURFACE,
-  /* Reprojected on 3D cursor orientation */
-  GP_REPROJECT_CURSOR,
-} eGP_ReprojectModes;
-
 static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   Scene *scene = CTX_data_scene(C);
   Main *bmain = CTX_data_main(C);
-  ToolSettings *ts = CTX_data_tool_settings(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Object *ob = CTX_data_active_object(C);
   ARegion *region = CTX_wm_region(C);
-  RegionView3D *rv3d = region->regiondata;
-  SnapObjectContext *sctx = NULL;
   int oldframe = (int)DEG_get_ctime(depsgraph);
+  const eGP_ReprojectModes mode = RNA_enum_get(op->ptr, "type");
+  const bool keep_original = RNA_boolean_get(op->ptr, "keep_original");
 
+  /* Init space conversion stuff. */
   GP_SpaceConversion gsc = {NULL};
-  eGP_ReprojectModes mode = RNA_enum_get(op->ptr, "type");
-
-  float origin[3];
-
-  /* init space conversion stuff */
+  SnapObjectContext *sctx = NULL;
   gp_point_conversion_init(C, &gsc);
+  /* Init snap context for geometry projection. */
+  sctx = ED_transform_snap_object_context_create_view3d(bmain, scene, 0, region, CTX_wm_view3d(C));
 
   int cfra_prv = INT_MIN;
-  /* init snap context for geometry projection */
-  sctx = ED_transform_snap_object_context_create_view3d(bmain, scene, 0, region, CTX_wm_view3d(C));
 
   /* Go through each editable + selected stroke, adjusting each of its points one by one... */
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
@@ -3532,106 +3514,7 @@ static int gp_strokes_reproject_exec(bContext *C, wmOperator *op)
         BKE_scene_graph_update_for_newframe(depsgraph, bmain);
       }
 
-      bGPDspoint *pt;
-      int i;
-      /* Adjust each point */
-      for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
-        float xy[2];
-
-        /* 3D to Screen-space */
-        /* Note: We can't use gp_point_to_xy() here because that uses ints for the screen-space
-         * coordinates, resulting in lost precision, which in turn causes stair-stepping
-         * artifacts in the final points. */
-
-        bGPDspoint pt2;
-        gp_point_to_parent_space(pt, gpstroke_iter.diff_mat, &pt2);
-        gp_point_to_xy_fl(&gsc, gps, &pt2, &xy[0], &xy[1]);
-
-        /* Project stroke in one axis */
-        if (ELEM(mode,
-                 GP_REPROJECT_FRONT,
-                 GP_REPROJECT_SIDE,
-                 GP_REPROJECT_TOP,
-                 GP_REPROJECT_CURSOR)) {
-          if (mode != GP_REPROJECT_CURSOR) {
-            ED_gpencil_drawing_reference_get(scene, ob, ts->gpencil_v3d_align, origin);
-          }
-          else {
-            copy_v3_v3(origin, scene->cursor.location);
-          }
-
-          int axis = 0;
-          switch (mode) {
-            case GP_REPROJECT_FRONT: {
-              axis = 1;
-              break;
-            }
-            case GP_REPROJECT_SIDE: {
-              axis = 0;
-              break;
-            }
-            case GP_REPROJECT_TOP: {
-              axis = 2;
-              break;
-            }
-            case GP_REPROJECT_CURSOR: {
-              axis = 3;
-              break;
-            }
-            default: {
-              axis = 1;
-              break;
-            }
-          }
-
-          ED_gp_project_point_to_plane(scene, ob, rv3d, origin, axis, &pt2);
-
-          copy_v3_v3(&pt->x, &pt2.x);
-
-          /* apply parent again */
-          gp_apply_parent_point(depsgraph, ob, gpl, pt);
-        }
-        /* Project screen-space back to 3D space (from current perspective)
-         * so that all points have been treated the same way. */
-        else if (mode == GP_REPROJECT_VIEW) {
-          /* Planar - All on same plane parallel to the view-plane. */
-          gp_point_xy_to_3d(&gsc, scene, xy, &pt->x);
-        }
-        else {
-          /* Geometry - Snap to surfaces of visible geometry */
-          float ray_start[3];
-          float ray_normal[3];
-          /* magic value for initial depth copied from the default
-           * value of Python's Scene.ray_cast function
-           */
-          float depth = 1.70141e+38f;
-          float location[3] = {0.0f, 0.0f, 0.0f};
-          float normal[3] = {0.0f, 0.0f, 0.0f};
-
-          ED_view3d_win_to_ray(region, xy, &ray_start[0], &ray_normal[0]);
-          if (ED_transform_snap_object_project_ray(sctx,
-                                                   depsgraph,
-                                                   &(const struct SnapObjectParams){
-                                                       .snap_select = SNAP_ALL,
-                                                   },
-                                                   &ray_start[0],
-                                                   &ray_normal[0],
-                                                   &depth,
-                                                   &location[0],
-                                                   &normal[0])) {
-            copy_v3_v3(&pt->x, location);
-          }
-          else {
-            /* Default to planar */
-            gp_point_xy_to_3d(&gsc, scene, xy, &pt->x);
-          }
-        }
-
-        /* Unapply parent corrections */
-        if (!ELEM(mode, GP_REPROJECT_FRONT, GP_REPROJECT_SIDE, GP_REPROJECT_TOP)) {
-          mul_m4_v3(gpstroke_iter.inverse_diff_mat, &pt->x);
-        }
-      }
+      ED_gpencil_stroke_reproject(depsgraph, &gsc, sctx, gpl, gpf_, gps, mode, keep_original);
     }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
@@ -3694,6 +3577,13 @@ void GPENCIL_OT_reproject(wmOperatorType *ot)
   /* properties */
   ot->prop = RNA_def_enum(
       ot->srna, "type", reproject_type, GP_REPROJECT_VIEW, "Projection Type", "");
+
+  RNA_def_boolean(
+      ot->srna,
+      "keep_original",
+      0,
+      "Keep Original",
+      "Keep original strokes and create a copy before reprojecting instead of reproject them");
 }
 
 static int gp_recalc_geometry_exec(bContext *C, wmOperator *UNUSED(op))
@@ -4365,6 +4255,7 @@ static int gp_stroke_separate_exec(bContext *C, wmOperator *op)
   DEG_relations_tag_update(bmain);
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, NULL);
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_SELECTED, NULL);
 
   return OPERATOR_FINISHED;
 }
@@ -4625,7 +4516,7 @@ static int gpencil_cutter_lasso_select(bContext *C,
                                        void *user_data)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
   const float scale = ts->gp_sculpt.isect_threshold;
 
@@ -4636,7 +4527,7 @@ static int gpencil_cutter_lasso_select(bContext *C,
   bool changed = false;
 
   /* sanity checks */
-  if (sa == NULL) {
+  if (area == NULL) {
     BKE_report(op->reports, RPT_ERROR, "No active area");
     return OPERATOR_CANCELLED;
   }
@@ -4732,9 +4623,9 @@ static bool gpencil_cutter_poll(bContext *C)
 
 static int gpencil_cutter_exec(bContext *C, wmOperator *op)
 {
-  ScrArea *sa = CTX_wm_area(C);
+  ScrArea *area = CTX_wm_area(C);
   /* sanity checks */
-  if (sa == NULL) {
+  if (area == NULL) {
     BKE_report(op->reports, RPT_ERROR, "No active area");
     return OPERATOR_CANCELLED;
   }
