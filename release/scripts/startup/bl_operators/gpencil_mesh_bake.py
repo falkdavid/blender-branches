@@ -127,7 +127,7 @@ class GPENCIL_OT_mesh_bake(Operator):
     def poll(self, context):
         ob = context.active_object
         return ((ob is not None) and
-                (ob.type == 'MESH') and
+                (ob.type in {'EMPTY', 'MESH'}) and
                 (context.mode == 'OBJECT'))
 
     def execute(self, context):

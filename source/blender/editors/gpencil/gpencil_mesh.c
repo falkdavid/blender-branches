@@ -32,6 +32,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_context.h"
+#include "BKE_duplilist.h"
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
 #include "BKE_gpencil_geom.h"
@@ -80,6 +81,73 @@ static bool gp_bake_mesh_animation_poll(bContext *C)
   return (area && area->spacetype);
 }
 
+typedef struct GpBakeOb {
+  struct GPBakelist *next, *prev;
+  Object *ob;
+} GpBakeOb;
+
+static void gp_bake_duplilist(Depsgraph *depsgraph, Scene *scene, Object *ob, ListBase *list)
+{
+  GpBakeOb *elem = NULL;
+  ListBase *lb;
+  DupliObject *dob;
+  lb = object_duplilist(depsgraph, scene, ob);
+  for (dob = lb->first; dob; dob = dob->next) {
+    if (dob->ob->type != OB_MESH) {
+      continue;
+    }
+    elem = MEM_callocN(sizeof(GpBakeOb), __func__);
+    elem->ob = dob->ob;
+    BLI_addtail(list, elem);
+  }
+
+  free_object_duplilist(lb);
+}
+
+static void gp_bake_ob_list(bContext *C, Depsgraph *depsgraph, Scene *scene, ListBase *list)
+{
+  GpBakeOb *elem = NULL;
+
+  /* Add active object. In some files this could not be in selected array. */
+  Object *obact = CTX_data_active_object(C);
+
+  if (obact->type == OB_MESH) {
+    elem = MEM_callocN(sizeof(GpBakeOb), __func__);
+    elem->ob = obact;
+    BLI_addtail(list, elem);
+  }
+  /* Add duplilist. */
+  else if (obact->type == OB_EMPTY) {
+    gp_bake_duplilist(depsgraph, scene, obact, list);
+  }
+
+  /* Add other selected objects. */
+  CTX_DATA_BEGIN (C, Object *, ob, selected_objects) {
+    if (ob == obact) {
+      continue;
+    }
+    /* Add selected meshes.*/
+    if (ob->type == OB_MESH) {
+      elem = MEM_callocN(sizeof(GpBakeOb), __func__);
+      elem->ob = ob;
+      BLI_addtail(list, elem);
+    }
+
+    /* Add duplilist. */
+    if (ob->type == OB_EMPTY) {
+      gp_bake_duplilist(depsgraph, scene, obact, list);
+    }
+  }
+  CTX_DATA_END;
+}
+
+static void gp_bake_free_ob_list(ListBase *list)
+{
+  LISTBASE_FOREACH_MUTABLE (GpBakeOb *, elem, list) {
+    MEM_SAFE_FREE(elem);
+  }
+}
+
 static int gp_bake_mesh_animation_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -87,19 +155,17 @@ static int gp_bake_mesh_animation_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ARegion *region = CTX_wm_region(C);
   View3D *v3d = CTX_wm_view3d(C);
-  Object *ob = CTX_data_active_object(C);
   Object *ob_gpencil = NULL;
 
+  ListBase list = {NULL, NULL};
+  gp_bake_ob_list(C, depsgraph, scene, &list);
+
   /* Cannot check this in poll because the active object changes. */
-  if ((ob == NULL) || (ob->type != OB_MESH)) {
-    BKE_report(op->reports, RPT_ERROR, "No Mesh object selected");
+  if (list.first == NULL) {
+    BKE_report(op->reports, RPT_INFO, "No valid object selected");
+    gp_bake_free_ob_list(&list);
     return OPERATOR_CANCELLED;
   }
-
-  /* Set cursor to indicate working. */
-  WM_cursor_wait(1);
-
-  Object *ob_eval = (Object *)DEG_get_evaluated_object(depsgraph, ob);
 
   /* Grab all relevant settings. */
   const int step = RNA_int_get(op->ptr, "step");
@@ -131,13 +197,18 @@ static int gp_bake_mesh_animation_exec(bContext *C, wmOperator *op)
   else {
     ob_gpencil = BLI_findstring(&bmain->objects, target, offsetof(ID, name) + 2);
   }
+
   if ((ob_gpencil == NULL) || (ob_gpencil->type != OB_GPENCIL)) {
     BKE_report(op->reports, RPT_ERROR, "Target grease pencil object not valid");
+    gp_bake_free_ob_list(&list);
     return OPERATOR_CANCELLED;
   }
 
   bGPdata *gpd = (bGPdata *)ob_gpencil->data;
   gpd->draw_mode = (project_type == GP_REPROJECT_KEEP) ? GP_DRAWMODE_3D : GP_DRAWMODE_2D;
+
+  /* Set cursor to indicate working. */
+  WM_cursor_wait(1);
 
   GP_SpaceConversion gsc = {NULL};
   SnapObjectContext *sctx = NULL;
@@ -172,30 +243,35 @@ static int gp_bake_mesh_animation_exec(bContext *C, wmOperator *op)
     CFRA = i;
     BKE_scene_graph_update_for_newframe(depsgraph, bmain);
 
-    /* Generate strokes. */
-    BKE_gpencil_convert_mesh(bmain,
-                             depsgraph,
-                             scene,
-                             ob_gpencil,
-                             ob,
-                             angle,
-                             thickness,
-                             offset,
-                             ob_eval->obmat,
-                             frame_offset,
-                             use_seams,
-                             use_faces);
+    /* Loop all objects in the list. */
+    LISTBASE_FOREACH (GpBakeOb *, elem, &list) {
+      Object *ob_eval = (Object *)DEG_get_evaluated_object(depsgraph, elem->ob);
 
-    /* Reproject all untaged created strokes. */
-    if (project_type != GP_REPROJECT_KEEP) {
-      LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-        bGPDframe *gpf = gpl->actframe;
-        if (gpf != NULL) {
-          LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-            if ((gps->flag & GP_STROKE_TAG) == 0) {
-              ED_gpencil_stroke_reproject(
-                  depsgraph, &gsc, sctx, gpl, gpf, gps, project_type, false);
-              gps->flag |= GP_STROKE_TAG;
+      /* Generate strokes. */
+      BKE_gpencil_convert_mesh(bmain,
+                               depsgraph,
+                               scene,
+                               ob_gpencil,
+                               elem->ob,
+                               angle,
+                               thickness,
+                               offset,
+                               ob_eval->obmat,
+                               frame_offset,
+                               use_seams,
+                               use_faces);
+
+      /* Reproject all untaged created strokes. */
+      if (project_type != GP_REPROJECT_KEEP) {
+        LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+          bGPDframe *gpf = gpl->actframe;
+          if (gpf != NULL) {
+            LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+              if ((gps->flag & GP_STROKE_TAG) == 0) {
+                ED_gpencil_stroke_reproject(
+                    depsgraph, &gsc, sctx, gpl, gpf, gps, project_type, false);
+                gps->flag |= GP_STROKE_TAG;
+              }
             }
           }
         }
@@ -233,6 +309,7 @@ static int gp_bake_mesh_animation_exec(bContext *C, wmOperator *op)
   }
 
   /* Free memory. */
+  gp_bake_free_ob_list(&list);
   if (sctx != NULL) {
     ED_transform_snap_object_context_destroy(sctx);
   }

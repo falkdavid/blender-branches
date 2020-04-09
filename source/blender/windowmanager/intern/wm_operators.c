@@ -103,9 +103,13 @@
 
 #include "wm.h"
 #include "wm_draw.h"
+#include "wm_event_system.h"
 #include "wm_event_types.h"
 #include "wm_files.h"
 #include "wm_window.h"
+#ifdef WITH_XR_OPENXR
+#  include "wm_xr.h"
+#endif
 
 #define UNDOCUMENTED_OPERATOR_TIP N_("(undocumented operator)")
 
@@ -3241,8 +3245,12 @@ static void redraw_timer_step(bContext *C,
     }
   }
   else { /* eRTUndo */
+    /* Undo and redo, including depsgraph update since that can be a
+     * significant part of the cost. */
     ED_undo_pop(C);
+    wm_event_do_refresh_wm_and_depsgraph(C);
     ED_undo_redo(C);
+    wm_event_do_refresh_wm_and_depsgraph(C);
   }
 }
 
