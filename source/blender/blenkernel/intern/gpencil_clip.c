@@ -49,6 +49,8 @@
 #define ISECT_LEFT 0
 #define ISECT_RIGHT 1
 
+/* Temporary data structures */
+
 typedef struct tClipPoint {
   /* Listbase functonality */
   struct tClipPoint *next, *prev;
@@ -76,14 +78,25 @@ typedef enum tClipPointFlag {
   CP_INNER_EDGE = (1 << 3),
 } tClipPointFlag;
 
-typedef struct t2dStrokeEdge {
+typedef struct tClipEdge {
   /* Listbase functonality */
-  struct t2dStrokeEdge *next, *prev;
+  struct tClipEdge *next, *prev;
   /* pointers to start and end */
   struct tClipPoint *start, *end;
   /* bounding box */
-  float min[2], max[2];
-} t2dStrokeEdge;
+  float bounding_box[4];
+} tClipEdge;
+
+typedef struct tClipPath {
+  /* list of clip points */
+  ListBase clip_points;
+  /* list of tClipEdge */
+  ListBase edges;
+  /* number of points and edges */
+  int num_points, num_edges;
+  /* min_x, min_y, max_x, max_y */
+  float bounding_box[4];
+} tClipPath;
 
 static void debug_print_clip_point(tClipPoint *cp)
 {
@@ -122,8 +135,20 @@ static bool isect_aabb_aabb_v2(const float min1[2],
   return (min1[0] < max2[0] && min1[1] < max2[1] && min2[0] < max1[0] && min2[1] < max1[1]);
 }
 
+static bool isect_aabb_aabb_v4(const float aabb_A[4],
+                               const float aabb_B[4])
+{
+  return (aabb_A[0] < aabb_B[2] && aabb_A[1] < aabb_B[3] && aabb_B[0] < aabb_A[2] && aabb_B[1] < aabb_A[3]);
+}
+
+static bool aabb_inside_aabb_v4(const float aabb_A[4],
+                                const float aabb_B[4])
+{
+  return (aabb_B[0] <= aabb_A[0] && aabb_B[1] <= aabb_A[1] && aabb_A[2] <= aabb_B[2] && aabb_A[3] <= aabb_B[3]);
+}
+
 /* Helper: given that A and B intersect, returns the intersection type */
-static bool gp_clip_point_isect_type(const t2dStrokeEdge *A, const t2dStrokeEdge *B)
+static bool gp_clip_point_isect_type(const tClipEdge *A, const tClipEdge *B)
 {
   double a_start[2], a_end[2];
   double b_end[2];
@@ -145,15 +170,15 @@ static void gp_point3d_to_proj_space(const float mat[4][4], const float p[3], fl
   mul_m4_v4(mat, r);
 }
 
-static t2dStrokeEdge *gp_new_edge_from_clip_points(tClipPoint* A, tClipPoint *B)
+static tClipEdge *gp_new_edge_from_clip_points(tClipPoint* A, tClipPoint *B)
 {
-  t2dStrokeEdge *new_edge = MEM_callocN(sizeof(t2dStrokeEdge), __func__);
+  tClipEdge *new_edge = MEM_callocN(sizeof(tClipEdge), __func__);
   new_edge->start = A;
   new_edge->end = B;
-  new_edge->min[0] = A->x < B->x ? A->x : B->x;
-  new_edge->min[1] = A->y < B->y ? A->y : B->y;
-  new_edge->max[0] = A->x > B->x ? A->x : B->x;
-  new_edge->max[1] = A->y > B->y ? A->y : B->y;
+  new_edge->bounding_box[0] = A->x < B->x ? A->x : B->x;
+  new_edge->bounding_box[1] = A->y < B->y ? A->y : B->y;
+  new_edge->bounding_box[2] = A->x > B->x ? A->x : B->x;
+  new_edge->bounding_box[3] = A->y > B->y ? A->y : B->y;
   return new_edge;
 }
 
@@ -175,9 +200,71 @@ static void gp_stroke_to_points_and_edges(const bGPDstroke *gps, const float pro
     copy_v3_v3(&cpt_curr->x, vec_tmp);
     BLI_addtail(clip_points, cpt_curr);
 
-    t2dStrokeEdge *new_edge = gp_new_edge_from_clip_points(cpt_prev, cpt_curr);
+    tClipEdge *new_edge = gp_new_edge_from_clip_points(cpt_prev, cpt_curr);
     BLI_addtail(edges, new_edge);
     cpt_prev = cpt_curr;
+  }
+}
+
+static void gp_clip_path_update_bounds(tClipPath *path, tClipPoint *new_point)
+{
+  if (new_point->x < path->bounding_box[0]) {
+    path->bounding_box[0] = new_point->x;
+  }
+  if (new_point->y < path->bounding_box[1]) {
+    path->bounding_box[1] = new_point->y;
+  }
+  if (new_point->x > path->bounding_box[2]) {
+    path->bounding_box[2] = new_point->x;
+  }
+  if (new_point->y > path->bounding_box[3]) {
+    path->bounding_box[3] = new_point->y;
+  }
+}
+
+static tClipPath *gp_stroke_to_clip_path(const bGPDstroke *gps, const float proj_mat[4][4])
+{
+  tClipPath *new_cpath = MEM_callocN(sizeof(tClipPath), __func__);
+  tClipPoint *cpt_first = MEM_callocN(sizeof(tClipPoint), __func__);
+  bGPDspoint *pt_first = &gps->points[0];
+
+  float vec_tmp[4];
+  gp_point3d_to_proj_space(proj_mat, &pt_first->x, vec_tmp);
+  copy_v3_v3(&cpt_first->x, vec_tmp);
+  BLI_addtail(&new_cpath->clip_points, cpt_first);
+  new_cpath->num_points++;
+
+  new_cpath->bounding_box[0] = new_cpath->bounding_box[2] = cpt_first->x;
+  new_cpath->bounding_box[1] = new_cpath->bounding_box[3] = cpt_first->y;
+
+  tClipPoint *cpt_prev = cpt_first;
+  for (int i = 1; i < gps->totpoints; i++) {
+    tClipPoint *cpt_curr = MEM_callocN(sizeof(tClipPoint), __func__);
+    bGPDspoint *pt = &gps->points[i];
+    gp_point3d_to_proj_space(proj_mat, &pt->x, vec_tmp);
+    copy_v3_v3(&cpt_curr->x, vec_tmp);
+    BLI_addtail(&new_cpath->clip_points, cpt_curr);
+    new_cpath->num_points++;
+
+    gp_clip_path_update_bounds(new_cpath, cpt_curr);
+
+    tClipEdge *new_edge = gp_new_edge_from_clip_points(cpt_prev, cpt_curr);
+    BLI_addtail(&new_cpath->edges, new_edge);
+    new_cpath->num_edges++;
+
+    cpt_prev = cpt_curr;
+  }
+
+  return new_cpath;
+}
+
+static void gp_free_clip_path(tClipPath *clip_path)
+{
+  if (clip_path != NULL) {
+    BLI_freelistN(&clip_path->clip_points);
+    BLI_freelistN(&clip_path->edges);
+
+    MEM_freeN(clip_path);
   }
 }
 
@@ -569,11 +656,11 @@ static int gp_edge_intersection_algorithm(ListBase *edges, ListBase *clip_points
 {
   int num_intersections = 0;
   /* check every pair for intersection */
-  LISTBASE_FOREACH(t2dStrokeEdge *, edgeA, edges) {
-    t2dStrokeEdge *edgeB = NULL;
+  LISTBASE_FOREACH(tClipEdge *, edgeA, edges) {
+    tClipEdge *edgeB = NULL;
     for (edgeB = edgeA->next; edgeB != NULL; edgeB = edgeB->next) {
       /* check bounding boxes */
-      if (isect_aabb_aabb_v2(edgeA->min, edgeA->max, edgeB->min, edgeB->max)) {
+      if (isect_aabb_aabb_v4(edgeA->bounding_box, edgeB->bounding_box)) {
         /* check for intersection */
         float *p0_a = &edgeA->start->x;
         float *p1_a = &edgeA->end->x;
@@ -618,6 +705,77 @@ static int gp_edge_intersection_algorithm(ListBase *edges, ListBase *clip_points
     }
   }
   return num_intersections;
+}
+
+static int gp_get_outer_edge_clip_paths(tClipPath *path_A, tClipPath *path_B, ListBase *outer_edge)
+{
+  int num_outer_edge_points = 0;
+
+  /* connect the paths together by linking the point and edge list*/
+  ((tClipPoint *)path_A->clip_points.last)->next = (tClipPoint *)path_B->clip_points.first;
+  ((tClipPoint *)path_B->clip_points.first)->prev = (tClipPoint *)path_A->clip_points.last;
+
+  ((tClipPoint *)path_A->edges.last)->next = (tClipPoint *)path_B->edges.first;
+  ((tClipPoint *)path_B->edges.first)->prev = (tClipPoint *)path_A->edges.last;
+
+  int num_intersections = gp_edge_intersection_algorithm(&path_A->edges, &path_A->clip_points);
+  if (num_intersections == 0) {
+    /* If no intersections where found, check if one path is entirely inside the other */
+    if (aabb_inside_aabb_v4(path_A->bounding_box, path_B->bounding_box)) {
+      /* path A is inside path B */
+      outer_edge = &path_B->clip_points;
+      num_outer_edge_points = path_B->num_points;
+    }
+    else if (aabb_inside_aabb_v4(path_B->bounding_box, path_A->bounding_box)) {
+      /* path B is inside path A */
+      outer_edge = &path_A->clip_points;
+      num_outer_edge_points = path_A->num_points;
+    }
+    else {
+      /* path A and path B are seperate */
+      outer_edge = NULL;
+    }
+  }
+  else {
+    /* find point on the outer edge first */
+    tClipPoint *cpt_min = NULL;
+    float min_x = FLT_MAX;
+    LISTBASE_FOREACH(tClipPoint *, curr, &path_A->clip_points) {
+      if (curr->x < min_x) {
+        min_x = curr->x;
+        cpt_min = curr;
+      }
+    }
+
+    /* now we know that the right side of the edge to the next pt is inside */
+    tClipPoint *cpt_start = cpt_min;
+    tClipPoint *out_start = MEM_dupallocN(cpt_start);
+    BLI_addtail(outer_edge, out_start);
+    num_outer_edge_points++;
+
+    tClipPoint *cpt_curr = cpt_start->next;
+    while (cpt_curr != cpt_start) {
+      tClipPoint *out_curr = MEM_dupallocN(cpt_curr);
+      BLI_addtail(outer_edge, out_curr);
+      num_outer_edge_points++;
+
+      /* Follow the path around, switch path on intersection */
+      if(cpt_curr->isect_link != NULL) {
+        cpt_curr = cpt_curr->isect_link->next;
+      }
+      else {
+        cpt_curr = cpt_curr->next;
+      }
+    }
+  }
+
+  /* disconnect point and edge list */
+  ((tClipPoint *)path_A->clip_points.last)->next = NULL;
+  ((tClipPoint *)path_B->clip_points.first)->prev = NULL;
+  ((tClipPoint *)path_A->edges.last)->next = NULL;
+  ((tClipPoint *)path_B->edges.first)->prev = NULL;
+
+  return num_outer_edge_points;
 }
 
 static bGPDstroke *gp_clip_points_to_gp_stroke(ListBase *points, int num_points, const float invmat[4][4], int mat_idx, bool select)
@@ -765,42 +923,39 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const RegionView3D *rv
  * Takes two stroke outlines and applies a union boolean operation.
  * Returns either the unified stroke or NULL if the strokes do not intersect.
  */
-bGPDstroke *BKE_gpencil_stroke_outline_union(const RegionView3D *rv3d,
-                                             const bGPDlayer *gpl,
-                                             bGPDstroke *gps_A,
-                                             bGPDstroke *gps_B)
+bGPDstroke *BKE_gpencil_stroke_outline_boolean_add(const RegionView3D *rv3d,
+                                                   const bGPDlayer *gpl,
+                                                   bGPDstroke *gps_A,
+                                                   bGPDstroke *gps_B)
 {
-  ListBase clip_points = {NULL, NULL};
-  ListBase edges = {NULL, NULL};
-  /* convert stroke to point and edge data strusture */
-  gp_stroke_to_points_and_edges(gps_A, rv3d->viewmat, &edges, &clip_points);
-  gp_stroke_to_points_and_edges(gps_B, rv3d->viewmat, &edges, &clip_points);
-  int num_isect_points = gp_edge_intersection_algorithm(&edges, &clip_points); 
-  if (num_isect_points == 0) {
-    BLI_freelistN(&edges);
-    BLI_freelistN(&clip_points);
+  bGPDstroke *outline_stroke = NULL;
+  /* convert stroke to clip path data strusture */
+  tClipPath *path_A = gp_stroke_to_clip_path(gps_A, rv3d->viewmat);
+  tClipPath *path_B = gp_stroke_to_clip_path(gps_B, rv3d->viewmat);
+
+  if (isect_aabb_aabb_v4(path_A->bounding_box, path_B->bounding_box)) {
+    ListBase outline_points = {NULL, NULL};
+    int num_outline_points = gp_get_outer_edge_clip_paths(path_A, path_B, &outline_points);
+    if (num_outline_points == 0) {
+      gp_free_clip_path(path_A);
+      gp_free_clip_path(path_B);
+      return NULL;
+    }
+
+    /* create new stroke */
+    outline_stroke = gp_clip_points_to_gp_stroke(&outline_points, num_outline_points, rv3d->viewinv, gps_A->mat_nr, true);
+    outline_stroke->flag |= GP_STROKE_CYCLIC;
+
+    /* free temp data */
+    BLI_freelistN(&outline_points);
+    gp_free_clip_path(path_A);
+    gp_free_clip_path(path_B);
+  }
+  else {
+    gp_free_clip_path(path_A);
+    gp_free_clip_path(path_B);
     return NULL;
   }
-
-  /* walk along the outline */
-  ListBase outline_points = {NULL, NULL};
-  int num_outline_points = gp_get_outer_edge(&clip_points, &outline_points);
-
-  /* create new stroke */
-  bGPDstroke *outline_stroke = gp_clip_points_to_gp_stroke(&outline_points, num_outline_points, rv3d->viewinv, gps_A->mat_nr, true);
-
-  /* free temp data */
-  BLI_freelistN(&edges);
-  BLI_freelistN(&clip_points);
-  BLI_freelistN(&outline_points);
-
-  outline_stroke->flag |= GP_STROKE_CYCLIC;
-
-  /* Delete the old strokes */
-  BLI_remlink(&gpl->actframe->strokes, gps_A);
-  BLI_remlink(&gpl->actframe->strokes, gps_B);
-  BKE_gpencil_free_stroke(gps_A);
-  BKE_gpencil_free_stroke(gps_B);
 
   return outline_stroke;
 }

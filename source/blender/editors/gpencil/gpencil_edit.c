@@ -4856,12 +4856,15 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 5);
 }
 
-/* ********** Stroke difference ********** */
+/* ********** Stroke union ********** */
 
-static int gp_stroke_difference_exec(bContext *C)
+static int gp_stroke_union_exec(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = (bGPdata *)ob->data;
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
+  bGPDlayer *gpl = CTX_data_active_gpencil_layer(C);
 
   /* sanity checks */
   if (ELEM(NULL, gpd)) {
@@ -4869,25 +4872,49 @@ static int gp_stroke_difference_exec(bContext *C)
   }
 
   ListBase selected_strokes = {NULL, NULL};
-  ListBase unselected_strokes = {NULL, NULL};
-
+  ListBase unified_strokes = {NULL, NULL};
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
     if (gps->flag & GP_STROKE_SELECT) {
-      BLI_addtail(&selected_strokes, gps);
-    }
-    else {
-      BLI_addtail(&unselected_strokes, gps);
+      BLI_addtail(&selected_strokes, BLI_genericNodeN(gps));
     }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);
 
+  LinkData *gps_first = BLI_pophead(&selected_strokes);
+  BLI_addtail(&unified_strokes, gps_first);
+
   bool changed = false;
-  LISTBASE_FOREACH (bGPDstroke *, gps_B, &selected_strokes) {
-    LISTBASE_FOREACH (bGPDstroke *, gps_A, &unselected_strokes) {
-      BKE_gpencil_stroke_difference(gps_A, gps_B);
-      changed = true;
+  LinkData *_gps_B = BLI_poptail(&selected_strokes);
+  while (_gps_B != NULL) {
+    bool is_intersected = false;
+    LISTBASE_FOREACH (LinkData *, _gps_A, &unified_strokes) {
+      bGPDstroke *gps_A = _gps_A->data;
+      bGPDstroke *gps_B = _gps_B->data;
+
+      bGPDstroke *unified_stroke = BKE_gpencil_stroke_outline_boolean_add(rv3d, gpl, gps_A, gps_B);
+      if (unified_stroke != NULL) {
+        BLI_remlink(&gpl->actframe->strokes, gps_A);
+        BLI_remlink(&gpl->actframe->strokes, gps_B);
+        BLI_remlink(&unified_strokes, _gps_A);
+        BKE_gpencil_free_stroke(gps_A);
+        BKE_gpencil_free_stroke(gps_B);
+
+        BLI_addhead(&gpl->actframe->strokes, unified_stroke);
+        BLI_addhead(&unified_strokes, BLI_genericNodeN(unified_stroke));
+        changed = true;
+        is_intersected = true;
+      }
+
+      if (is_intersected == false) {
+        BLI_addhead(&unified_strokes, _gps_B);
+      }
     }
+
+    _gps_B = BLI_poptail(&selected_strokes);
   }
+
+  BLI_freelistN(&selected_strokes);
+  BLI_freelistN(&unified_strokes);
 
   /* notifiers */
   if (changed) {
@@ -4899,14 +4926,14 @@ static int gp_stroke_difference_exec(bContext *C)
 }
 
 
-void GPENCIL_OT_stroke_difference(wmOperatorType *ot)
+void GPENCIL_OT_stroke_union(wmOperatorType *ot)
 {
-  ot->name = "Difference";
-  ot->idname = "GPENCIL_OT_stroke_difference";
-  ot->description = "Merge points by distance";
+  ot->name = "Union";
+  ot->idname = "GPENCIL_OT_stroke_union";
+  ot->description = "Boolean add on selected strokes";
 
   /* api callbacks */
-  ot->exec = gp_stroke_difference_exec;
+  ot->exec = gp_stroke_union_exec;
   ot->poll = gp_active_layer_poll;
 
   /* flags */

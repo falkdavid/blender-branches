@@ -431,7 +431,7 @@ void GPENCIL_OT_clip_stroke(struct wmOperatorType *ot);
 void GPENCIL_OT_sculpt_paint(struct wmOperatorType *ot);
 void GPENCIL_OT_weight_paint(struct wmOperatorType *ot);
 
-void GPENCIL_OT_stroke_difference(struct wmOperatorType *ot);
+void GPENCIL_OT_stroke_union(struct wmOperatorType *ot);
 
 /* buttons editing --- */
 
