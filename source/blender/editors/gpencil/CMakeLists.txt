@@ -29,6 +29,7 @@ set(INC
   ../../windowmanager
   ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
+  ../../../../extern/potrace/src
 )
 
 set(INC_SYS
@@ -56,6 +57,8 @@ set(SRC
   gpencil_primitive.c
   gpencil_sculpt_paint.c
   gpencil_select.c
+  gpencil_trace_ops.c
+  gpencil_trace_utils.c
   gpencil_undo.c
   gpencil_utils.c
   gpencil_uv.c
@@ -64,11 +67,13 @@ set(SRC
   gpencil_weight_paint.c
 
   gpencil_intern.h
+  gpencil_trace.h
 )
 
 set(LIB
   bf_blenkernel
   bf_blenlib
+  extern_potrace
 )
 
 if(WITH_INTERNATIONAL)
