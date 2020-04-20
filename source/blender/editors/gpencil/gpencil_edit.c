@@ -4863,61 +4863,61 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
   RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 5);
 }
 
-/* ********** Stroke difference ********** */
+// /* ********** Stroke difference ********** */
 
-static int gp_stroke_difference_exec(bContext *C)
-{
-  Object *ob = CTX_data_active_object(C);
-  bGPdata *gpd = (bGPdata *)ob->data;
+// static int gp_stroke_difference_exec(bContext *C)
+// {
+//   Object *ob = CTX_data_active_object(C);
+//   bGPdata *gpd = (bGPdata *)ob->data;
 
-  /* sanity checks */
-  if (ELEM(NULL, gpd)) {
-    return OPERATOR_CANCELLED;
-  }
+//   /* sanity checks */
+//   if (ELEM(NULL, gpd)) {
+//     return OPERATOR_CANCELLED;
+//   }
 
-  ListBase selected_strokes = {NULL, NULL};
-  ListBase unselected_strokes = {NULL, NULL};
+//   ListBase selected_strokes = {NULL, NULL};
+//   ListBase unselected_strokes = {NULL, NULL};
 
-  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (gps->flag & GP_STROKE_SELECT) {
-      BLI_addtail(&selected_strokes, gps);
-    }
-    else {
-      BLI_addtail(&unselected_strokes, gps);
-    }
-  }
-  GP_EDITABLE_STROKES_END(gpstroke_iter);
+//   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+//     if (gps->flag & GP_STROKE_SELECT) {
+//       BLI_addtail(&selected_strokes, gps);
+//     }
+//     else {
+//       BLI_addtail(&unselected_strokes, gps);
+//     }
+//   }
+//   GP_EDITABLE_STROKES_END(gpstroke_iter);
 
-  bool changed = false;
-  LISTBASE_FOREACH (bGPDstroke *, gps_B, &selected_strokes) {
-    LISTBASE_FOREACH (bGPDstroke *, gps_A, &unselected_strokes) {
-      BKE_gpencil_stroke_difference(gps_A, gps_B);
-      changed = true;
-    }
-  }
+//   bool changed = false;
+//   LISTBASE_FOREACH (bGPDstroke *, gps_B, &selected_strokes) {
+//     LISTBASE_FOREACH (bGPDstroke *, gps_A, &unselected_strokes) {
+//       BKE_gpencil_stroke_difference(gps_A, gps_B);
+//       changed = true;
+//     }
+//   }
 
-  /* notifiers */
-  if (changed) {
-    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
-    return OPERATOR_FINISHED;
-  }
-  return OPERATOR_CANCELLED;
-}
+//   /* notifiers */
+//   if (changed) {
+//     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+//     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+//     return OPERATOR_FINISHED;
+//   }
+//   return OPERATOR_CANCELLED;
+// }
 
-void GPENCIL_OT_stroke_difference(wmOperatorType *ot)
-{
-  ot->name = "Difference";
-  ot->idname = "GPENCIL_OT_stroke_difference";
-  ot->description = "Merge points by distance";
+// void GPENCIL_OT_stroke_difference(wmOperatorType *ot)
+// {
+//   ot->name = "Difference";
+//   ot->idname = "GPENCIL_OT_stroke_difference";
+//   ot->description = "Merge points by distance";
 
-  /* api callbacks */
-  ot->exec = gp_stroke_difference_exec;
-  ot->poll = gp_active_layer_poll;
+//   /* api callbacks */
+//   ot->exec = gp_stroke_difference_exec;
+//   ot->poll = gp_active_layer_poll;
 
-  /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-}
+//   /* flags */
+//   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+// }
 
 /* ********** Clip stroke ********** */
 

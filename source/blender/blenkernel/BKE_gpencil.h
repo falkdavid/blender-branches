@@ -247,22 +247,6 @@ bool BKE_gpencil_from_image(struct SpaceImage *sima,
                             const float size,
                             const bool mask);
 
-struct bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const struct RegionView3D *rv3d,
-                                                          const struct bGPdata *gpd,
-                                                          const struct bGPDlayer *gpl,
-                                                          struct bGPDstroke *gps,
-                                                          int subdivisions);
-
-struct bGPDstroke *BKE_gpencil_stroke_perimeter_from_proj_mat(const struct bGPdata *gpd,
-                                                              const struct bGPDlayer *gpl,
-                                                              struct bGPDstroke *gps,
-                                                              const float proj_mat[4][4],
-                                                              int subdivisions);
-
-void BKE_gpencil_stroke_difference(struct bGPDstroke *gps_A, struct bGPDstroke *gps_B);
-
-bool BKE_gpencil_stroke_resolve_self_overlapp(const struct RegionView3D *rv3d, struct bGPDstroke *gps);
-
 /* Iterator */
 /* frame & stroke are NULL if it is a layer callback. */
 typedef void (*gpIterCb)(struct bGPDlayer *layer,
