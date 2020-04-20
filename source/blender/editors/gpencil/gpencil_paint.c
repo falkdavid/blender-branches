@@ -54,8 +54,8 @@
 #include "BKE_deform.h"
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
-#include "BKE_gpencil_geom.h"
 #include "BKE_gpencil_clip.h"
+#include "BKE_gpencil_geom.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
@@ -1155,11 +1155,12 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
 
     /* Outline stroke */
     if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
-      gps = BKE_gpencil_stroke_perimeter_from_view(rv3d, gpd, gpl, gps,  brush->gpencil_settings->draw_cap_subdivisions);
+      gps = BKE_gpencil_stroke_perimeter_from_view(
+          rv3d, gpd, gpl, gps, brush->gpencil_settings->draw_cap_subdivisions);
       if (brush->gpencil_settings->draw_sample_length > 0.0f) {
         BKE_gpencil_stroke_sample(gps, brush->gpencil_settings->draw_sample_length, true);
       }
-      gps = BKE_gpencil_fill_stroke_to_outline(rv3d, gpl, gps);
+      // gps = BKE_gpencil_fill_stroke_to_outline(C, gpl, gpf, gps);
     }
 
     /* reproject to plane (only in 3d space) */
@@ -1788,8 +1789,9 @@ static void gp_init_colors(tGPsdata *p)
   /* TODO: find a better solution to set the right material */
   if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
     Material *default_mat = BKE_material_default_gpencil();
-    //copy_v4_v4(default_mat->gp_style->stroke_rgba, p->material->gp_style->fill_rgba);
-    gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, default_mat);;
+    // copy_v4_v4(default_mat->gp_style->stroke_rgba, p->material->gp_style->fill_rgba);
+    gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, default_mat);
+    ;
   }
   else {
     gpd->runtime.matid = BKE_object_material_slot_find_index(p->ob, p->material);

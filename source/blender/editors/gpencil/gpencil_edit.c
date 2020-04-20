@@ -4799,12 +4799,13 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
         for (gps = gpf->strokes.first; gps; gps = gps_next) {
           gps_next = gps->next;
           /* skip strokes that are invalid for current view, cyclic or not selected */
-          if (ED_gpencil_stroke_can_use(C, gps) == false ||
-              gps->flag & GP_STROKE_CYCLIC || (gps->flag & GP_STROKE_SELECT) == 0 ) {
+          if (ED_gpencil_stroke_can_use(C, gps) == false || gps->flag & GP_STROKE_CYCLIC ||
+              (gps->flag & GP_STROKE_SELECT) == 0) {
             continue;
           }
 
-          bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(rv3d, gpd, gpl, gps, subdivisions);
+          bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
+              rv3d, gpd, gpl, gps, subdivisions);
 
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
@@ -4820,7 +4821,7 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   if (changed) {
-    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY );
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED | NA_SELECTED, NULL);
     return OPERATOR_FINISHED;
   }
@@ -4839,19 +4840,25 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = gp_stroke_to_perimeter_exec;
-  ot->poll = gp_stroke_to_perimeter_poll;
+  ot->poll = gp_active_layer_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
   prop = RNA_def_int(ot->srna,
-                    "subdivisions", 3, 0, 10,
-                    "Corner subdivisions",
-                    "Number of subdivisions on the rounded corners", 0, 6);
+                     "subdivisions",
+                     3,
+                     0,
+                     10,
+                     "Corner subdivisions",
+                     "Number of subdivisions on the rounded corners",
+                     0,
+                     6);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  prop = RNA_def_float(ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
+  prop = RNA_def_float(
+      ot->srna, "sample_dist", 0.0f, 0.0f, 100.0f, "Sample length", "", 0.0f, 100.0f);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 5);
 }
@@ -4897,7 +4904,6 @@ static int gp_stroke_difference_exec(bContext *C)
   }
   return OPERATOR_CANCELLED;
 }
-
 
 void GPENCIL_OT_stroke_difference(wmOperatorType *ot)
 {
@@ -4945,10 +4951,8 @@ static int gp_stroke_clip_exec(bContext *C)
           if ((gps->flag & GP_STROKE_SELECT) && (gps->flag & GP_STROKE_CYCLIC)) {
             /* preprocess, merge all duplicates */
             BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0f, false);
-            bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline_with_holes(rv3d, gpl, gps);
+            bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline(C, gpl, gpf, gps);
             if (clipped_stroke != NULL) {
-              /* add to frame */
-              BLI_addhead(&gpf->strokes, clipped_stroke);
               changed = true;
             }
           }
@@ -4966,7 +4970,6 @@ static int gp_stroke_clip_exec(bContext *C)
   }
   return OPERATOR_CANCELLED;
 }
-
 
 void GPENCIL_OT_clip_stroke(wmOperatorType *ot)
 {
