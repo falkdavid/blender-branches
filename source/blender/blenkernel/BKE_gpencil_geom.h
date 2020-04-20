@@ -119,6 +119,12 @@ void BKE_gpencil_convert_mesh(struct Main *bmain,
                               const bool use_seams,
                               const bool use_faces);
 
+void BKE_gpencil_stroke_to_view_space(struct bContext *C,
+                                      struct bGPDlayer *gpl,
+                                      struct bGPDstroke *gps);
+void BKE_gpencil_stroke_from_view_space(struct bContext *C,
+                                        struct bGPDlayer *gpl,
+                                        struct bGPDstroke *gps);
 struct bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const struct RegionView3D *rv3d,
                                                           const struct bGPdata *gpd,
                                                           const struct bGPDlayer *gpl,

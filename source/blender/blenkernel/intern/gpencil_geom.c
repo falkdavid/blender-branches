@@ -40,8 +40,10 @@
 #include "DNA_gpencil_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_screen_types.h"
 
 #include "BKE_collection.h"
+#include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_deform.h"
 #include "BKE_gpencil.h"
@@ -50,6 +52,7 @@
 #include "BKE_material.h"
 #include "BKE_object.h"
 
+#include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
 
 /* GP Object - Boundbox Support */
@@ -2354,6 +2357,59 @@ void BKE_gpencil_transform(bGPdata *gpd, float mat[4][4])
         BKE_gpencil_stroke_geometry_update(gps);
       }
     }
+  }
+}
+
+/**
+ * Stroke to view space
+ * Transforms a stroke to view space. This allows for manipulations in 2D but also easy conversion
+ * back to 3D.
+ */
+void BKE_gpencil_stroke_to_view_space(bContext *C, bGPDlayer *gpl, bGPDstroke *gps)
+{
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
+  Object *ob = CTX_data_active_object(C);
+
+  float tmp[3];
+  float diff_mat[4][4];
+  BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
+
+  for (int i = 0; i < gps->totpoints; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    /* point to parent space */
+    mul_v3_m4v3(tmp, diff_mat, &pt->x);
+    /* point to view space */
+    mul_m4_v3(rv3d->viewmat, tmp);
+    copy_v3_v3(&pt->x, tmp);
+  }
+}
+
+/**
+ * Stroke from view space
+ * Transforms a stroke from view space back to world space. Inverse of
+ * BKE_gpencil_stroke_to_view_space
+ */
+void BKE_gpencil_stroke_from_view_space(bContext *C, bGPDlayer *gpl, bGPDstroke *gps)
+{
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
+  Object *ob = CTX_data_active_object(C);
+
+  float tmp[3];
+  float diff_mat[4][4];
+  float inverse_diff_mat[4][4];
+
+  BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
+  invert_m4_m4(inverse_diff_mat, diff_mat);
+
+  for (int i = 0; i < gps->totpoints; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    mul_v3_m4v3(tmp, rv3d->viewinv, &pt->x);
+    mul_m4_v3(inverse_diff_mat, tmp);
+    copy_v3_v3(&pt->x, tmp);
   }
 }
 
