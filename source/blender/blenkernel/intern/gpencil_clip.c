@@ -302,16 +302,16 @@ static void gp_clip_path_to_3d_space(bContext *C, bGPDlayer *gpl, tClipPath *pat
 
 static tClipPath *gp_stroke_to_view_space_clip_path(bContext *C, bGPDlayer *gpl, bGPDstroke *gps)
 {
+  BKE_gpencil_stroke_to_view_space(C, gpl, gps);
   tClipPath *clip_path = gp_clip_path_from_stroke(gps);
-  gp_clip_path_to_view_space(C, gpl, clip_path);
   return clip_path;
 }
 
 static bGPDstroke *gp_view_space_clip_path_to_stroke(
     bContext *C, bGPDlayer *gpl, tClipPath *path, int mat_idx, bool select)
 {
-  gp_clip_path_to_3d_space(C, gpl, path);
   bGPDstroke *gps = gp_stroke_from_clip_path(path, mat_idx, select);
+  BKE_gpencil_stroke_from_view_space(C, gpl, gps);
   return gps;
 }
 
