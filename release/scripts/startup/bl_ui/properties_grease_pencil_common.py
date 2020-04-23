@@ -47,6 +47,8 @@ def gpencil_stroke_placement_settings(context, layout):
 def gpencil_active_brush_settings_simple(context, layout):
     tool_settings = context.tool_settings
     brush = tool_settings.gpencil_paint.brush
+    mode = tool_settings.gpencil_paint.color_mode
+
     if brush is None:
         layout.label(text="No Active Brush")
         return
@@ -74,6 +76,20 @@ def gpencil_active_brush_settings_simple(context, layout):
     row = col.row()
     row.prop(brush, "angle", slider=True)
     row.prop(brush, "angle_factor", text="Factor", slider=True)
+
+    col = layout.column()
+    col.enabled = mode == 'VERTEXCOLOR'
+    row = col.row(align=True)
+    row.prop(gp_settings, "random_hue_factor", slider=True)
+    row.prop(gp_settings, "use_stroke_random_hue", text="", icon='GP_SELECT_STROKES')
+
+    row = col.row(align=True)
+    row.prop(gp_settings, "random_saturation_factor", slider=True)
+    row.prop(gp_settings, "use_stroke_random_sat", text="", icon='GP_SELECT_STROKES')
+
+    row = col.row(align=True)
+    row.prop(gp_settings, "random_value_factor", slider=True)
+    row.prop(gp_settings, "use_stroke_random_val", text="", icon='GP_SELECT_STROKES')
 
 
 # XXX: To be replaced with active tools
@@ -549,7 +565,7 @@ class AnnotationOnionSkin:
             if gpl is None:
                 return False
 
-            return True
+        return True
 
     def draw_header(self, context):
         gpl = context.active_annotation_layer

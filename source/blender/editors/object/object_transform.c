@@ -1728,7 +1728,7 @@ static void object_apply_location(Object *ob, const float loc[3])
   copy_v3_v3(ob->loc, mat[3]);
 }
 
-static void object_orient_to_location(Object *ob,
+static bool object_orient_to_location(Object *ob,
                                       const float rot_orig[3][3],
                                       const float axis[3],
                                       const float location[3],
@@ -1750,9 +1750,10 @@ static void object_orient_to_location(Object *ob,
 
       object_apply_rotation(ob, final_rot);
 
-      DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
+      return true;
     }
   }
+  return false;
 }
 
 static void object_transform_axis_target_cancel(bContext *C, wmOperator *op)
@@ -1904,9 +1905,9 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
               normal_found = true;
 
               /* cheap attempt to smooth normals out a bit! */
-              const uint ofs = 2;
-              for (uint x = -ofs; x <= ofs; x += ofs / 2) {
-                for (uint y = -ofs; y <= ofs; y += ofs / 2) {
+              const int ofs = 2;
+              for (int x = -ofs; x <= ofs; x += ofs / 2) {
+                for (int y = -ofs; y <= ofs; y += ofs / 2) {
                   if (x != 0 && y != 0) {
                     int mval_ofs[2] = {event->mval[0] + x, event->mval[1] + y};
                     float n[3];
@@ -1923,7 +1924,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
               normal_found = true;
             }
 
-            if (normal_found) {
+            {
 #ifdef USE_RELATIVE_ROTATION
               if (is_translate_init && xfd->object_data_len > 1) {
                 float xform_rot_offset_inv_first[3][3];
@@ -1952,16 +1953,26 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                   item->xform_dist = len_v3v3(item->ob->obmat[3], location_world);
                   normalize_v3_v3(ob_axis, item->ob->obmat[2]);
                   /* Scale to avoid adding distance when moving between surfaces. */
-                  float scale = fabsf(dot_v3v3(ob_axis, normal));
-                  item->xform_dist *= scale;
+                  if (normal_found) {
+                    float scale = fabsf(dot_v3v3(ob_axis, normal));
+                    item->xform_dist *= scale;
+                  }
                 }
 
                 float target_normal[3];
-                copy_v3_v3(target_normal, normal);
+
+                if (normal_found) {
+                  copy_v3_v3(target_normal, normal);
+                }
+                else {
+                  normalize_v3_v3(target_normal, item->ob->obmat[2]);
+                }
 
 #ifdef USE_RELATIVE_ROTATION
-                if (i != 0) {
-                  mul_m3_v3(item->xform_rot_offset, target_normal);
+                if (normal_found) {
+                  if (i != 0) {
+                    mul_m3_v3(item->xform_rot_offset, target_normal);
+                  }
                 }
 #endif
                 {
@@ -1976,18 +1987,24 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
 
                 object_orient_to_location(
                     item->ob, item->rot_mat, item->rot_mat[2], location_world, item->is_z_flip);
+
+                DEG_id_tag_update(&item->ob->id, ID_RECALC_TRANSFORM);
                 WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, item->ob);
               }
-              copy_v3_v3(xfd->prev.normal, normal);
-              xfd->prev.is_normal_valid = true;
+              if (normal_found) {
+                copy_v3_v3(xfd->prev.normal, normal);
+                xfd->prev.is_normal_valid = true;
+              }
             }
           }
           else {
             struct XFormAxisItem *item = xfd->object_data;
             for (int i = 0; i < xfd->object_data_len; i++, item++) {
-              object_orient_to_location(
-                  item->ob, item->rot_mat, item->rot_mat[2], location_world, item->is_z_flip);
-              WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, item->ob);
+              if (object_orient_to_location(
+                      item->ob, item->rot_mat, item->rot_mat[2], location_world, item->is_z_flip)) {
+                DEG_id_tag_update(&item->ob->id, ID_RECALC_TRANSFORM);
+                WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, item->ob);
+              }
             }
             xfd->prev.is_normal_valid = false;
           }
