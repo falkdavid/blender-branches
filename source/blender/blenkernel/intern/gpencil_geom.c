@@ -2364,6 +2364,7 @@ void BKE_gpencil_transform(bGPdata *gpd, float mat[4][4])
  * Stroke to view space
  * Transforms a stroke to view space. This allows for manipulations in 2D but also easy conversion
  * back to 3D.
+ * Note: also takes care of parent space transform
  */
 void BKE_gpencil_stroke_to_view_space(const bContext *C, const bGPDlayer *gpl, bGPDstroke *gps)
 {
@@ -2390,6 +2391,7 @@ void BKE_gpencil_stroke_to_view_space(const bContext *C, const bGPDlayer *gpl, b
  * Stroke from view space
  * Transforms a stroke from view space back to world space. Inverse of
  * BKE_gpencil_stroke_to_view_space
+ * Note: also takes care of parent space transform
  */
 void BKE_gpencil_stroke_from_view_space(const bContext *C, const bGPDlayer *gpl, bGPDstroke *gps)
 {
@@ -2593,8 +2595,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   ListBase *perimeter_right_side = MEM_callocN(sizeof(ListBase), __func__);
   ListBase *perimeter_left_side = MEM_callocN(sizeof(ListBase), __func__);
   int num_perimeter_points = 0;
-  // tPerimeterPointList *perimeter_right_side = init_perimeter_point_list();
-  // tPerimeterPointList *perimeter_left_side = init_perimeter_point_list();
 
   bGPDspoint *first = &gps->points[0];
   bGPDspoint *last = &gps->points[gps->totpoints - 1];
@@ -2719,8 +2719,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
       BLI_addtail(perimeter_left_side, normal_prev);
       BLI_addtail(perimeter_right_side, normal_next);
       num_perimeter_points += 2;
-      // add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
-      // add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
     }
     else {
       /* bend to the left */
@@ -2740,8 +2738,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         BLI_addtail(perimeter_left_side, normal_prev);
         BLI_addtail(perimeter_left_side, normal_next);
         num_perimeter_points += 2;
-        // add_point_to_end_perimeter_list(normal_prev, perimeter_left_side);
-        // add_point_to_end_perimeter_list(normal_next, perimeter_left_side);
 
         generate_arc_from_point_to_point(
             perimeter_left_side, normal_prev, normal_next, curr_pt, subdivisions, true, true);
@@ -2759,7 +2755,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         tPerimeterPoint *miter_right = new_perimeter_point(miter_right_pt, false);
         BLI_addtail(perimeter_right_side, miter_right);
         num_perimeter_points++;
-        // add_point_to_end_perimeter_list(miter_right, perimeter_right_side);
       }
       /* bend to the right */
       else {
@@ -2778,8 +2773,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         BLI_addtail(perimeter_right_side, normal_prev);
         BLI_addtail(perimeter_right_side, normal_next);
         num_perimeter_points += 2;
-        // add_point_to_end_perimeter_list(normal_prev, perimeter_right_side);
-        // add_point_to_end_perimeter_list(normal_next, perimeter_right_side);
 
         generate_arc_from_point_to_point(
             perimeter_right_side, normal_prev, normal_next, curr_pt, subdivisions, false, false);
@@ -2797,7 +2790,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
         tPerimeterPoint *miter_left = new_perimeter_point(miter_left_pt, true);
         BLI_addtail(perimeter_left_side, miter_left);
         num_perimeter_points++;
-        // add_point_to_end_perimeter_list(miter_left, perimeter_left_side);
       }
     }
   }
@@ -2810,9 +2802,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   BLI_listbase_reverse(perimeter_right_side);
   BLI_movelisttolist(perimeter_left_side,
                      perimeter_right_side);  // perimeter_left_side contains entire list
-  // reverse_perimeter_list(perimeter_right_side);
-  // extend_perimeter_list(perimeter_left_side,
-  //                       perimeter_right_side);
   ListBase *perimeter_list = perimeter_left_side;
 
   /* close by creating a point close to the first (make a small gap) */
