@@ -30,6 +30,7 @@ extern "C" {
 
 struct BoundBox;
 struct Depsgraph;
+struct bContext;
 struct Main;
 struct Object;
 struct Scene;
@@ -120,10 +121,10 @@ void BKE_gpencil_convert_mesh(struct Main *bmain,
                               const bool use_faces);
 
 void BKE_gpencil_stroke_to_view_space(const struct bContext *C,
-                                      struct bGPDlayer *gpl,
+                                      const struct bGPDlayer *gpl,
                                       struct bGPDstroke *gps);
-void BKE_gpencil_stroke_from_view_space(struct bContext *C,
-                                        struct bGPDlayer *gpl,
+void BKE_gpencil_stroke_from_view_space(const struct bContext *C,
+                                        const struct bGPDlayer *gpl,
                                         struct bGPDstroke *gps);
 struct bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(const struct bContext *C,
                                                           const struct bGPdata *gpd,

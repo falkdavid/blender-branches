@@ -4781,7 +4781,6 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   ARegion *ar = CTX_wm_region(C);
-  RegionView3D *rv3d = ar->regiondata;
   const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
   const float dist = RNA_float_get(op->ptr, "sample_dist");
   bool changed = false;
@@ -4956,7 +4955,15 @@ static int gp_stroke_clip_exec(bContext *C)
           if ((gps->flag & GP_STROKE_SELECT) && (gps->flag & GP_STROKE_CYCLIC)) {
             /* preprocess, merge all duplicates */
             BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0f, false);
-            bGPDstroke *clipped_stroke = BKE_gpencil_fill_stroke_to_outline(C, gpl, gpf, gps);
+            bGPDstroke *clipped_stroke = BKE_gpencil_stroke_to_outline(C, gpl, gps);
+
+            /* delete old stroke */
+            BLI_remlink(&gpf->strokes, gps);
+            BKE_gpencil_free_stroke(gps);
+
+            /* add new stroke to frame */
+            BLI_addtail(&gpf->strokes, clipped_stroke);
+
             if (clipped_stroke != NULL) {
               changed = true;
             }

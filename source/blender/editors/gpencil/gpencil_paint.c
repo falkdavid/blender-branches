@@ -1155,12 +1155,14 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
 
     /* Outline stroke */
     if (brush->gpencil_settings->flag & GP_BRUSH_GROUP_OUTLINE) {
-      gps = BKE_gpencil_stroke_perimeter_from_view(
-          rv3d, gpd, gpl, gps, brush->gpencil_settings->draw_cap_subdivisions);
+      bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
+          p->C, gpd, gpl, gps, brush->gpencil_settings->draw_cap_subdivisions);
+      BKE_gpencil_free_stroke(gps);
+      gps = perimeter_stroke;
       if (brush->gpencil_settings->draw_sample_length > 0.0f) {
         BKE_gpencil_stroke_sample(gps, brush->gpencil_settings->draw_sample_length, true);
       }
-      // gps = BKE_gpencil_fill_stroke_to_outline(C, gpl, gpf, gps);
+      // gps = BKE_gpencil_stroke_to_outline(C, gpl, gpf, gps);
     }
 
     /* reproject to plane (only in 3d space) */

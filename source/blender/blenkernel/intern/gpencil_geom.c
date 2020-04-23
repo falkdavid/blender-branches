@@ -2365,7 +2365,7 @@ void BKE_gpencil_transform(bGPdata *gpd, float mat[4][4])
  * Transforms a stroke to view space. This allows for manipulations in 2D but also easy conversion
  * back to 3D.
  */
-void BKE_gpencil_stroke_to_view_space(const bContext *C, bGPDlayer *gpl, bGPDstroke *gps)
+void BKE_gpencil_stroke_to_view_space(const bContext *C, const bGPDlayer *gpl, bGPDstroke *gps)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ARegion *ar = CTX_wm_region(C);
@@ -2391,7 +2391,7 @@ void BKE_gpencil_stroke_to_view_space(const bContext *C, bGPDlayer *gpl, bGPDstr
  * Transforms a stroke from view space back to world space. Inverse of
  * BKE_gpencil_stroke_to_view_space
  */
-void BKE_gpencil_stroke_from_view_space(bContext *C, bGPDlayer *gpl, bGPDstroke *gps)
+void BKE_gpencil_stroke_from_view_space(const bContext *C, const bGPDlayer *gpl, bGPDstroke *gps)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ARegion *ar = CTX_wm_region(C);
@@ -2843,66 +2843,6 @@ static void gpencil_copy_point(bGPDspoint *pt_to, bGPDspoint *pt_from)
   pt_to->flag = pt_from->flag;
   copy_v4_v4(&pt_to->vert_color, &pt_from->vert_color);
 }
-
-// void BKE_gpencil_stroke_difference(bGPDstroke *gps_A, bGPDstroke *gps_B)
-// {
-//   /* Assumes B is entirely inside A, no special checks */
-
-//   /* first A (all B) first B (all A) */
-//   int num_old_points_a = gps_A->totpoints;
-//   int num_points = gps_A->totpoints + gps_B->totpoints + 2;
-
-//   bGPDspoint *old_points_a = MEM_dupallocN(gps_A->points);
-
-//   gps_A->points = MEM_recallocN(gps_A->points, sizeof(bGPDspoint) * num_points);
-//   gps_A->totpoints = num_points;
-
-//   int i = 0, j;
-//   gpencil_copy_point(&gps_A->points[i], &old_points_a[0]);
-//   i++;
-//   for (j = 0; j < gps_B->totpoints; j++) {
-//     gpencil_copy_point(&gps_A->points[i], &gps_B->points[j]);
-//     i++;
-//   }
-//   gpencil_copy_point(&gps_A->points[i], &gps_B->points[0]);
-//   i++;
-//   for (j = 0; j < num_old_points_a; j++) {
-//     gpencil_copy_point(&gps_A->points[i], &old_points_a[j]);
-//     i++;
-//   }
-
-//   MEM_freeN(old_points_a);
-
-//   BKE_gpencil_stroke_geometry_update(gps_A);
-// }
-
-// static tPerimeterPointList *gpencil_stroke_perimeter_view(const RegionView3D *rv3d,
-//                                                           const bGPdata *gpd,
-//                                                           const bGPDlayer *gpl,
-//                                                           const bGPDstroke *gps,
-//                                                           int subdivisions,
-//                                                           int *r_num_perimeter_points)
-// {
-//   return gpencil_stroke_perimeter_ex(
-//       gpd, gpl, gps, rv3d->viewmat, rv3d->viewinv, subdivisions, r_num_perimeter_points);
-// }
-
-// static tPerimeterPointList *gpencil_stroke_perimeter_mat(const bGPdata *gpd,
-//                                                          const bGPDlayer *gpl,
-//                                                          const bGPDstroke *gps,
-//                                                          const float proj_mat[4][4],
-//                                                          int subdivisions,
-//                                                          int *r_num_perimeter_points)
-// {
-//   float proj_inv[4][4];
-//   if (invert_m4_m4(proj_inv, proj_mat) == false) {
-//     *r_num_perimeter_points = 0;
-//     return NULL;
-//   }
-
-//   return gpencil_stroke_perimeter_ex(
-//       gpd, gpl, gps, proj_mat, proj_inv, subdivisions, r_num_perimeter_points);
-// }
 
 /**
  * Calculates the perimeter of a stroke projected from the view and
