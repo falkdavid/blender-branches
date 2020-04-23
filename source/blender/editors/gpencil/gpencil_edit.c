@@ -4805,14 +4805,19 @@ static int gp_stroke_to_perimeter_exec(bContext *C, wmOperator *op)
           }
 
           bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
-              rv3d, gpd, gpl, gps, subdivisions);
+              C, gpd, gpl, gps, subdivisions);
+
+          /* Delete the old stroke */
+          BLI_remlink(&gpf->strokes, gps);
+          BKE_gpencil_free_stroke(gps);
+
+          /* add new stroke to frame */
+          BLI_addhead(&gpf->strokes, perimeter_stroke);
 
           /* project and sample stroke */
           ED_gpencil_project_stroke_to_view(C, gpl, perimeter_stroke);
           BKE_gpencil_stroke_sample(perimeter_stroke, dist, true);
 
-          /* add to frame */
-          BLI_addhead(&gpf->strokes, perimeter_stroke);
           changed = true;
         }
       }
@@ -4840,7 +4845,7 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = gp_stroke_to_perimeter_exec;
-  ot->poll = gp_active_layer_poll;
+  ot->poll = gp_stroke_to_perimeter_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
