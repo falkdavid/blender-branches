@@ -2818,6 +2818,7 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
 
   /* free temp data */
   BLI_freelistN(perimeter_right_side);
+  MEM_freeN(perimeter_right_side);
 
   *r_num_perimeter_points = num_perimeter_points;
   return perimeter_list;
