@@ -144,6 +144,21 @@ static void heap_up(Heap *heap, uint i)
   }
 }
 
+static void heap_up_cmp(Heap *heap, Heap_Comparator_FP cmp_fp, uint i)
+{
+  HeapNode **const tree = heap->tree;
+
+  while (LIKELY(i > 0)) {
+    const uint p = HEAP_PARENT(i);
+
+    if (cmp_fp(tree[p], tree[i])) {
+      break;
+    }
+    heap_swap(heap, p, i);
+    i = p;
+  }
+}
+
 /** \} */
 
 /** \name Internal Memory Management
@@ -282,6 +297,29 @@ HeapNode *BLI_heap_insert(Heap *heap, float value, void *ptr)
   heap->size++;
 
   heap_up(heap, node->index);
+
+  return node;
+}
+
+HeapNode *BLI_heap_insert_cmp(Heap *heap, Heap_Comparator_FP cmp_fp, void *ptr)
+{
+  HeapNode *node;
+
+  if (UNLIKELY(heap->size >= heap->bufsize)) {
+    heap->bufsize *= 2;
+    heap->tree = MEM_reallocN(heap->tree, heap->bufsize * sizeof(*heap->tree));
+  }
+
+  node = heap_node_alloc(heap);
+
+  node->ptr = ptr;
+  node->index = heap->size;
+
+  heap->tree[node->index] = node;
+
+  heap->size++;
+
+  heap_up_cmp(heap, cmp_fp, node->index);
 
   return node;
 }

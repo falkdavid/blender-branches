@@ -34,12 +34,14 @@ typedef struct Heap Heap;
 typedef struct HeapNode HeapNode;
 
 typedef void (*HeapFreeFP)(void *ptr);
+typedef short (*Heap_Comparator_FP)(void *ptr, void *data);
 
 Heap *BLI_heap_new_ex(unsigned int tot_reserve) ATTR_WARN_UNUSED_RESULT;
 Heap *BLI_heap_new(void) ATTR_WARN_UNUSED_RESULT;
 void BLI_heap_clear(Heap *heap, HeapFreeFP ptrfreefp) ATTR_NONNULL(1);
 void BLI_heap_free(Heap *heap, HeapFreeFP ptrfreefp) ATTR_NONNULL(1);
 HeapNode *BLI_heap_insert(Heap *heap, float value, void *ptr) ATTR_NONNULL(1);
+HeapNode *BLI_heap_insert_cmp(Heap *heap, Heap_Comparator_FP cmp_fp, void *ptr) ATTR_NONNULL(1, 2);
 void BLI_heap_insert_or_update(Heap *heap, HeapNode **node_p, float value, void *ptr)
     ATTR_NONNULL(1, 2);
 void BLI_heap_remove(Heap *heap, HeapNode *node) ATTR_NONNULL(1, 2);
