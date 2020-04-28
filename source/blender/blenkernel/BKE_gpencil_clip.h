@@ -36,7 +36,7 @@ struct bGPDstroke *BKE_gpencil_stroke_clip_self(const struct RegionView3D *rv3d,
 struct bGPDstroke *BKE_gpencil_stroke_to_outline(const struct bContext *C,
                                                  const struct bGPDlayer *gpl,
                                                  struct bGPDstroke *gps);
-struct bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const struct RegionView3D *rv3d,
+struct bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const struct bContext *C,
                                                                  const struct bGPDlayer *gpl,
                                                                  struct bGPDstroke *gps);
 
