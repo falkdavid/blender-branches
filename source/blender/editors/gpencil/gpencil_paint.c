@@ -1224,11 +1224,17 @@ static void gp_stroke_newfrombuffer(tGPsdata *p)
       bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
           p->C, gpd, gpl, gps, brush->gpencil_settings->draw_cap_subdivisions);
       BKE_gpencil_free_stroke(gps);
-      gps = perimeter_stroke;
       if (brush->gpencil_settings->draw_sample_length > 0.0f) {
-        BKE_gpencil_stroke_sample(gps, brush->gpencil_settings->draw_sample_length, true);
+        BKE_gpencil_stroke_sample(perimeter_stroke, brush->gpencil_settings->draw_sample_length, true);
       }
-      // gps = BKE_gpencil_stroke_to_outline(C, gpl, gpf, gps);
+      bGPDstroke *outline_stroke = BKE_gpencil_fill_stroke_to_outline_with_holes(p->C, gpl, perimeter_stroke);
+      if (outline_stroke != NULL) {
+        BKE_gpencil_free_stroke(perimeter_stroke);
+        gps = outline_stroke;
+      }
+      else {
+        gps = perimeter_stroke;
+      }
     }
 
     /* reproject to plane (only in 3d space) */
