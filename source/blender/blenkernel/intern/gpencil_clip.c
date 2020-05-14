@@ -53,6 +53,13 @@
 #define ISECT_LEFT 0
 #define ISECT_RIGHT 1
 
+enum {
+  BRUTE_FORCE = 1,
+  BRUTE_FORCE_WITH_AABB,
+  BENTLEY_OTTMANN,
+  BENTLEY_OTTMANN_WITH_AABB,
+};
+
 /* -------------------------------------------------------------------- */
 /** \name Temporary data structures
  * \{ */
@@ -258,7 +265,7 @@ static tClipPoint *gp_isect_clip_edges(ListBase *clip_points, tClipEdge *edgeA, 
   float *p1_b = &edgeB->end->x;
 
   float isect_pt[2];
-  int status = isect_seg_seg_v2_point(p0_a, p1_a, p0_b, p1_b, isect_pt);
+  int status = isect_seg_seg_v2_point_ex(p0_a, p1_a, p0_b, p1_b, -1e-6f, isect_pt);
   if (status == 1) {
     tClipPoint *cpt_isectA = MEM_callocN(sizeof(tClipPoint), __func__);
     copy_v2_v2(&cpt_isectA->x, isect_pt);
@@ -932,7 +939,24 @@ static tClipPath *gp_clip_path_get_outer_edge_with_holes(tClipPath *path)
  * TODO: This is the most primitive (brute force) way of finding line segment intersections.
  * We will need to implement a more efficient algorithm down the line.
  */
-static int gp_edge_intersection_algorithm(ListBase *edges, ListBase *clip_points)
+static int gp_edge_intersection_algorithm_brute_force(ListBase *edges, ListBase *clip_points)
+{
+  int num_intersections = 0;
+  /* check every pair for intersection */
+  LISTBASE_FOREACH (tClipEdge *, edgeA, edges) {
+    tClipEdge *edgeB = NULL;
+    for (edgeB = edgeA->next; edgeB != NULL; edgeB = edgeB->next) {
+      /* check for intersection */
+      if (gp_isect_clip_edges(clip_points, edgeA, edgeB) != NULL) {
+        num_intersections++;
+      }
+    }
+  }
+  return num_intersections;
+}
+
+static int gp_edge_intersection_algorithm_brute_force_with_aabb(ListBase *edges,
+                                                                ListBase *clip_points)
 {
   int num_intersections = 0;
   /* check every pair for intersection */
@@ -1178,18 +1202,19 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
  *                    Intersection points will be inserted into the tClipPaths.
  * \returns number of intersection found
  */
-static int gp_clip_paths_find_intersections(ListBase *clip_paths)
+// static int gp_clip_paths_find_intersections(ListBase *clip_paths)
+// {
+//   int num_intersections = 0;
+
+//   /* TODO: iterate over all clip paths and clip them individualy as well as with each other */
+
+//   return num_intersections;
+// }
+
+static int gp_edge_intersection_algorithm(tClipPath *clip_path)
 {
-  int num_intersections = 0;
-
-  /* TODO: iterate over all clip paths and clip them individualy as well as with each other */
-
-  return num_intersections;
-}
-
-static int gp_clip_path_find_intersections(tClipPath *clip_path)
-{
-  int num_intersections = gp_edge_intersection_algorithm(&clip_path->edges, &clip_path->points);
+  int num_intersections = gp_edge_intersection_algorithm_brute_force(&clip_path->edges,
+                                                                     &clip_path->points);
   /* we insert two points, one on each of two intersecting edges */
   clip_path->num_points += 2 * num_intersections;
   gp_update_clip_edges_clip_path(clip_path);
@@ -1198,37 +1223,45 @@ static int gp_clip_path_find_intersections(tClipPath *clip_path)
 
 /** \} */
 
-// bGPDstroke *BKE_gpencil_stroke_clip_self(const bContext *C, const bGPDlayer *gpl, bGPDstroke
-// *gps)
-// {
-//   tClipPath *clip_path = gp_stroke_to_view_space_clip_path(C, gpl, gps);
-//   bGPDstroke *clip_stroke = NULL;
-//   ListBase clip_points = {NULL, NULL};
-//   ListBase edges = {NULL, NULL};
-//   gp_stroke_to_points_and_edges(gps, rv3d->viewmat, &edges, &clip_points);
+bGPDstroke *BKE_gpencil_stroke_clip_self(const bContext *C,
+                                         const bGPDlayer *gpl,
+                                         bGPDstroke *gps,
+                                         int algorithm)
+{
+  tClipPath *clip_path = gp_stroke_to_view_space_clip_path(C, gpl, gps);
 
-//   int num_isect_points = gp_edge_intersection_algorithm(&clip_path->edges, &clip_path->points);
-//   if (num_isect_points == 0) {
-//     BLI_freelistN(&edges);
-//     BLI_freelistN(&clip_points);
-//     return gps;
-//   }
+  if (algorithm == BRUTE_FORCE) {
+    int num_intersections = gp_edge_intersection_algorithm_brute_force(&clip_path->edges,
+                                                                       &clip_path->points);
+    /* we insert two points, one on each of two intersecting edges */
+    clip_path->num_points += 2 * num_intersections;
+    // gp_update_clip_edges_clip_path(clip_path);
+    if (num_intersections == 0) {
+      free_clip_path(clip_path);
+      return gps;
+    }
+  }
+  else if (algorithm == BRUTE_FORCE_WITH_AABB) {
+    int num_intersections = gp_edge_intersection_algorithm_brute_force_with_aabb(
+        &clip_path->edges, &clip_path->points);
+    /* we insert two points, one on each of two intersecting edges */
+    clip_path->num_points += 2 * num_intersections;
+    // gp_update_clip_edges_clip_path(clip_path);
+    if (num_intersections == 0) {
+      free_clip_path(clip_path);
+      return gps;
+    }
+  }
 
-//   /* create new stroke */
-//   int tot_points = gps->totpoints + 2 * num_isect_points;
-//   clip_stroke = gp_clip_points_to_gp_stroke(
-//       &clip_points, tot_points, rv3d->viewinv, gps->mat_nr, true);
+  /* create new stroke */
+  bGPDstroke *outer_edge_stroke = gp_view_space_clip_path_to_stroke(
+      C, gpl, clip_path, gps->mat_nr, true);
 
-//   /* free temp data */
-//   BLI_freelistN(&edges);
-//   BLI_freelistN(&clip_points);
+  /* free temp data */
+  free_clip_path(clip_path);
 
-//   /* Delete the old stroke */
-//   BLI_remlink(&gpl->actframe->strokes, gps);
-//   BKE_gpencil_free_stroke(gps);
-
-//   return clip_stroke;
-// }
+  return outer_edge_stroke;
+}
 
 /**
  * Finds the outline projected from the current view of a cyclic stroke and returns it as a new
@@ -1238,7 +1271,7 @@ bGPDstroke *BKE_gpencil_stroke_to_outline(const bContext *C, const bGPDlayer *gp
 {
   tClipPath *clip_path = gp_stroke_to_view_space_clip_path(C, gpl, gps);
 
-  int num_isect_points = gp_clip_path_find_intersections(clip_path);
+  int num_isect_points = gp_edge_intersection_algorithm(clip_path);
   if (num_isect_points == 0) {
     free_clip_path(clip_path);
     return gps;
@@ -1264,7 +1297,7 @@ bGPDstroke *BKE_gpencil_fill_stroke_to_outline_with_holes(const bContext *C,
   tClipPath *clip_path = gp_stroke_to_view_space_clip_path(C, gpl, gps);
 
   /* intersection algorithm */
-  int num_isect_points = gp_clip_path_find_intersections(clip_path);
+  int num_isect_points = gp_edge_intersection_algorithm(clip_path);
   if (num_isect_points == 0) {
     free_clip_path(clip_path);
     BKE_gpencil_stroke_from_view_space(C, gpl, gps);

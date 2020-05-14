@@ -30,9 +30,10 @@ extern "C" {
 
 bool BKE_gpencil_stroke_find_intersections(const struct RegionView3D *rv3d,
                                            struct bGPDstroke *gps);
-struct bGPDstroke *BKE_gpencil_stroke_clip_self(const struct RegionView3D *rv3d,
+struct bGPDstroke *BKE_gpencil_stroke_clip_self(const struct bContext *C,
                                                 const struct bGPDlayer *gpl,
-                                                struct bGPDstroke *gps);
+                                                struct bGPDstroke *gps,
+                                                int algorithm);
 struct bGPDstroke *BKE_gpencil_stroke_to_outline(const struct bContext *C,
                                                  const struct bGPDlayer *gpl,
                                                  struct bGPDstroke *gps);

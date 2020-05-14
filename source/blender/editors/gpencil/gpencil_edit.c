@@ -4996,3 +4996,104 @@ void GPENCIL_OT_clip_stroke(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+/* ********** Test performance of clipping algorithms ********** */
+
+enum {
+  BRUTE_FORCE = 1,
+  BRUTE_FORCE_WITH_AABB,
+  BENTLEY_OTTMANN,
+  BENTLEY_OTTMANN_WITH_AABB,
+};
+
+static const EnumPropertyItem prop_test_algorithm[] = {
+    {BRUTE_FORCE, "BF", ICON_NONE, "Brute force", ""},
+    {BRUTE_FORCE_WITH_AABB, "BF_AABB", ICON_NONE, "Brute force with aabb checking", ""},
+    {0, NULL, 0, NULL, NULL},
+};
+
+static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = CTX_data_active_object(C);
+  bGPdata *gpd = (bGPdata *)ob->data;
+  ARegion *ar = CTX_wm_region(C);
+  RegionView3D *rv3d = ar->regiondata;
+
+  int algorithm = RNA_enum_get(op->ptr, "algorithm");
+
+  /* sanity checks */
+  if (ELEM(NULL, gpd)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  bool changed = false;
+
+  const bool is_multiedit_ = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+
+  struct GP_EditableStrokes_Iter gpstroke_iter = {{{0}}};
+  Depsgraph *depsgraph_ = CTX_data_ensure_evaluated_depsgraph(C);
+  Object *obact_ = CTX_data_active_object(C);
+  for (bGPDlayer *gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+    bGPDframe *init_gpf = (is_multiedit_) ? gpl->frames.first : gpl->actframe;
+
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && is_multiedit_)) {
+        /* loop over strokes */
+        bGPDstroke *gps, *gps_next;
+
+        for (gps = gpf->strokes.first; gps; gps = gps_next) {
+          gps_next = gps->next;
+
+          if ((gps->flag & GP_STROKE_SELECT)) {
+            /* preprocess, merge all duplicates */
+            BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0001f, false);
+
+            /* Use a constant number of subdivisions of 3 */
+            bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
+                C, gpd, gpl, gps, 3);
+            bGPDstroke *clipped_stroke = BKE_gpencil_stroke_clip_self(
+                C, gpl, perimeter_stroke, algorithm);
+            BKE_gpencil_free_stroke(perimeter_stroke);
+
+            if (clipped_stroke == NULL) {
+              continue;
+            }
+            /* delete old stroke */
+            BLI_remlink(&gpf->strokes, gps);
+            BKE_gpencil_free_stroke(gps);
+
+            /* add new stroke to frame */
+            BLI_addtail(&gpf->strokes, clipped_stroke);
+
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
+  /* notifiers */
+  if (changed) {
+    DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+    return OPERATOR_FINISHED;
+  }
+  return OPERATOR_CANCELLED;
+}
+
+void GPENCIL_OT_performance_clip_stroke(wmOperatorType *ot)
+{
+  ot->name = "Test Performance Clip Stroke";
+  ot->idname = "GPENCIL_OT_performance_clip_stroke";
+  ot->description = "Operator to test the perofmance of clipping algorithms";
+
+  /* api callbacks */
+  ot->exec = gp_stroke_performance_clip_exec;
+  ot->poll = gp_active_layer_poll;
+
+  ot->prop = RNA_def_enum(
+      ot->srna, "algorithm", prop_test_algorithm, 0, "Algorithm", "Algorithm to be tested");
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}

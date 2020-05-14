@@ -108,6 +108,7 @@ bGPdata **ED_gpencil_data_get_pointers_direct(ScrArea *area, Object *ob, Pointer
       case SPACE_INFO:       /* header info */
       case SPACE_TOPBAR:     /* Topbar */
       case SPACE_VIEW3D:     /* 3D-View */
+      case SPACE_TEXT:
       {
         if (ob && (ob->type == OB_GPENCIL)) {
           /* GP Object. */

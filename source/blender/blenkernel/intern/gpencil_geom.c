@@ -2370,20 +2370,40 @@ void BKE_gpencil_stroke_to_view_space(const bContext *C, const bGPDlayer *gpl, b
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ARegion *ar = CTX_wm_region(C);
-  RegionView3D *rv3d = ar->regiondata;
-  Object *ob = CTX_data_active_object(C);
+  if (ar) {
+    RegionView3D *rv3d = ar->regiondata;
+    Object *ob = CTX_data_active_object(C);
 
-  float tmp[3];
-  float diff_mat[4][4];
-  BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
+    float tmp[3];
+    float diff_mat[4][4];
+    BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
 
-  for (int i = 0; i < gps->totpoints; i++) {
-    bGPDspoint *pt = &gps->points[i];
-    /* point to parent space */
-    mul_v3_m4v3(tmp, diff_mat, &pt->x);
-    /* point to view space */
-    mul_m4_v3(rv3d->viewmat, tmp);
-    copy_v3_v3(&pt->x, tmp);
+    for (int i = 0; i < gps->totpoints; i++) {
+      bGPDspoint *pt = &gps->points[i];
+      /* point to parent space */
+      mul_v3_m4v3(tmp, diff_mat, &pt->x);
+      /* point to view space */
+      mul_m4_v3(rv3d->viewmat, tmp);
+      copy_v3_v3(&pt->x, tmp);
+    }
+  }
+  else {
+    /* just swap y and z */
+    Object *ob = CTX_data_active_object(C);
+
+    float tmp[3];
+    float diff_mat[4][4];
+    BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
+
+    for (int i = 0; i < gps->totpoints; i++) {
+      bGPDspoint *pt = &gps->points[i];
+      /* point to parent space */
+      mul_v3_m4v3(tmp, diff_mat, &pt->x);
+      /* point to view space */
+      (&pt->x)[0] = tmp[0];
+      (&pt->x)[1] = tmp[2];
+      (&pt->x)[2] = tmp[1];
+    }
   }
 }
 
@@ -2397,21 +2417,43 @@ void BKE_gpencil_stroke_from_view_space(const bContext *C, const bGPDlayer *gpl,
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ARegion *ar = CTX_wm_region(C);
-  RegionView3D *rv3d = ar->regiondata;
-  Object *ob = CTX_data_active_object(C);
+  if (ar) {
+    RegionView3D *rv3d = ar->regiondata;
+    Object *ob = CTX_data_active_object(C);
 
-  float tmp[3];
-  float diff_mat[4][4];
-  float inverse_diff_mat[4][4];
+    float tmp[3];
+    float diff_mat[4][4];
+    float inverse_diff_mat[4][4];
 
-  BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
-  invert_m4_m4(inverse_diff_mat, diff_mat);
+    BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
+    invert_m4_m4(inverse_diff_mat, diff_mat);
 
-  for (int i = 0; i < gps->totpoints; i++) {
-    bGPDspoint *pt = &gps->points[i];
-    mul_v3_m4v3(tmp, rv3d->viewinv, &pt->x);
-    mul_m4_v3(inverse_diff_mat, tmp);
-    copy_v3_v3(&pt->x, tmp);
+    for (int i = 0; i < gps->totpoints; i++) {
+      bGPDspoint *pt = &gps->points[i];
+      mul_v3_m4v3(tmp, rv3d->viewinv, &pt->x);
+      mul_m4_v3(inverse_diff_mat, tmp);
+      copy_v3_v3(&pt->x, tmp);
+    }
+  }
+  else {
+    /* just swap y and z */
+    Object *ob = CTX_data_active_object(C);
+
+    float tmp[3];
+    float diff_mat[4][4];
+    float inverse_diff_mat[4][4];
+
+    BKE_gpencil_parent_matrix_get(depsgraph, ob, gpl, diff_mat);
+    invert_m4_m4(inverse_diff_mat, diff_mat);
+
+    for (int i = 0; i < gps->totpoints; i++) {
+      bGPDspoint *pt = &gps->points[i];
+      tmp[0] = (&pt->x)[0];
+      tmp[1] = (&pt->x)[2];
+      tmp[2] = (&pt->x)[1];
+      mul_m4_v3(inverse_diff_mat, tmp);
+      copy_v3_v3(&pt->x, tmp);
+    }
   }
 }
 
