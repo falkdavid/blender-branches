@@ -111,10 +111,10 @@ static void heap_down(Heap *heap, uint i, HeapComparatorFP cmp)
     const uint r = HEAP_RIGHT(i);
     uint smallest = i;
 
-    if (LIKELY(l < size) && cmp(tree[l]->ptr, tree[smallest]->ptr) == 1) {
+    if (LIKELY(l < size) && cmp(tree[l]->ptr, tree[smallest]->ptr) == -1) {
       smallest = l;
     }
-    if (LIKELY(r < size) && cmp(tree[r]->ptr, tree[smallest]->ptr) == 1) {
+    if (LIKELY(r < size) && cmp(tree[r]->ptr, tree[smallest]->ptr) == -1) {
       smallest = r;
     }
 
@@ -134,7 +134,7 @@ static void heap_up(Heap *heap, uint i, HeapComparatorFP cmp)
   while (LIKELY(i > 0)) {
     const uint p = HEAP_PARENT(i);
     short c = cmp(tree[p]->ptr, tree[i]->ptr);
-    if (c == 1) {
+    if (c == -1) {
       break;
     }
     heap_swap(heap, p, i);
@@ -193,7 +193,7 @@ static void heap_node_free(Heap *heap, HeapNode *node)
  *
  * \note Use when the size of the heap is known in advance.
  */
-Heap *BLI_heap_new_ex(uint tot_reserve)
+Heap *BLI_heap_cmp_new_ex(uint tot_reserve)
 {
   Heap *heap = MEM_mallocN(sizeof(Heap), __func__);
   /* ensure we have at least one so we can keep doubling it */
@@ -208,12 +208,12 @@ Heap *BLI_heap_new_ex(uint tot_reserve)
   return heap;
 }
 
-Heap *BLI_heap_new(void)
+Heap *BLI_heap_cmp_new(void)
 {
-  return BLI_heap_new_ex(1);
+  return BLI_heap_cmp_new_ex(1);
 }
 
-void BLI_heap_free(Heap *heap, HeapFreeFP ptrfreefp)
+void BLI_heap_cmp_free(Heap *heap, HeapFreeFP ptrfreefp)
 {
   if (ptrfreefp) {
     uint i;
@@ -235,7 +235,7 @@ void BLI_heap_free(Heap *heap, HeapFreeFP ptrfreefp)
   MEM_freeN(heap);
 }
 
-void BLI_heap_clear(Heap *heap, HeapFreeFP ptrfreefp)
+void BLI_heap_cmp_clear(Heap *heap, HeapFreeFP ptrfreefp)
 {
   if (ptrfreefp) {
     uint i;
@@ -260,7 +260,7 @@ void BLI_heap_clear(Heap *heap, HeapFreeFP ptrfreefp)
  * Insert heap node with a value (often a 'cost') and pointer into the heap,
  * duplicate values are allowed.
  */
-HeapNode *BLI_heap_insert(Heap *heap, HeapComparatorFP cmp, void *ptr)
+HeapNode *BLI_heap_cmp_insert(Heap *heap, HeapComparatorFP cmp, void *ptr)
 {
   HeapNode *node;
 
@@ -286,22 +286,22 @@ HeapNode *BLI_heap_insert(Heap *heap, HeapComparatorFP cmp, void *ptr)
 /**
  * Convenience function since this is a common pattern.
  */
-void BLI_heap_insert_or_update(Heap *heap, HeapNode **node_p, HeapComparatorFP cmp, void *ptr)
+void BLI_heap_cmp_insert_or_update(Heap *heap, HeapNode **node_p, HeapComparatorFP cmp, void *ptr)
 {
   if (*node_p == NULL) {
-    *node_p = BLI_heap_insert(heap, cmp, ptr);
+    *node_p = BLI_heap_cmp_insert(heap, cmp, ptr);
   }
   else {
-    BLI_heap_node_value_update_ptr(heap, *node_p, cmp, ptr);
+    BLI_heap_cmp_node_value_update_ptr(heap, *node_p, cmp, ptr);
   }
 }
 
-bool BLI_heap_is_empty(const Heap *heap)
+bool BLI_heap_cmp_is_empty(const Heap *heap)
 {
   return (heap->size == 0);
 }
 
-uint BLI_heap_len(const Heap *heap)
+uint BLI_heap_cmp_len(const Heap *heap)
 {
   return heap->size;
 }
@@ -310,7 +310,7 @@ uint BLI_heap_len(const Heap *heap)
  * Return the top node of the heap.
  * This is the node with the lowest value.
  */
-HeapNode *BLI_heap_top(const Heap *heap)
+HeapNode *BLI_heap_cmp_top(const Heap *heap)
 {
   return heap->tree[0];
 }
@@ -319,7 +319,7 @@ HeapNode *BLI_heap_top(const Heap *heap)
  * Return the ptr of top node of the heap.
  * This is the node with the lowest value.
  */
-void *BLI_heap_top_ptr(const Heap *heap)
+void *BLI_heap_cmp_top_ptr(const Heap *heap)
 {
   BLI_assert(heap->size != 0);
 
@@ -329,7 +329,7 @@ void *BLI_heap_top_ptr(const Heap *heap)
 /**
  * Pop the top node off the heap and return it's pointer.
  */
-void *BLI_heap_pop_min(Heap *heap, HeapComparatorFP cmp)
+void *BLI_heap_cmp_pop_min(Heap *heap, HeapComparatorFP cmp)
 {
   BLI_assert(heap->size != 0);
 
@@ -345,7 +345,7 @@ void *BLI_heap_pop_min(Heap *heap, HeapComparatorFP cmp)
   return ptr;
 }
 
-void BLI_heap_remove(Heap *heap, HeapComparatorFP cmp, HeapNode *node)
+void BLI_heap_cmp_remove(Heap *heap, HeapComparatorFP cmp, HeapNode *node)
 {
   BLI_assert(heap->size != 0);
 
@@ -357,23 +357,25 @@ void BLI_heap_remove(Heap *heap, HeapComparatorFP cmp, HeapNode *node)
     i = p;
   }
 
-  BLI_heap_pop_min(heap, cmp);
+  BLI_heap_cmp_pop_min(heap, cmp);
 }
 
-void BLI_heap_node_value_update_ptr(Heap *heap, HeapNode *node, HeapComparatorFP cmp, void *ptr)
+void BLI_heap_cmp_node_value_update_ptr(Heap *heap,
+                                        HeapNode *node,
+                                        HeapComparatorFP cmp,
+                                        void *ptr)
 {
   short c = cmp(ptr, node->ptr);
-  if (c == 1) {
-    node->ptr = ptr;
+  node->ptr = ptr;
+  if (c == -1) {
     heap_up(heap, node->index, cmp);
   }
-  else if (c == -1) {
-    node->ptr = ptr;
+  else if (c == 1) {
     heap_down(heap, node->index, cmp);
   }
 }
 
-void *BLI_heap_node_ptr(const HeapNode *node)
+void *BLI_heap_cmp_node_ptr(const HeapNode *node)
 {
   return node->ptr;
 }
@@ -386,13 +388,13 @@ static bool heap_is_minheap(const Heap *heap, uint root, HeapComparatorFP cmp)
     }
     const uint l = HEAP_LEFT(root);
     if (l < heap->size) {
-      if (cmp(heap->tree[l]->ptr, heap->tree[root]->ptr) == 1 || !heap_is_minheap(heap, l, cmp)) {
+      if (cmp(heap->tree[l]->ptr, heap->tree[root]->ptr) == -1 || !heap_is_minheap(heap, l, cmp)) {
         return false;
       }
     }
     const uint r = HEAP_RIGHT(root);
     if (r < heap->size) {
-      if (cmp(heap->tree[r]->ptr, heap->tree[root]->ptr) == 1 || !heap_is_minheap(heap, r, cmp)) {
+      if (cmp(heap->tree[r]->ptr, heap->tree[root]->ptr) == -1 || !heap_is_minheap(heap, r, cmp)) {
         return false;
       }
     }
@@ -402,7 +404,7 @@ static bool heap_is_minheap(const Heap *heap, uint root, HeapComparatorFP cmp)
 /**
  * Only for checking internal errors (gtest).
  */
-bool BLI_heap_is_valid(const Heap *heap, HeapComparatorFP cmp)
+bool BLI_heap_cmp_is_valid(const Heap *heap, HeapComparatorFP cmp)
 {
   return heap_is_minheap(heap, 0, cmp);
 }

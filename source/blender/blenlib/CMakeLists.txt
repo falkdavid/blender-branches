@@ -42,6 +42,7 @@ set(SRC
   intern/BLI_filelist.c
   intern/BLI_ghash.c
   intern/BLI_ghash_utils.c
+  intern/BLI_heap_cmp.c
   intern/BLI_heap.c
   intern/BLI_heap_simple.c
   intern/BLI_index_range.cc
@@ -183,6 +184,7 @@ set(SRC
   BLI_hash_mm2a.h
   BLI_hash_mm3.h
   BLI_heap.h
+  BLI_heap_cmp.h
   BLI_heap_simple.h
   BLI_index_range.hh
   BLI_iterator.h
