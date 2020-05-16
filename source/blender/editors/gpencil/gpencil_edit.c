@@ -5009,6 +5009,8 @@ enum {
 static const EnumPropertyItem prop_test_algorithm[] = {
     {BRUTE_FORCE, "BF", ICON_NONE, "Brute force", ""},
     {BRUTE_FORCE_WITH_AABB, "BF_AABB", ICON_NONE, "Brute force with aabb checking", ""},
+    {BENTLEY_OTTMANN, "BO", ICON_NONE, "Bentley Ottmann", ""},
+    {BENTLEY_OTTMANN_WITH_AABB, "BO_AABB", ICON_NONE, "Bentley Ottmann with aabb checking", ""},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -5016,8 +5018,6 @@ static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = (bGPdata *)ob->data;
-  ARegion *ar = CTX_wm_region(C);
-  RegionView3D *rv3d = ar->regiondata;
 
   int algorithm = RNA_enum_get(op->ptr, "algorithm");
 
@@ -5051,6 +5051,7 @@ static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
             /* Use a constant number of subdivisions of 3 */
             bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
                 C, gpd, gpl, gps, 3);
+            BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, 0.0001f, false);
             bGPDstroke *clipped_stroke = BKE_gpencil_stroke_clip_self(
                 C, gpl, perimeter_stroke, algorithm);
             BKE_gpencil_free_stroke(perimeter_stroke);
