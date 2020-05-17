@@ -5046,12 +5046,12 @@ static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
 
           if ((gps->flag & GP_STROKE_SELECT)) {
             /* preprocess, merge all duplicates */
-            BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0001f, false);
+            BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0f, false);
 
             /* Use a constant number of subdivisions of 3 */
             bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
                 C, gpd, gpl, gps, 3);
-            BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, 0.0001f, false);
+            BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, 0.0f, false);
             bGPDstroke *clipped_stroke = BKE_gpencil_stroke_clip_self(
                 C, gpl, perimeter_stroke, algorithm);
             BKE_gpencil_free_stroke(perimeter_stroke);
