@@ -121,7 +121,7 @@ typedef struct tClipEdge {
   /* bounding box (min_x, max_x, min_y, max_y) */
   float aabb[4];
 
-  bool is_clipped;
+  struct tClipPoint *sweep_pt;
 } tClipEdge;
 
 /**
@@ -995,27 +995,30 @@ enum CLIP_EVENT_TYPE {
   CLIP_EVENT_INTERSECTION = 3,
 };
 
+static short gp_compare_points(const float A[2], const float B[2])
+{
+  if (A[0] < B[0]) {
+    return -1;
+  }
+  else if (A[0] > B[0]) {
+    return 1;
+  }
+  else {
+    if (A[1] < B[1]) {
+      return -1;
+    }
+    else if (A[1] > B[1]) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static short gp_compare_clip_points(void *A, void *B)
 {
   tClipPoint *pointA = (tClipPoint *)A;
   tClipPoint *pointB = (tClipPoint *)B;
-  if (pointA->x < pointB->x) {
-    return -1;
-  }
-  else if (pointA->x > pointB->x) {
-    return 1;
-  }
-  else {
-    if (pointA->y < pointB->y) {
-      return -1;
-    }
-    else if (pointA->y > pointB->y) {
-      return 1;
-    }
-    else {
-      return 0;
-    }
-  }
+  return gp_compare_points(&pointA->x, &pointB->x);
 }
 
 static short gp_compare_clip_edges(void *A, void *B)
@@ -1033,10 +1036,10 @@ static short gp_y_compare_clip_edges(void *A, void *B)
 {
   tClipEdge *edgeA = (tClipEdge *)A;
   tClipEdge *edgeB = (tClipEdge *)B;
-  if (edgeA->start->y < edgeB->start->y) {
+  if (edgeA->sweep_pt->y < edgeB->sweep_pt->y) {
     return -1;
   }
-  else if (edgeA->start->y > edgeB->start->y) {
+  else if (edgeA->sweep_pt->y > edgeB->sweep_pt->y) {
     return 1;
   }
   else {
@@ -1062,8 +1065,6 @@ static short gp_compare_clip_events(void *A, void *B)
   else if (eventA->pt->x > eventB->pt->x) {
     return 1;
   }
-  else {
-  }
 
   return gp_compare_clip_edges(eventA->edge, eventB->edge);
 }
@@ -1073,6 +1074,7 @@ static short gp_compare_clip_events(void *A, void *B)
  */
 static bool isect_clip_event_edges(ListBase *clip_points,
                                    Heap *event_queue,
+                                   tClipEvent *curr_event,
                                    WAVL_Node *curr_node,
                                    WAVL_Node *other_node)
 {
@@ -1080,11 +1082,53 @@ static bool isect_clip_event_edges(ListBase *clip_points,
     tClipEdge *curr_edge = curr_node->data;
     tClipEdge *other_edge = other_node->data;
     if (isect_aabb_aabb_v4(curr_edge->aabb, other_edge->aabb)) {
-      tClipPoint *cpt_isectA = gp_isect_clip_edges(clip_points, curr_edge, other_edge);
-      if (cpt_isectA != NULL) {
-        curr_edge->is_clipped = other_edge->is_clipped = true;
+      tClipEvent *next_event = BLI_heap_cmp_top_ptr(event_queue);
+      float *p0_a = &curr_edge->start->x;
+      float *p1_a = &curr_edge->end->x;
+      float *p0_b = &other_edge->start->x;
+      float *p1_b = &other_edge->end->x;
 
-        tClipPoint *cpt_isectB = cpt_isectA->isect_link;
+      float isect_pt[2];
+      int status = isect_seg_seg_v2_point_ex(p0_a, p1_a, p0_b, p1_b, -1e-6f, isect_pt);
+      /* if there is an exact intersection point and the point is in front of the sweep line and
+       * there is no event before the intersection */
+      if (status == 1 && curr_event->pt->x <= isect_pt[0] &&
+          gp_compare_points(isect_pt, &next_event->pt->x) == -1) {
+        /* create new intersection points */
+        tClipPoint *cpt_isectA = MEM_callocN(sizeof(tClipPoint), __func__);
+        copy_v2_v2(&cpt_isectA->x, isect_pt);
+        cpt_isectA->isect_type = gp_clip_point_isect_type(curr_edge, other_edge);
+
+        tClipPoint *cpt_isectB = MEM_dupallocN(cpt_isectA);
+        cpt_isectB->isect_type = !cpt_isectA->isect_type;
+
+        cpt_isectA->z = curr_edge->start->z;
+        cpt_isectA->isect_dist = len_v2v2(p0_a, p1_a) / len_v2v2(p0_a, isect_pt);
+        cpt_isectB->z = other_edge->start->z;
+        cpt_isectB->isect_dist = len_v2v2(p0_b, p1_b) / len_v2v2(p0_b, isect_pt);
+
+        cpt_isectA->isect_link = cpt_isectB;
+        cpt_isectB->isect_link = cpt_isectA;
+
+        /* insert intersection point at the right place in clip point list*/
+        tClipPoint *cpt_insert = curr_edge->start;
+        while (cpt_insert->next != curr_edge->end &&
+               cpt_insert->next->isect_dist > cpt_isectA->isect_dist) {
+          cpt_insert = cpt_insert->next;
+        }
+        BLI_insertlinkafter(clip_points, cpt_insert, cpt_isectA);
+
+        cpt_insert = other_edge->start;
+        while (cpt_insert->next != other_edge->end &&
+               cpt_insert->next->isect_dist > cpt_isectB->isect_dist) {
+          cpt_insert = cpt_insert->next;
+        }
+        BLI_insertlinkafter(clip_points, cpt_insert, cpt_isectB);
+
+        curr_edge->sweep_pt = cpt_isectA;
+        other_edge->sweep_pt = cpt_isectB;
+
+        /* create new events */
         tClipEvent *isectA_event = MEM_callocN(sizeof(tClipEvent), __func__);
         tClipEvent *isectB_event = MEM_callocN(sizeof(tClipEvent), __func__);
         isectA_event->pt = cpt_isectA;
@@ -1110,7 +1154,7 @@ static bool isect_clip_event_edges(ListBase *clip_points,
 
 /**
  * Finds all the intersections of the edges and inserts the newly created points in the
- * clip_points list at the right places
+ * clip_points list at the correct places
  */
 static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase *clip_points)
 {
@@ -1122,6 +1166,7 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
   LISTBASE_FOREACH (tClipEdge *, edge, edges) {
     tClipEvent *start_event = MEM_callocN(sizeof(tClipEvent), __func__);
     tClipEvent *end_event = MEM_callocN(sizeof(tClipEvent), __func__);
+    edge->sweep_pt = edge->start;
     if (edge->start->x < edge->end->x) {
       start_event->pt = edge->start;
     }
@@ -1170,33 +1215,31 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
       tClipEvent *isect_event = event->isect_link;
       tClipEdge *edge_isect = isect_event->edge;
 
-      if (!edge_isect->is_clipped && !event_edge->is_clipped) {
-        WAVL_Node *nodeA = event->sweep_line_node;
-        WAVL_Node *nodeB = isect_event->sweep_line_node;
+      WAVL_Node *nodeA = event->sweep_line_node;
+      WAVL_Node *nodeB = isect_event->sweep_line_node;
 
-        tClipPoint *cpt_isectA = event->pt;
-        tClipPoint *cpt_isectB = cpt_isectA->isect_link;
+      tClipPoint *cpt_isectA = event->pt;
+      tClipPoint *cpt_isectB = cpt_isectA->isect_link;
 
-        event_edge->start = cpt_isectA;
-        edge_isect->start = cpt_isectB;
+      event_edge->sweep_pt = cpt_isectA;
+      edge_isect->sweep_pt = cpt_isectB;
 
-        /* swap data in tree */
-        nodeA->data = edge_isect;
-        nodeB->data = event_edge;
+      /* swap data in tree */
+      nodeA->data = edge_isect;
+      nodeB->data = event_edge;
 
-        WAVL_Node *pair_nodeB = BLI_wavlTree_predecessor_ex(nodeB);
-        WAVL_Node *pair_nodeA = BLI_wavlTree_successor_ex(nodeA);
-        if (pair_nodeB == nodeA) {
-          pair_nodeB = BLI_wavlTree_successor_ex(nodeB);
-          pair_nodeA = BLI_wavlTree_predecessor_ex(nodeA);
-        }
+      WAVL_Node *pair_nodeB = BLI_wavlTree_predecessor_ex(nodeB);
+      WAVL_Node *pair_nodeA = BLI_wavlTree_successor_ex(nodeA);
+      if (pair_nodeB == nodeA) {
+        pair_nodeB = BLI_wavlTree_successor_ex(nodeB);
+        pair_nodeA = BLI_wavlTree_predecessor_ex(nodeA);
+      }
 
-        if (isect_clip_event_edges(clip_points, event_queue, nodeB, pair_nodeB)) {
-          num_intersections++;
-        }
-        if (isect_clip_event_edges(clip_points, event_queue, nodeA, pair_nodeA)) {
-          num_intersections++;
-        }
+      if (isect_clip_event_edges(clip_points, event_queue, event, nodeB, pair_nodeB)) {
+        num_intersections++;
+      }
+      if (isect_clip_event_edges(clip_points, event_queue, event, nodeA, pair_nodeA)) {
+        num_intersections++;
       }
 
       MEM_freeN(isect_event);
@@ -1207,11 +1250,11 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
       WAVL_Node *below_node = BLI_wavlTree_predecessor_ex(node);
       WAVL_Node *above_node = BLI_wavlTree_successor_ex(node);
 
-      if (isect_clip_event_edges(clip_points, event_queue, node, below_node)) {
+      if (isect_clip_event_edges(clip_points, event_queue, event, node, below_node)) {
         num_intersections++;
       }
 
-      if (isect_clip_event_edges(clip_points, event_queue, node, above_node)) {
+      if (isect_clip_event_edges(clip_points, event_queue, event, node, above_node)) {
         num_intersections++;
       }
     }
@@ -1223,7 +1266,7 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
         WAVL_Node *above_node = BLI_wavlTree_successor_ex(node);
         BLI_wavlTree_delete_node(sweep_line_tree, NULL, node);
 
-        if (isect_clip_event_edges(clip_points, event_queue, below_node, above_node)) {
+        if (isect_clip_event_edges(clip_points, event_queue, event, below_node, above_node)) {
           num_intersections++;
         }
       }
