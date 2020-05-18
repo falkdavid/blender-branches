@@ -4925,7 +4925,7 @@ void GPENCIL_OT_stroke_to_perimeter(wmOperatorType *ot)
 
 /* ********** Clip stroke ********** */
 
-static int gp_stroke_clip_exec(bContext *C)
+static int gp_stroke_clip_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = (bGPdata *)ob->data;
@@ -5050,7 +5050,7 @@ static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
 
             /* Use a constant number of subdivisions of 3 */
             bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
-                C, gpd, gpl, gps, 3);
+                C, gpd, gpl, gps, 0);
             BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, 0.0f, false);
             bGPDstroke *clipped_stroke = BKE_gpencil_stroke_clip_self(
                 C, gpl, perimeter_stroke, algorithm);
