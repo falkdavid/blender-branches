@@ -1055,7 +1055,7 @@ static short gp_compare_clip_events(void *A, void *B)
   if (eventA->pt->x < eventB->pt->x) {
     return -1;
   }
-  else if (eventA->pt->x > eventB->pt->x) {
+  if (eventA->pt->x > eventB->pt->x) {
     return 1;
   }
 
@@ -1151,6 +1151,12 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
   int num_intersections = 0;
   while (!BLI_heap_cmp_is_empty(event_queue)) {
     tClipEvent *event = BLI_heap_cmp_pop_min(event_queue, gp_compare_clip_events);
+    printf("Event at %f,%f (%s)\n",
+           event->pt->x,
+           event->pt->y,
+           (event->type == CLIP_EVENT_START) ?
+               "START" :
+               ((event->type == CLIP_EVENT_END) ? "END" : "INTERSECTION"));
     tClipEdge *event_edge = event->edge;
 
     if (event->type == CLIP_EVENT_INTERSECTION) {
@@ -1276,7 +1282,8 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
         }
       }
     }
-
+    printf("Tree size: %u\n", BLI_wavlTree_size(sweep_line_tree));
+    printf("Queue size: %u\n", BLI_heap_cmp_len(event_queue));
     MEM_freeN(event);
   }
 
