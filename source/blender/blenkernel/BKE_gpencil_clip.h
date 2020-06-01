@@ -27,6 +27,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+typedef struct tClipEvent tClipEvent;
+enum CLIP_EVENT_TYPE {
+  CLIP_EVENT_START = 1,
+  CLIP_EVENT_END = 2,
+  CLIP_EVENT_INTERSECTION = 3,
+};
+
+/* For testing only */
+short gp_compare_points(const float A[2], const float B[2]);
 
 bool BKE_gpencil_stroke_find_intersections(const struct RegionView3D *rv3d,
                                            struct bGPDstroke *gps);

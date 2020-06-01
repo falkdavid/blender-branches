@@ -5051,7 +5051,7 @@ static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
             /* Use a constant number of subdivisions of 3 */
             bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
                 C, gpd, gpl, gps, 0);
-            BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, 0.0f, false);
+            BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, FLT_MIN, false);
             bGPDstroke *clipped_stroke = BKE_gpencil_stroke_clip_self(
                 C, gpl, perimeter_stroke, algorithm);
             BKE_gpencil_free_stroke(perimeter_stroke);
