@@ -64,69 +64,6 @@ enum {
 /** \name Temporary data structures
  * \{ */
 
-/**
- * Point 3d datastructure for clipping.
- */
-typedef struct tClipPoint {
-  /* Listbase functonality */
-  struct tClipPoint *next, *prev;
-
-  /* Coordinates
-   * Note: although all algorithms on clip points only use x and y, the clip points are
-   * represented in 3D view space to make transition between 2D and 3D easier */
-  float x, y, z;
-
-  /* Link to other intersection point
-   * NULL if point is not an intersection
-   *
-   * [..]--[p1]--[p2]--[p3]--[..]  clipPath p
-   *               | <- isect_link
-   * [..]--[q1]--[q2]--[q3]--[..]  clipPath q
-   */
-  struct tClipPoint *isect_link;
-
-  /* temporary value between 0 and 1 that represents the
-   * normalized distance between the start of the edge and the intersection */
-  float isect_dist;
-
-  /*
-   *    ^         ^
-   * <--+---   ---+-->
-   *    |         |
-   *
-   * 0 = left; 1 = right */
-  bool isect_type;
-
-  /* temporary flag */
-  int flag;
-} tClipPoint;
-
-/* tClipPoint->flag */
-typedef enum tClipPointFlag {
-  CP_UNVISITED = 0,
-  CP_VISITED = (1 << 0),
-  CP_CHECKED = (1 << 1),
-  CP_OUTER_EDGE = (1 << 2),
-  CP_INNER_EDGE = (1 << 3),
-} tClipPointFlag;
-
-/**
- * Edge datastructure for clipping.
- */
-typedef struct tClipEdge {
-  /* Listbase functonality */
-  struct tClipEdge *next, *prev;
-  /* pointers to start and end */
-  struct tClipPoint *start, *end;
-  /* bounding box (min_x, max_x, min_y, max_y) */
-  float aabb[4];
-  /* for sweep line algorithm: sweep crossing point */
-  struct tClipPoint *sweep_pt;
-  /* flag */
-  char flag;
-  /* edge points in the x direction */
-  bool x_dir;
-} tClipEdge;
 
 /**
  * A polygonal chain datastructure for clipping.
@@ -182,7 +119,7 @@ static void free_clip_path(tClipPath *path)
   MEM_freeN(path);
 }
 
-static void gp_update_clip_edge_aabb(tClipEdge *edge)
+void gp_update_clip_edge_aabb(tClipEdge *edge)
 {
   edge->aabb[0] = edge->start->x < edge->end->x ? edge->start->x : edge->end->x;
   edge->aabb[1] = edge->start->x > edge->end->x ? edge->start->x : edge->end->x;
@@ -993,14 +930,6 @@ static int gp_edge_intersection_algorithm_brute_force_with_aabb(ListBase *edges,
  * Bentley-Ottmann implementation
  */
 
-typedef struct tClipEvent {
-  tClipPoint *pt;
-  tClipEdge *edge;
-  tClipEdge *isect_link_edge;
-  WAVL_Node *sweep_node;
-  char type;
-} tClipEvent;
-
 static void print_edge(const char *pre, tClipEdge *edge)
 {
   tClipPoint *edge_end = edge->x_dir ? edge->end : edge->start;
@@ -1027,13 +956,13 @@ short gp_compare_points(const float A[2], const float B[2])
   return 0;
 }
 
-static bool gp_edge_is_vertical(tClipEdge *edge)
+inline bool gp_edge_is_vertical(tClipEdge *edge)
 {
   return edge->start->x == edge->end->x;
 }
 
 /* returns -1 if C is to the left of AB, 1 if its on the right and 0 if its on the line */
-static inline short gp_point_is_left(const float A[2], const float B[2], const float C[2])
+inline short gp_point_is_right(const float A[2], const float B[2], const float C[2])
 {
   float r = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
   if (r > 0.0f)
@@ -1137,7 +1066,7 @@ static short gp_y_compare_clip_edges(void *A, void *B)
 
   tClipPoint *startA = edgeA->x_dir ? edgeA->start : edgeA->end;
   /* if y intersept is equal, check endpoints */
-  short cmp = gp_point_is_left(&startA->x, &endA->x, &endB->x);
+  short cmp = gp_point_is_right(&startA->x, &endA->x, &endB->x);
   if (cmp != 0) {
     return cmp;
   }

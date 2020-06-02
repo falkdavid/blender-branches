@@ -27,7 +27,79 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-typedef struct tClipEvent tClipEvent;
+
+/**
+ * Point 3d datastructure for clipping.
+ */
+typedef struct tClipPoint {
+  /* Listbase functonality */
+  struct tClipPoint *next, *prev;
+
+  /* Coordinates
+   * Note: although all algorithms on clip points only use x and y, the clip points are
+   * represented in 3D view space to make transition between 2D and 3D easier */
+  float x, y, z;
+
+  /* Link to other intersection point
+   * NULL if point is not an intersection
+   *
+   * [..]--[p1]--[p2]--[p3]--[..]  clipPath p
+   *               | <- isect_link
+   * [..]--[q1]--[q2]--[q3]--[..]  clipPath q
+   */
+  struct tClipPoint *isect_link;
+
+  /* temporary value between 0 and 1 that represents the
+   * normalized distance between the start of the edge and the intersection */
+  float isect_dist;
+
+  /*
+   *    ^         ^
+   * <--+---   ---+-->
+   *    |         |
+   *
+   * 0 = left; 1 = right */
+  bool isect_type;
+
+  /* temporary flag */
+  int flag;
+} tClipPoint;
+
+/* tClipPoint->flag */
+typedef enum tClipPointFlag {
+  CP_UNVISITED = 0,
+  CP_VISITED = (1 << 0),
+  CP_CHECKED = (1 << 1),
+  CP_OUTER_EDGE = (1 << 2),
+  CP_INNER_EDGE = (1 << 3),
+} tClipPointFlag;
+
+/**
+ * Edge datastructure for clipping.
+ */
+typedef struct tClipEdge {
+  /* Listbase functonality */
+  struct tClipEdge *next, *prev;
+  /* pointers to start and end */
+  struct tClipPoint *start, *end;
+  /* bounding box (min_x, max_x, min_y, max_y) */
+  float aabb[4];
+  /* for sweep line algorithm: sweep crossing point */
+  struct tClipPoint *sweep_pt;
+  /* flag */
+  char flag;
+  /* edge points in the x direction */
+  bool x_dir;
+} tClipEdge;
+
+typedef struct tClipEvent {
+  tClipPoint *pt;
+  tClipEdge *edge;
+  tClipEdge *isect_link_edge;
+  WAVL_Node *sweep_node;
+  char type;
+} tClipEvent;
+
 enum CLIP_EVENT_TYPE {
   CLIP_EVENT_START = 1,
   CLIP_EVENT_END = 2,
@@ -35,7 +107,10 @@ enum CLIP_EVENT_TYPE {
 };
 
 /* For testing only */
+void gp_update_clip_edge_aabb(struct tClipEdge *edge);
 short gp_compare_points(const float A[2], const float B[2]);
+bool gp_edge_is_vertical(struct tClipEdge *edge);
+short gp_point_is_right(const float A[2], const float B[2], const float C[2]);
 
 bool BKE_gpencil_stroke_find_intersections(const struct RegionView3D *rv3d,
                                            struct bGPDstroke *gps);
