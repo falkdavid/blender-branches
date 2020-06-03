@@ -64,7 +64,6 @@ enum {
 /** \name Temporary data structures
  * \{ */
 
-
 /**
  * A polygonal chain datastructure for clipping.
  */
@@ -972,14 +971,14 @@ inline short gp_point_is_right(const float A[2], const float B[2], const float C
   return 0;
 }
 
-static short gp_compare_clip_points(void *A, void *B)
+short gp_compare_clip_points(void *A, void *B)
 {
   tClipPoint *pointA = (tClipPoint *)A;
   tClipPoint *pointB = (tClipPoint *)B;
   return gp_compare_points(&pointA->x, &pointB->x);
 }
 
-static float gp_y_intersept_edge(tClipEdge *edge, float x)
+float gp_y_intersept_edge(tClipEdge *edge, float x)
 {
   tClipPoint *edge_start = edge->x_dir ? edge->start : edge->end;
   tClipPoint *edge_end = edge->x_dir ? edge->end : edge->start;
@@ -1011,7 +1010,7 @@ static float gp_y_intersept_edge(tClipEdge *edge, float x)
   return edge_start->y * fac + edge_end->y * ifac;
 }
 
-static short gp_y_compare_clip_edges(void *A, void *B)
+short gp_y_compare_clip_edges(void *A, void *B)
 {
   /* XXX: check the bounding boxes first to check if an edge is above or below.
    * Otherwise calculate the y-intersept of B of the x coordintate of the sweep point of A */
@@ -1079,6 +1078,12 @@ static short gp_y_compare_clip_edges(void *A, void *B)
   }
 
   tClipPoint *startB = edgeB->x_dir ? edgeB->start : edgeB->end;
+  if (startA->y < startB->y) {
+    return -1;
+  }
+  if (startA->y > startB->y) {
+    return 1;
+  }
   if (startA->x < startB->x) {
     return -1;
   }
@@ -1089,7 +1094,7 @@ static short gp_y_compare_clip_edges(void *A, void *B)
   return 0;
 }
 
-static short gp_compare_clip_events(void *A, void *B)
+short gp_compare_clip_events(void *A, void *B)
 {
   tClipEvent *eventA = (tClipEvent *)A;
   tClipEvent *eventB = (tClipEvent *)B;

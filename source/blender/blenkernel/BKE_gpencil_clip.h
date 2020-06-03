@@ -28,6 +28,8 @@
 extern "C" {
 #endif
 
+struct WAVL_Node;
+
 /**
  * Point 3d datastructure for clipping.
  */
@@ -96,7 +98,7 @@ typedef struct tClipEvent {
   tClipPoint *pt;
   tClipEdge *edge;
   tClipEdge *isect_link_edge;
-  WAVL_Node *sweep_node;
+  struct WAVL_Node *sweep_node;
   char type;
 } tClipEvent;
 
@@ -111,6 +113,10 @@ void gp_update_clip_edge_aabb(struct tClipEdge *edge);
 short gp_compare_points(const float A[2], const float B[2]);
 bool gp_edge_is_vertical(struct tClipEdge *edge);
 short gp_point_is_right(const float A[2], const float B[2], const float C[2]);
+short gp_compare_clip_points(void *A, void *B);
+float gp_y_intersept_edge(tClipEdge *edge, float x);
+short gp_y_compare_clip_edges(void *A, void *B);
+short gp_compare_clip_events(void *A, void *B);
 
 bool BKE_gpencil_stroke_find_intersections(const struct RegionView3D *rv3d,
                                            struct bGPDstroke *gps);
