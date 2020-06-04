@@ -47,6 +47,7 @@ static tClipEdge *create_edge(tClipPoint *p1, tClipPoint *p2)
   if (new_edge->start->x == new_edge->end->x && new_edge->start->y < new_edge->end->y) {
     new_edge->x_dir = 1;
   }
+  new_edge->sweep_pt = p1;
   return new_edge;
 }
 
@@ -80,7 +81,6 @@ static void free_edge(tClipEdge *e)
   if (e == NULL)
     return;
   free_point(e->start);
-  free_point(e->sweep_pt);
   free_point(e->end);
   MEM_freeN(e);
 }
@@ -159,26 +159,26 @@ TEST(bentley_ottmann_test, y_intersept_edge)
 {
   tClipEdge *e;
   e = create_edge_fl(0, 0, 1, 1);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, -1.0f), EPS);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, 0.0f), EPS);
-  ASSERT_NEAR(1.0f, gp_y_intersept_edge(e, 1.0f), EPS);
-  ASSERT_NEAR(1.0f, gp_y_intersept_edge(e, 2.0f), EPS);
-  ASSERT_NEAR(0.5f, gp_y_intersept_edge(e, 0.5f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, -1.0f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, 0.0f), EPS);
+  ASSERT_NEAR(1.0f, gp_y_intercept_edge(e, 1.0f), EPS);
+  ASSERT_NEAR(1.0f, gp_y_intercept_edge(e, 2.0f), EPS);
+  ASSERT_NEAR(0.5f, gp_y_intercept_edge(e, 0.5f), EPS);
   free_edge(e);
 
   e = create_edge_fl(0, 0, 1, 0);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, -1.0f), EPS);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, 0.0f), EPS);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, 1.0f), EPS);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, 2.0f), EPS);
-  ASSERT_NEAR(0.0f, gp_y_intersept_edge(e, 0.5f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, -1.0f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, 0.0f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, 1.0f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, 2.0f), EPS);
+  ASSERT_NEAR(0.0f, gp_y_intercept_edge(e, 0.5f), EPS);
   free_edge(e);
 
   e = create_edge_fl(0, -1, 0, 1);
-  ASSERT_NEAR(-1.0f, gp_y_intersept_edge(e, -1.0f), EPS);
-  ASSERT_NEAR(-1.0f, gp_y_intersept_edge(e, 0.0f), EPS);
-  ASSERT_NEAR(1.0f, gp_y_intersept_edge(e, 0.00001f), EPS);
-  ASSERT_NEAR(1.0f, gp_y_intersept_edge(e, 1.0f), EPS);
+  ASSERT_NEAR(-1.0f, gp_y_intercept_edge(e, -1.0f), EPS);
+  ASSERT_NEAR(-1.0f, gp_y_intercept_edge(e, 0.0f), EPS);
+  ASSERT_NEAR(1.0f, gp_y_intercept_edge(e, 0.00001f), EPS);
+  ASSERT_NEAR(1.0f, gp_y_intercept_edge(e, 1.0f), EPS);
   free_edge(e);
 }
 
@@ -232,6 +232,59 @@ TEST(bentley_ottmann_test, y_compare_edges_cross)
   MEM_freeN(e1);
 }
 
+TEST(bentley_ottmann_test, y_compare_edges_aabb)
+{
+  tClipPoint *p0 = create_point(0, 0);
+  tClipPoint *p1 = create_point(0, 1);
+  tClipPoint *p2 = create_point(1, 1);
+  tClipPoint *p3 = create_point(0, 2);
+  tClipPoint *p4 = create_point(1, 2);
+  tClipPoint *p5 = create_point(0, 3);
+  tClipPoint *p6 = create_point(1, 3);
+  tClipPoint *p7 = create_point(0, 4);
+  tClipPoint *p8 = create_point(0, 5);
+  tClipPoint *p9 = create_point(1, 5);
+
+  tClipEdge *e0 = create_edge(p0, p1);
+  tClipEdge *e1 = create_edge(p0, p2);
+  tClipEdge *e2 = create_edge(p3, p4);
+  tClipEdge *e3 = create_edge(p5, p6);
+  tClipEdge *e4 = create_edge(p5, p7);
+  tClipEdge *e5 = create_edge(p8, p9);
+
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e0, e2));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e2, e0));
+
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e1, e2));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e2, e1));
+
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e0, e4));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e4, e0));
+
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e1, e3));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e3, e1));
+
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e2, e5));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e5, e2));
+
+  free_point(p0);
+  free_point(p1);
+  free_point(p2);
+  free_point(p3);
+  free_point(p4);
+  free_point(p5);
+  free_point(p6);
+  free_point(p7);
+  free_point(p8);
+  free_point(p9);
+  MEM_freeN(e0);
+  MEM_freeN(e1);
+  MEM_freeN(e2);
+  MEM_freeN(e3);
+  MEM_freeN(e4);
+  MEM_freeN(e5);
+}
+
 TEST(bentley_ottmann_test, y_compare_edges_vertical)
 {
   tClipPoint *p0 = create_point(0, 0);
@@ -255,12 +308,24 @@ TEST(bentley_ottmann_test, y_compare_edges_vertical)
 
   e0->sweep_pt = p1;
   e2->sweep_pt = p1;
-  ASSERT_EQ(-1, gp_y_compare_clip_edges(e0, e2));
-  ASSERT_EQ(1, gp_y_compare_clip_edges(e2, e0));
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e0, e2));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e2, e0));
   e1->sweep_pt = p1;
   e4->sweep_pt = p1;
-  ASSERT_EQ(-1, gp_y_compare_clip_edges(e1, e4));
-  ASSERT_EQ(1, gp_y_compare_clip_edges(e4, e1));
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e1, e4));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e4, e1));
+  e0->sweep_pt = p1;
+  e3->sweep_pt = p1;
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e0, e3));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e3, e0));
+  e2->sweep_pt = p1;
+  e3->sweep_pt = p1;
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e2, e3));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e3, e2));
+  e4->sweep_pt = p1;
+  e3->sweep_pt = p1;
+  EXPECT_EQ(-1, gp_y_compare_clip_edges(e4, e3));
+  EXPECT_EQ(1, gp_y_compare_clip_edges(e3, e4));
 
   free_point(p0);
   free_point(p1);

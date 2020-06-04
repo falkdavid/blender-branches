@@ -114,7 +114,7 @@ short gp_compare_points(const float A[2], const float B[2]);
 bool gp_edge_is_vertical(struct tClipEdge *edge);
 short gp_point_is_right(const float A[2], const float B[2], const float C[2]);
 short gp_compare_clip_points(void *A, void *B);
-float gp_y_intersept_edge(tClipEdge *edge, float x);
+float gp_y_intercept_edge(tClipEdge *edge, float x);
 short gp_y_compare_clip_edges(void *A, void *B);
 short gp_compare_clip_events(void *A, void *B);
 

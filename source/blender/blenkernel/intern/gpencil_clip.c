@@ -978,7 +978,7 @@ short gp_compare_clip_points(void *A, void *B)
   return gp_compare_points(&pointA->x, &pointB->x);
 }
 
-float gp_y_intersept_edge(tClipEdge *edge, float x)
+float gp_y_intercept_edge(tClipEdge *edge, float x)
 {
   tClipPoint *edge_start = edge->x_dir ? edge->start : edge->end;
   tClipPoint *edge_end = edge->x_dir ? edge->end : edge->start;
@@ -1013,7 +1013,7 @@ float gp_y_intersept_edge(tClipEdge *edge, float x)
 short gp_y_compare_clip_edges(void *A, void *B)
 {
   /* XXX: check the bounding boxes first to check if an edge is above or below.
-   * Otherwise calculate the y-intersept of B of the x coordintate of the sweep point of A */
+   * Otherwise calculate the y-intercept of B of the x coordintate of the sweep point of A */
 
   tClipEdge *edgeA = (tClipEdge *)A;
   tClipEdge *edgeB = (tClipEdge *)B;
@@ -1035,16 +1035,17 @@ short gp_y_compare_clip_edges(void *A, void *B)
   tClipPoint *endA = edgeA->x_dir ? edgeA->end : edgeA->start;
   tClipPoint *endB = edgeB->x_dir ? edgeB->end : edgeB->start;
 
-  /* calculate the y intersept at the current sweep x */
-  if (!gp_edge_is_vertical(edgeB)) {
-    float y_isept = gp_y_intersept_edge(edgeB, current_x);
-    if (current_y < y_isept) {
-      return -1;
-    }
-    if (current_y > y_isept) {
-      return 1;
-    }
+  /* calculate the y intersept at the current sweep x 
+   * note: the sweep x of an edge can only be <= to the current x*/
+  float y_icept = gp_y_intercept_edge(edgeB, current_x);
+  if (current_y < y_icept) {
+    return -1;
   }
+  if (current_y > y_icept) {
+    return 1;
+  }
+  /* y intercept is the same for both edges 
+   * note: if edgeB is vertical, the y intercept is at the bottom point */
 
   // /* handle case for end event */
   // if (edgeA->sweep_pt == endA) {
@@ -1417,7 +1418,7 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
     bool order = true;
     WAVLTREE_REVERSE_INORDER(tClipEdge *, clip_edge, sweep_line_tree)
     {
-      float y_isept = clip_edge != event->edge ? gp_y_intersept_edge(clip_edge, event->pt->x) :
+      float y_isept = clip_edge != event->edge ? gp_y_intercept_edge(clip_edge, event->pt->x) :
                                                  event->pt->y;
       if (y_isept > prev_isept) {
         printf("%.12f > %.12f\n", y_isept, prev_isept);
