@@ -975,6 +975,9 @@ short gp_compare_clip_points(void *A, void *B)
 {
   tClipPoint *pointA = (tClipPoint *)A;
   tClipPoint *pointB = (tClipPoint *)B;
+  if (pointA == pointB) {
+    return 0;
+  }
   return gp_compare_points(&pointA->x, &pointB->x);
 }
 
@@ -1032,10 +1035,8 @@ short gp_y_compare_clip_edges(void *A, void *B)
 
   float current_x = edgeA->sweep_pt->x;
   float current_y = edgeA->sweep_pt->y;
-  tClipPoint *endA = edgeA->x_dir ? edgeA->end : edgeA->start;
-  tClipPoint *endB = edgeB->x_dir ? edgeB->end : edgeB->start;
 
-  /* calculate the y intersept at the current sweep x 
+  /* calculate the y intersept at the current sweep x
    * note: the sweep x of an edge can only be <= to the current x*/
   float y_icept = gp_y_intercept_edge(edgeB, current_x);
   if (current_y < y_icept) {
@@ -1044,8 +1045,23 @@ short gp_y_compare_clip_edges(void *A, void *B)
   if (current_y > y_icept) {
     return 1;
   }
-  /* y intercept is the same for both edges 
+  /* y intercept is the same for both edges
    * note: if edgeB is vertical, the y intercept is at the bottom point */
+
+  /**
+   * We need to check for 4 cases:
+   *  - the two start points are the same
+   *  - the two end points are the same
+   *  - the start and end point are the same
+   *  - its an intersection point (the sweep points are the same)
+   */
+
+  // tClipPoint *endA = edgeA->x_dir ? edgeA->end : edgeA->start;
+  // tClipPoint *endB = edgeB->x_dir ? edgeB->end : edgeB->start;
+  // if (gp_compare_clip_points(edgeA->sweep_pt, endB) == 0) {
+  // }
+  // if (gp_compare_clip_points(edgeA->sweep_pt, startB) == 0) {
+  // }
 
   // /* handle case for end event */
   // if (edgeA->sweep_pt == endA) {
