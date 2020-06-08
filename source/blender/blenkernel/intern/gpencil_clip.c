@@ -955,6 +955,17 @@ short gp_compare_points(const float A[2], const float B[2])
   return 0;
 }
 
+inline bool gp_points_are_equal(tClipPoint *pointA, tClipPoint *pointB)
+{
+  if (pointA == pointB) {
+    return 1;
+  }
+  if (pointA->x == pointB->x && pointA->y == pointB->y) {
+    return 1;
+  }
+  return 0;
+}
+
 inline bool gp_edge_is_vertical(tClipEdge *edge)
 {
   return edge->start->x == edge->end->x;
@@ -1033,8 +1044,9 @@ short gp_y_compare_clip_edges(void *A, void *B)
     return 1;
   }
 
-  float current_x = edgeA->sweep_pt->x;
-  float current_y = edgeA->sweep_pt->y;
+  tClipPoint *sweep_pt = edgeA->sweep_pt;
+  float current_x = sweep_pt->x;
+  float current_y = sweep_pt->y;
 
   /* calculate the y intersept at the current sweep x
    * note: the sweep x of an edge can only be <= to the current x*/
@@ -1055,9 +1067,47 @@ short gp_y_compare_clip_edges(void *A, void *B)
    *  - the start and end point are the same
    *  - its an intersection point (the sweep points are the same)
    */
+  tClipPoint *startA = edgeA->x_dir ? edgeA->start : edgeA->end;
+  tClipPoint *startB = edgeB->x_dir ? edgeB->start : edgeB->end;
+  tClipPoint *endA = edgeA->x_dir ? edgeA->end : edgeA->start;
+  tClipPoint *endB = edgeB->x_dir ? edgeB->end : edgeB->start;
 
-  // tClipPoint *endA = edgeA->x_dir ? edgeA->end : edgeA->start;
-  // tClipPoint *endB = edgeB->x_dir ? edgeB->end : edgeB->start;
+  short cmp;
+  if (startA == sweep_pt) {
+    if (gp_points_are_equal(startB, sweep_pt)) {
+      cmp = gp_point_is_right(&startA->x, &endA->x, &endB->x);
+      if (cmp != 0) {
+        return cmp;
+      }
+      return gp_compare_clip_points(endA, endB);
+    }
+    else if (gp_points_are_equal(endB, sweep_pt)) {
+      return gp_compare_clip_points(endA, startB);
+    }
+    else {
+    }
+  }
+  else if (endA == sweep_pt) {
+    if (gp_points_are_equal(startB, sweep_pt)) {
+      return gp_compare_clip_points(startA, endB);
+    }
+    else if (gp_points_are_equal(endB, sweep_pt)) {
+      cmp = gp_point_is_right(&startA->x, &endA->x, &endB->x);
+      if (cmp != 0) {
+        return cmp;
+      }
+      return gp_compare_clip_points(startA, startB);
+    }
+    else {
+    }
+  }
+  else {
+    cmp = gp_point_is_right(&sweep_pt->x, &endA->x, &endB->x);
+    if (cmp != 0) {
+      return cmp;
+    }
+    return gp_compare_clip_points(endA, endB);
+  }
   // if (gp_compare_clip_points(edgeA->sweep_pt, endB) == 0) {
   // }
   // if (gp_compare_clip_points(edgeA->sweep_pt, startB) == 0) {
@@ -1080,33 +1130,33 @@ short gp_y_compare_clip_edges(void *A, void *B)
   //   }
   // }
 
-  tClipPoint *startA = edgeA->x_dir ? edgeA->start : edgeA->end;
-  /* if y intersept is equal, check endpoints */
-  short cmp = gp_point_is_right(&startA->x, &endA->x, &endB->x);
-  if (cmp != 0) {
-    return cmp;
-  }
+  // tClipPoint *startA = edgeA->x_dir ? edgeA->start : edgeA->end;
+  // /* if y intersept is equal, check endpoints */
+  // short cmp = gp_point_is_right(&startA->x, &endA->x, &endB->x);
+  // if (cmp != 0) {
+  //   return cmp;
+  // }
 
-  if (endA->x < endB->x) {
-    return -1;
-  }
-  if (endA->x > endB->x) {
-    return 1;
-  }
+  // if (endA->x < endB->x) {
+  //   return -1;
+  // }
+  // if (endA->x > endB->x) {
+  //   return 1;
+  // }
 
-  tClipPoint *startB = edgeB->x_dir ? edgeB->start : edgeB->end;
-  if (startA->y < startB->y) {
-    return -1;
-  }
-  if (startA->y > startB->y) {
-    return 1;
-  }
-  if (startA->x < startB->x) {
-    return -1;
-  }
-  if (startA->x > startB->x) {
-    return 1;
-  }
+  // tClipPoint *startB = edgeB->x_dir ? edgeB->start : edgeB->end;
+  // if (startA->y < startB->y) {
+  //   return -1;
+  // }
+  // if (startA->y > startB->y) {
+  //   return 1;
+  // }
+  // if (startA->x < startB->x) {
+  //   return -1;
+  // }
+  // if (startA->x > startB->x) {
+  //   return 1;
+  // }
 
   return 0;
 }
