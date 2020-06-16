@@ -98,8 +98,6 @@ typedef struct tClipEvent {
   tClipPoint *pt;
   tClipEdge *edge;
   tClipEdge *isect_link_edge;
-  struct WAVL_Node *sweep_nodeA;
-  struct WAVL_Node *sweep_nodeB;
   char type;
 } tClipEvent;
 
@@ -111,6 +109,7 @@ enum CLIP_EVENT_TYPE {
 
 /* For testing only */
 void gp_update_clip_edge_aabb(struct tClipEdge *edge);
+bool gp_points_are_equal(tClipPoint *pointA, tClipPoint *pointB);
 short gp_compare_points(const float A[2], const float B[2]);
 bool gp_edge_is_vertical(struct tClipEdge *edge);
 short gp_point_is_right(const float A[2], const float B[2], const float C[2]);
