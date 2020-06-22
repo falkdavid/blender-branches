@@ -1303,7 +1303,7 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
       /* create intersection point and insert points into point list */
       tClipPoint *cpt_isectA = event->pt;
       other_edge = event->isect_link_edge;
-      event_edge->sweep_pt = other_edge->sweep_pt = event->pt;
+
       print_edge("Other edge", other_edge);
 
       float *isect_pt = &cpt_isectA->x;
@@ -1340,8 +1340,19 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
       /* swap the line segments in the sweep_line datastruct
        * and check neighbours for intersections */
       printf("searching: %p %p\n", event_edge, other_edge);
-      WAVL_Node *nodeA = BLI_wavlTree_search(sweep_line_tree, gp_y_compare_clip_edges, event_edge);
-      WAVL_Node *nodeB = BLI_wavlTree_search(sweep_line_tree, gp_y_compare_clip_edges, other_edge);
+      // WAVL_Node *nodeA = BLI_wavlTree_search(sweep_line_tree, gp_y_compare_clip_edges,
+      // event_edge); WAVL_Node *nodeB = BLI_wavlTree_search(sweep_line_tree,
+      // gp_y_compare_clip_edges, other_edge);
+      WAVL_Node *nodeA = NULL;
+      WAVL_Node *nodeB = NULL;
+      for (WAVL_Node *node = sweep_line_tree->min_node; node != NULL; node = node->succ) {
+        if (node->data == event_edge) {
+          nodeA = node;
+        }
+        if (node->data == other_edge) {
+          nodeB = node;
+        }
+      }
 
 #ifdef DEBUG_BO
       printf("nodeA: %p, nodeB: %p\n", nodeA, nodeB);
@@ -1359,6 +1370,9 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
       else {
         printf("nodeA %p and nodeB %p are not neightbours\n", nodeA, nodeB);
       }
+#endif
+      event_edge->sweep_pt = other_edge->sweep_pt = event->pt;
+#ifdef DEBUG_BO
       print_edge("nodeA data", nodeA->data);
       print_edge("nodeB data", nodeB->data);
       short cmp1 = gp_y_compare_clip_edges(nodeA->data, nodeB->data);
