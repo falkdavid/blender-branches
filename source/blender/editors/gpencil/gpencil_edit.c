@@ -88,6 +88,7 @@
 #include "DEG_depsgraph_build.h"
 #include "DEG_depsgraph_query.h"
 
+#include "PIL_time_utildefines.h"
 #include "gpencil_intern.h"
 
 /* ************************************************ */
@@ -5049,12 +5050,14 @@ static int gp_stroke_performance_clip_exec(bContext *C, wmOperator *op)
             BKE_gpencil_stroke_merge_distance(gpf, gps, 0.0f, false);
 
             /* Use a constant number of subdivisions of 3 */
-            bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(
-                C, gpd, gpl, gps, 0);
+            bGPDstroke *clipped_stroke;
+            bGPDstroke *perimeter_stroke;
+            TIMEIT_START(stroke_clip_timer);
+            perimeter_stroke = BKE_gpencil_stroke_perimeter_from_view(C, gpd, gpl, gps, 0);
             BKE_gpencil_stroke_merge_distance(gpf, perimeter_stroke, FLT_MIN, false);
-            bGPDstroke *clipped_stroke = BKE_gpencil_stroke_clip_self(
-                C, gpl, perimeter_stroke, algorithm);
+            clipped_stroke = BKE_gpencil_stroke_clip_self(C, gpl, perimeter_stroke, algorithm);
             BKE_gpencil_free_stroke(perimeter_stroke);
+            TIMEIT_END(stroke_clip_timer);
 
             if (clipped_stroke == NULL) {
               continue;
