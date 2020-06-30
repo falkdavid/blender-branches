@@ -50,6 +50,8 @@
 
 #include "DEG_depsgraph.h"
 
+#include "PIL_time_utildefines.h"
+
 #define ISECT_LEFT 0
 #define ISECT_RIGHT 1
 
@@ -319,7 +321,9 @@ static bGPDstroke *gp_stroke_from_clip_path(tClipPath *path, int mat_idx, bool s
   }
 
   /* triangles cache needs to be recalculated */
+  TIMEIT_START(geom_update);
   BKE_gpencil_stroke_geometry_update(clip_stroke);
+  TIMEIT_END(geom_update);
 
   clip_stroke->flag |= GP_STROKE_CYCLIC;
   if (select) {
@@ -1585,8 +1589,10 @@ bGPDstroke *BKE_gpencil_stroke_clip_self(const bContext *C,
     }
   }
   else if (algorithm == BRUTE_FORCE_WITH_AABB) {
+    TIMEIT_START(gp_edge_intersection_algorithm_brute_force_with_aabb);
     num_intersections = gp_edge_intersection_algorithm_brute_force_with_aabb(&clip_path->edges,
                                                                              &clip_path->points);
+    TIMEIT_END(gp_edge_intersection_algorithm_brute_force_with_aabb);
     /* we insert two points, one on each of two intersecting edges */
     clip_path->num_points += 2 * num_intersections;
     // gp_update_clip_edges_clip_path(clip_path);
@@ -1596,8 +1602,10 @@ bGPDstroke *BKE_gpencil_stroke_clip_self(const bContext *C,
     }
   }
   else if (algorithm == BENTLEY_OTTMANN) {
+    TIMEIT_START(gp_bentley_ottmann_algorithm);
     num_intersections = gp_bentley_ottmann_algorithm(
         &clip_path->edges, clip_path->num_edges, &clip_path->points);
+    TIMEIT_END(gp_bentley_ottmann_algorithm);
     /* we insert two points, one on each of two intersecting edges */
     clip_path->num_points += 2 * num_intersections;
     // gp_update_clip_edges_clip_path(clip_path);
@@ -1615,8 +1623,10 @@ bGPDstroke *BKE_gpencil_stroke_clip_self(const bContext *C,
   printf("Num intersections: %d\n", num_intersections);
 
   /* create new stroke */
-  bGPDstroke *outer_edge_stroke = gp_view_space_clip_path_to_stroke(
-      C, gpl, clip_path, gps->mat_nr, true);
+  bGPDstroke *outer_edge_stroke;
+  TIMEIT_START(path_to_stroke);
+  outer_edge_stroke = gp_view_space_clip_path_to_stroke(C, gpl, clip_path, gps->mat_nr, true);
+  TIMEIT_END(path_to_stroke);
 
   /* free temp data */
   free_clip_path(clip_path);
