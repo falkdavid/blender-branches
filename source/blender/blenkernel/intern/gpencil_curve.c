@@ -639,7 +639,7 @@ void BKE_gpencil_selected_strokes_editcurve_update(bGPdata *gpd)
   }
 }
 
-static void gp_interpolate_fl_from_to(
+static void gpencil_interpolate_fl_from_to(
     float from, float to, float *point_offset, int it, int stride)
 {
   /* linear interpolation */
@@ -651,7 +651,7 @@ static void gp_interpolate_fl_from_to(
   }
 }
 
-static void gp_interpolate_v4_from_to(
+static void gpencil_interpolate_v4_from_to(
     float from[4], float to[4], float *point_offset, int it, int stride)
 {
   /* linear interpolation */
@@ -661,6 +661,45 @@ static void gp_interpolate_v4_from_to(
     interp_v4_v4v4(r, from, to, fac);
     r = POINTER_OFFSET(r, stride);
   }
+}
+
+/**
+ * Helper: calculate the sum of the length of the two handles and the distance between the ends of
+ * the handles of a curve segment.
+ */
+static float gpencil_calculate_curve_point_pair_distance(bGPDcurve_point *curr_pt,
+                                                         bGPDcurve_point *next_pt)
+{
+#define MIN_VAL 1e-5f
+  float p1[3], h1[3], p2[3], h2[3];
+  copy_v3_v3(p1, curr_pt->bezt.vec[1]);
+  copy_v3_v3(h1, curr_pt->bezt.vec[2]);
+  copy_v3_v3(p2, next_pt->bezt.vec[1]);
+  copy_v3_v3(h2, next_pt->bezt.vec[0]);
+
+  float len1 = max_ff(len_v3v3(p1, h1), MIN_VAL);
+  float len2 = max_ff(len_v3v3(p2, h2), MIN_VAL);
+  float dist = max_ff(len_v3v3(h1, h2), MIN_VAL);
+#undef MIN_VAL
+
+  return len1 + len2 + dist;
+}
+
+static uint gpencil_calc_curve_point_array_len(bGPDcurve_point *curve_point_array,
+                                               const uint array_last,
+                                               const uint resolu)
+{
+  uint length = 0;
+  for (unsigned int i = 0; i < array_last; i++) {
+    bGPDcurve_point *cpt_curr = &curve_point_array[i];
+    bGPDcurve_point *cpt_next = &curve_point_array[i + 1];
+
+    float distance = gpencil_calculate_curve_point_pair_distance(cpt_curr, cpt_next);
+    int adaptive_resolu = floorf(distance * resolu);
+    length += adaptive_resolu;
+  }
+
+  return length;
 }
 
 /**
@@ -681,15 +720,18 @@ void BKE_gpencil_stroke_update_geometry_from_editcurve(bGPDstroke *gps)
   const uint array_last = curve_point_array_len - 1;
   /* One stride contains: x, y, z, pressure, strength, Vr, Vg, Vb, Vmix_factor */
   const uint stride = sizeof(float[9]);
-  const uint resolu_stride = resolu * stride;
-  const uint points_len = BKE_curve_calc_coords_axis_len(
-      curve_point_array_len, resolu, is_cyclic, true);
+  const uint points_len = gpencil_calc_curve_point_array_len(
+      curve_point_array, array_last, resolu);
 
   float(*points)[9] = MEM_callocN((stride * points_len * (is_cyclic ? 2 : 1)), __func__);
   float *points_offset = &points[0][0];
   for (unsigned int i = 0; i < array_last; i++) {
     bGPDcurve_point *cpt_curr = &curve_point_array[i];
     bGPDcurve_point *cpt_next = &curve_point_array[i + 1];
+
+    float distance = gpencil_calculate_curve_point_pair_distance(cpt_curr, cpt_next);
+    int adaptive_resolu = floorf(distance * resolu);
+    int resolu_stride = adaptive_resolu * stride;
 
     /* sample points on all 3 axis between two curve points */
     for (uint axis = 0; axis < 3; axis++) {
@@ -698,28 +740,28 @@ void BKE_gpencil_stroke_update_geometry_from_editcurve(bGPDstroke *gps)
                                     cpt_next->bezt.vec[0][axis],
                                     cpt_next->bezt.vec[1][axis],
                                     POINTER_OFFSET(points_offset, sizeof(float) * axis),
-                                    (int)resolu,
+                                    adaptive_resolu,
                                     stride);
     }
 
     /* interpolate other attributes */
-    gp_interpolate_fl_from_to(cpt_curr->pressure,
-                              cpt_next->pressure,
-                              POINTER_OFFSET(points_offset, sizeof(float) * 3),
-                              resolu,
-                              stride);
-    gp_interpolate_fl_from_to(cpt_curr->strength,
-                              cpt_next->strength,
-                              POINTER_OFFSET(points_offset, sizeof(float) * 4),
-                              resolu,
-                              stride);
-    gp_interpolate_v4_from_to(cpt_curr->vert_color,
-                              cpt_next->vert_color,
-                              POINTER_OFFSET(points_offset, sizeof(float) * 5),
-                              resolu,
-                              stride);
+    gpencil_interpolate_fl_from_to(cpt_curr->pressure,
+                                   cpt_next->pressure,
+                                   POINTER_OFFSET(points_offset, sizeof(float) * 3),
+                                   adaptive_resolu,
+                                   stride);
+    gpencil_interpolate_fl_from_to(cpt_curr->strength,
+                                   cpt_next->strength,
+                                   POINTER_OFFSET(points_offset, sizeof(float) * 4),
+                                   adaptive_resolu,
+                                   stride);
+    gpencil_interpolate_v4_from_to(cpt_curr->vert_color,
+                                   cpt_next->vert_color,
+                                   POINTER_OFFSET(points_offset, sizeof(float) * 5),
+                                   adaptive_resolu,
+                                   stride);
     /* update the index */
-    cpt_curr->point_index = i * resolu;
+    cpt_curr->point_index = i * adaptive_resolu;
     points_offset = POINTER_OFFSET(points_offset, resolu_stride);
   }
 
@@ -779,9 +821,8 @@ void BKE_gpencil_editcurve_recalculate_handles(bGPDstroke *gps)
     bGPDcurve_point *gpc_pt = &gpc->curve_points[i];
     if (gpc_pt->flag & GP_CURVE_POINT_SELECT) {
       bGPDcurve_point *gpc_pt_prev = (i > 0) ? &gpc->curve_points[i - 1] : NULL;
-      bGPDcurve_point *gpc_pt_next = (i < gpc->tot_curve_points - 1) ?
-                                          &gpc->curve_points[i + 1] :
-                                          NULL;
+      bGPDcurve_point *gpc_pt_next = (i < gpc->tot_curve_points - 1) ? &gpc->curve_points[i + 1] :
+                                                                       NULL;
 
       BezTriple *bezt = &gpc_pt->bezt;
       BezTriple *bezt_prev = gpc_pt_prev != NULL ? &gpc_pt_prev->bezt : NULL;
