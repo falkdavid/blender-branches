@@ -1370,7 +1370,8 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
         printf("nodeA %p and nodeB %p are not neightbours\n", nodeA, nodeB);
       }
 #endif
-      event_edge->sweep_pt = other_edge->sweep_pt = event->pt;
+      event_edge->sweep_pt = event->pt;
+      other_edge->sweep_pt = cpt_isectB;
 #if DEBUG_BO
       print_edge("nodeA data", nodeA->data);
       print_edge("nodeB data", nodeB->data);
@@ -1478,14 +1479,13 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
        * note: this can return NULL if the edge inserted was identical with another. In that case,
        * just skip the intersection checking */
       event_edge->sweep_pt = event->pt;
-      // WAVL_Node *node = BLI_wavlTree_search(sweep_line_tree, gp_y_compare_clip_edges,
-      // event_edge);
-      WAVL_Node *node = NULL;
-      for (WAVL_Node *n = sweep_line_tree->min_node; n != NULL; n = n->succ) {
-        if (n->data == event_edge) {
-          node = n;
-        }
-      }
+      WAVL_Node *node = BLI_wavlTree_search(sweep_line_tree, gp_y_compare_clip_edges, event_edge);
+      // WAVL_Node *node = NULL;
+      // for (WAVL_Node *n = sweep_line_tree->min_node; n != NULL; n = n->succ) {
+      //   if (n->data == event_edge) {
+      //     node = n;
+      //   }
+      // }
 #if DEBUG_BO
       printf("Delete node: %p\n", node);
       if (node->data != event_edge) {
@@ -1533,8 +1533,8 @@ static int gp_bentley_ottmann_algorithm(ListBase *edges, int num_edges, ListBase
       printf("ORDER IS NOT CORRECT!\n");
     }
     printf("\n");
-    ii++;
 #endif
+    ii++;
     MEM_freeN(event);
   }
 
