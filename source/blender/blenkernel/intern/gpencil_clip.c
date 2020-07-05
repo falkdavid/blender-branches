@@ -964,12 +964,12 @@ short gp_compare_points(const float A[2], const float B[2])
 inline bool gp_points_are_equal(tClipPoint *pointA, tClipPoint *pointB)
 {
   if (pointA == pointB) {
-    return 1;
+    return true;
   }
-  if (pointA->x == pointB->x && pointA->y == pointB->y) {
-    return 1;
+  if (IS_EQF(pointA->x, pointB->x) && IS_EQF(pointA->y, pointB->y)) {
+    return true;
   }
-  return 0;
+  return false;
 }
 
 inline bool gp_edge_is_vertical(tClipEdge *edge)
