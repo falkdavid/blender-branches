@@ -932,6 +932,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
             t->redraw |= TREDRAW_HARD;
             handled = true;
           }
+          else if (t->obedit_type == OB_GPENCIL) {
+            printf("curve point slide!\n");
+          }
         }
         else if (t->mode == TFM_SEQ_SLIDE) {
           t->flag ^= T_ALT_TRANSFORM;
