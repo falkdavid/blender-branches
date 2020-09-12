@@ -247,6 +247,7 @@ set(SRC
   BLI_multi_value_map.hh
   BLI_noise.h
   BLI_path_util.h
+  BLI_polyclip_2d.hh
   BLI_polyfill_2d.h
   BLI_polyfill_2d_beautify.h
   BLI_probing_strategies.hh
@@ -406,6 +407,7 @@ if(WITH_GTESTS)
     tests/BLI_mesh_intersect_test.cc
     tests/BLI_multi_value_map_test.cc
     tests/BLI_path_util_test.cc
+    tests/BLI_polyclip_2d_test.cc
     tests/BLI_polyfill_2d_test.cc
     tests/BLI_ressource_strings.h
     tests/BLI_session_uuid_test.cc
