@@ -29,6 +29,14 @@
 
 namespace blender::polyclip {
 
+static tPerimeterPoint *new_perimeter_point(const float pt[3], bool is_left)
+{
+  tPerimeterPoint *new_pt = MEM_callocN(sizeof(tPerimeterPoint), __func__);
+  copy_v3_v3(&new_pt->x, pt);
+  new_pt->is_left = is_left;
+  return new_pt;
+}
+
 static int generate_arc_from_point_to_point(Polyline *pline,
                                             double2 from,
                                             double2 to,
