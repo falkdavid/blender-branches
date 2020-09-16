@@ -56,6 +56,11 @@ struct double2 {
     return len_v2_db(*this);
   }
 
+  bool is_zero() const
+  {
+    return x == y == 0.0;
+  }
+
   friend double2 operator+(const double2 &a, const double2 &b)
   {
     return {a.x + b.x, a.y + b.y};
@@ -92,6 +97,12 @@ struct double2 {
     return a.x != b.x || a.y != b.y;
   }
 
+  void operator+=(const double2 &b)
+  {
+    this->x += b.x;
+    this->y += b.y;
+  }
+
   friend std::ostream &operator<<(std::ostream &stream, const double2 &v)
   {
     stream << "(" << v.x << ", " << v.y << ")";
@@ -121,6 +132,18 @@ struct double2 {
   static double distance_squared(const double2 &a, const double2 &b)
   {
     return double2::dot(a, b);
+  }
+
+  static double cross(const double2 &a, const double2 &b)
+  {
+    return cross_v2v2_db(a, b);
+  }
+
+  static double2 rotate(const double2 &a, const double angle)
+  {
+    const double co = cos(angle);
+    const double si = sin(angle);
+    return double2(co * a.x - si * a.y, si * a.x + co * a.y);
   }
 
   struct isect_result {

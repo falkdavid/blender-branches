@@ -23,6 +23,40 @@
 #include "BLI_map.hh"
 #include "BLI_vector.hh"
 
-namespace blender::ployclip {
+namespace blender::polyclip {
 
-} /* namespace blender::ployclip */
+typedef unsigned long long ulong64;
+
+enum EndCaps {
+  CAP_ROUND = 0,
+  CAP_FLAT = 1,
+  CAP_MAX,
+};
+
+struct tPerimeterPoint {
+  struct tPerimeterPoint *next, *prev;
+  float x, y, z;
+  bool is_left;
+};
+
+struct Vert {
+  double3 co;
+  double radius;
+
+  Vert() = default;
+
+  Vert(double3 co, double radius = 0) : co(co), radius(radius)
+  {
+  }
+
+  Vert(double2 co, double radius = 0) : co(co.x, co.y, 0), radius(radius)
+  {
+  }
+};
+
+struct Polyline {
+  blender::Vector<Vert> verts;
+  bool closed;
+};
+
+} /* namespace blender::polyclip */
