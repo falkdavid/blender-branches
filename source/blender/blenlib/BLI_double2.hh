@@ -51,14 +51,19 @@ struct double2 {
     return &x;
   }
 
-  float length() const
+  double length() const
   {
     return len_v2_db(*this);
   }
 
   bool is_zero() const
   {
-    return x == y == 0.0;
+    return x == 0.0 && y == 0.0;
+  }
+
+  bool is_length_zero() const
+  {
+    return IS_EQ(x, 0.0) && IS_EQ(y, 0.0);
   }
 
   friend double2 operator+(const double2 &a, const double2 &b)
@@ -103,6 +108,33 @@ struct double2 {
     this->y += b.y;
   }
 
+  void operator*=(const double b)
+  {
+    this->x *= b;
+    this->y *= b;
+  }
+
+  void normalize()
+  {
+    double l = length();
+    BLI_assert(l != 0);
+    x /= l;
+    y /= l;
+  }
+
+  void normalize(const double length)
+  {
+    BLI_assert(!is_length_zero());
+    if (length == 0.0) {
+      x = 0.0;
+      y = 0.0;
+    }
+    else {
+      normalize();
+      *this *= length;
+    }
+  }
+
   friend std::ostream &operator<<(std::ostream &stream, const double2 &v)
   {
     stream << "(" << v.x << ", " << v.y << ")";
@@ -144,6 +176,16 @@ struct double2 {
     const double co = cos(angle);
     const double si = sin(angle);
     return double2(co * a.x - si * a.y, si * a.x + co * a.y);
+  }
+
+  static double2 invert(const double2 &a)
+  {
+    return double2(-a.x, -a.y);
+  }
+
+  static bool compare(const double2 &a, const double2 &b, const double limit)
+  {
+    return std::abs(a.x - b.x) <= limit && std::abs(a.y - b.y) <= limit;
   }
 
   struct isect_result {

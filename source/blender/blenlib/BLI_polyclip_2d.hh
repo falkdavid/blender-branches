@@ -17,17 +17,17 @@
 /** \file
  * \ingroup bli
  */
+#include <list>
 
+#include "BLI_double2.hh"
 #include "BLI_double3.hh"
-#include "BLI_float3.hh"
-#include "BLI_map.hh"
-#include "BLI_vector.hh"
+#include "BLI_listbase_wrapper.hh"
 
 namespace blender::polyclip {
 
-typedef unsigned long long ulong64;
+typedef std::list<Vert> VertList;
 
-enum EndCaps {
+enum CapType {
   CAP_ROUND = 0,
   CAP_FLAT = 1,
   CAP_MAX,
@@ -37,6 +37,11 @@ struct tPerimeterPoint {
   struct tPerimeterPoint *next, *prev;
   float x, y, z;
   bool is_left;
+
+  tPerimeterPoint(float co[3], bool is_left) : is_left(is_left)
+  {
+    copy_v3_v3(&x, co);
+  }
 };
 
 struct Vert {
@@ -52,11 +57,28 @@ struct Vert {
   Vert(double2 co, double radius = 0) : co(co.x, co.y, 0), radius(radius)
   {
   }
+
+  Vert(double x, double y, double z, double radius = 0) : co(x, y, z), radius(radius)
+  {
+  }
 };
 
 struct Polyline {
-  blender::Vector<Vert> verts;
-  bool closed;
+  VertList verts;
+  uint64_t num_verts;
+
+  Polyline() = default;
+
+  Polyline(VertList &verts) : verts(verts)
+  {
+    num_verts = verts.size();
+  }
 };
+
+struct Path : Polyline {
+  bool isClosed;
+};
+
+typedef std::list<Path> Paths;
 
 } /* namespace blender::polyclip */
