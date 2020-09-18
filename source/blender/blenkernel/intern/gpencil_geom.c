@@ -35,6 +35,7 @@
 #include "BLI_ghash.h"
 #include "BLI_hash.h"
 #include "BLI_math_vector.h"
+#include "BLI_polyclip_2d.h"
 #include "BLI_polyfill_2d.h"
 
 #include "BLT_translation.h"

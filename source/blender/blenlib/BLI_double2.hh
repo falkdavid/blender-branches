@@ -61,7 +61,7 @@ struct double2 {
     return x == 0.0 && y == 0.0;
   }
 
-  bool is_length_zero() const
+  bool compare_zero() const
   {
     return IS_EQ(x, 0.0) && IS_EQ(y, 0.0);
   }

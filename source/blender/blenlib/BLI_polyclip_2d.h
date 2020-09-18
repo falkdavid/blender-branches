@@ -14,14 +14,18 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#pragma once
+
 /** \file
  * \ingroup bli
  */
-#include <list>
 
-#include "BLI_double2.hh"
-#include "BLI_double3.hh"
-#include "BLI_listbase_wrapper.hh"
+#ifdef __cplusplus
+
+#  include <list>
+
+#  include "BLI_double2.hh"
+#  include "BLI_double3.hh"
 
 namespace blender::polyclip {
 
@@ -82,3 +86,21 @@ struct Path : Polyline {
 typedef std::list<Path> Paths;
 
 } /* namespace blender::polyclip */
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void BLI_polyline_offset(const double *verts,
+                         uint num_verts,
+                         const double radius,
+                         const uint subdivisions,
+                         uint start_cap_t,
+                         uint end_cap_t,
+                         double *r_offset_verts,
+                         uint *r_num_offset_verts);
+
+#ifdef __cplusplus
+}
+#endif

@@ -25,7 +25,7 @@
 #include "BLI_map.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_polyclip_2d.hh"
+#include "BLI_polyclip_2d.h"
 
 #define MIN_MITER_LENGTH 0.0001
 #define CUT_OFF_ANGLE 0.0001
@@ -256,31 +256,31 @@ static int generate_perimeter_cap(VertList &list,
  * this radius.
  * \return: perimeter polyline.
  */
-static Polyline offset_polyline_intern(Polyline *pline,
+static Polyline polyline_offset_intern(Polyline &pline,
                                        const uint subdivisions,
                                        const double pline_radius,
                                        CapType start_cap_t,
                                        CapType end_cap_t)
 {
   /* sanity check */
-  if (pline == NULL || pline->num_verts < 1) {
+  if (pline.num_verts < 1) {
     return Polyline();
   }
 
   VertList perimeter_right_side, perimeter_left_side;
   int num_perimeter_points = 0;
 
-  Vert *first = pline->verts.front();
-  Vert *last = pline->verts.back();
+  Vert *first = pline.verts.front();
+  Vert *last = pline.verts.back();
 
   double first_radius = pline_radius * first->radius;
   double last_radius = pline_radius * last->radius;
 
   Vert *first_next;
   Vert *last_prev;
-  if (pline->num_verts > 1) {
-    first_next = std::next(pline->verts.begin(), 1);
-    last_prev = std::prev(pline->verts.end(), 1);
+  if (pline.num_verts > 1) {
+    first_next = std::next(pline.verts.begin(), 1);
+    last_prev = std::prev(pline.verts.end(), 1);
   }
   else {
     first_next = first;
@@ -308,7 +308,7 @@ static Polyline offset_polyline_intern(Polyline *pline,
   // }
 
   /* edgecase if single point */
-  if (pline->num_verts == 1) {
+  if (pline.num_verts == 1) {
     first_next_pt.x += 1.0;
     last_prev_pt.x -= 1.0;
   }
@@ -333,7 +333,7 @@ static Polyline offset_polyline_intern(Polyline *pline,
   // float miter_left_pt[3], miter_right_pt[3];
 
   // for (int i = 1; i < gps->tot_points - 1; i++) {
-  for (auto it = std::next(pline->verts.begin()); it != std::prev(pline->verts.end()); ++it) {
+  for (auto it = std::next(pline.verts.begin()); it != std::prev(pline.verts.end()); ++it) {
     // bGPDspoint *curr = &gps->points[i];
     // bGPDspoint *prev = &gps->points[i - 1];
     // bGPDspoint *next = &gps->points[i + 1];
@@ -370,14 +370,14 @@ static Polyline offset_polyline_intern(Polyline *pline,
     //   vec_next[1] = 0.0f;
     // }
 
-    if (vec_prev.is_length_zero()) {
+    if (vec_prev.compare_zero()) {
       vec_prev = double2(1.0, 0.0);
     }
     else {
       vec_prev.normalize();
     }
 
-    if (vec_next.is_length_zero()) {
+    if (vec_next.compare_zero()) {
       vec_next = double2(1.0, 0.0);
     }
     else {
@@ -399,7 +399,7 @@ static Polyline offset_polyline_intern(Polyline *pline,
     //   copy_v2_v2(vec_tangent, nvec_prev);
     // }
     double2 vec_tangent = vec_prev + vec_next;
-    if (vec_tangent.is_length_zero()) {
+    if (vec_tangent.compare_zero()) {
       vec_tangent = double2(nvec_prev);
     }
     else {
@@ -626,3 +626,34 @@ static Polyline offset_polyline_intern(Polyline *pline,
 }
 
 } /* namespace blender::polyclip */
+
+/* Wrapper for C. */
+extern "C" {
+
+void BLI_polyline_offset(const double *verts,
+                         uint num_verts,
+                         const double radius,
+                         const uint subdivisions,
+                         uint start_cap_t,
+                         uint end_cap_t,
+                         double **r_offset_verts,
+                         uint *r_num_offset_verts)
+{
+  blender::polyclip::Polyline pline;
+  /* Fill pline with data from verts */
+
+  blender::polyclip::Polyline offset_pline = polyline_offset_intern(
+      pline,
+      subdivisions,
+      radius,
+      static_cast<blender::polyclip::CapType>(start_cap_t),
+      static_cast<blender::polyclip::CapType>(end_cap_t));
+
+  double *offset_verts = NULL;
+  uint num_offset_verts = offset_pline.num_verts;
+
+  *r_offset_verts = offset_verts;
+  *r_num_offset_verts = num_offset_verts;
+}
+
+} /* extern "C" */
