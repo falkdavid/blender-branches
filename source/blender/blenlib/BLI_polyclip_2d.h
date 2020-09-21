@@ -98,7 +98,7 @@ void BLI_polyline_offset(const double *verts,
                          const uint subdivisions,
                          uint start_cap_t,
                          uint end_cap_t,
-                         double *r_offset_verts,
+                         double **r_offset_verts,
                          uint *r_num_offset_verts);
 
 #ifdef __cplusplus

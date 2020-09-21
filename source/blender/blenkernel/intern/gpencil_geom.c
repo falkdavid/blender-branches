@@ -2611,4 +2611,69 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
     copy_v4_v4(pt->vert_color, color);
   }
 }
+
+/**
+ * Offsets a stroke and returns it's perimeter as a stroke projected to the view.
+ */
+bGPDstroke *BKE_gpencil_stroke_to_perimeter(bGPdata *gpd,
+                                            bGPDlayer *gpl,
+                                            bGPDstroke *gps,
+                                            uint subdivisions)
+{
+#define POINT_DIM 4
+  if (gps->totpoints < 1) {
+    return NULL;
+  }
+
+  uint num_points = (uint)gps->totpoints;
+  double defaultpixsize = 1000.0 / (double)gpd->pixfactor;
+  double stroke_radius = ((double)(gps->thickness + gpl->line_change) / defaultpixsize) / 2.0;
+
+  double *stroke_points = MEM_callocN(sizeof(double) * POINT_DIM, __func__);
+  for (uint i = 0; i < num_points; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    copy_v3db_v3fl(&stroke_points[i * POINT_DIM], &pt->x);
+    stroke_points[i * POINT_DIM + (POINT_DIM - 1)] = (double)pt->pressure;
+  }
+
+  double *r_perimeter_stroke_points;
+  uint r_num_perimeter_stroke_points;
+  BLI_polyline_offset(stroke_points,
+                      num_points,
+                      stroke_radius,
+                      subdivisions,
+                      (uint)gps->caps[0],
+                      (uint)gps->caps[1],
+                      &r_perimeter_stroke_points,
+                      &r_num_perimeter_stroke_points);
+
+  if (r_perimeter_stroke_points == NULL) {
+    MEM_freeN(stroke_points);
+    return NULL;
+  }
+
+  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(
+      gps->mat_nr, r_num_perimeter_stroke_points, 1);
+
+  for (uint i = 0; i < r_num_perimeter_stroke_points; i++) {
+    bGPDspoint *pt = &perimeter_stroke->points[i];
+    copy_v3fl_v3db(&pt->x, &r_perimeter_stroke_points[i * POINT_DIM]);
+
+    /* Set pressure to zero and strength to one */
+    pt->pressure = 0.0f;
+    pt->strength = 1.0f;
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* Project stroke to view plane. */
+
+  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+
+  MEM_freeN(stroke_points);
+  MEM_freeN(r_perimeter_stroke_points);
+
+  return perimeter_stroke;
+#undef POINT_DIM
+}
 /** \} */

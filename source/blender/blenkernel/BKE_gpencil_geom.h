@@ -126,6 +126,11 @@ bool BKE_gpencil_convert_mesh(struct Main *bmain,
                               const bool use_seams,
                               const bool use_faces);
 
+struct bGPDstroke *BKE_gpencil_stroke_to_perimeter(struct bGPdata *gpd,
+                                                   struct bGPDlayer *gpl,
+                                                   struct bGPDstroke *gps,
+                                                   uint subdivisions);
+
 #ifdef __cplusplus
 }
 #endif

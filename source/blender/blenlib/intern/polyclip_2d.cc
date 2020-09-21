@@ -640,7 +640,13 @@ void BLI_polyline_offset(const double *verts,
                          uint *r_num_offset_verts)
 {
   blender::polyclip::Polyline pline;
+
   /* Fill pline with data from verts */
+  for (uint i = 0; i < num_verts; i++) {
+    blender::double3 co = blender::double3(verts[i * 4], verts[i * 4 + 1], verts[i * 4 + 2]);
+    double radius = verts[i * 3 + 3];
+    pline.verts.push_back(blender::polyclip::Vert(co, radius));
+  }
 
   blender::polyclip::Polyline offset_pline = polyline_offset_intern(
       pline,
@@ -649,8 +655,16 @@ void BLI_polyline_offset(const double *verts,
       static_cast<blender::polyclip::CapType>(start_cap_t),
       static_cast<blender::polyclip::CapType>(end_cap_t));
 
-  double *offset_verts = NULL;
   uint num_offset_verts = offset_pline.num_verts;
+  double *offset_verts = new double[num_offset_verts * 3];
+
+  blender::polyclip::VertList::iterator it = offset_pline.verts.begin();
+  for (uint i = 0; i < num_offset_verts; i++, it++) {
+    blender::polyclip::Vert vert = *it;
+    offset_verts[i * 3] = vert.co.x;
+    offset_verts[i * 3 + 1] = vert.co.y;
+    offset_verts[i * 3 + 2] = vert.co.z;
+  }
 
   *r_offset_verts = offset_verts;
   *r_num_offset_verts = num_offset_verts;
