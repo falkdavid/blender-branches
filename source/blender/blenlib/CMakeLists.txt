@@ -109,6 +109,7 @@ set(SRC
   intern/mesh_intersect.cc
   intern/noise.c
   intern/path_util.c
+  intern/polyclip_2d.cc
   intern/polyfill_2d.c
   intern/polyfill_2d_beautify.c
   intern/quadric.c

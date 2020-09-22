@@ -77,6 +77,6 @@ typedef std::list<Path> Paths;
 struct Polygon {
   Polyline contour;
   Polylines holes;
-}
+};
 
 } /* namespace blender::polyclip */

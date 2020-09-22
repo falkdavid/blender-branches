@@ -122,7 +122,7 @@ static int generate_arc_from_point_to_point(VertList &list,
       //   BLI_insertlinkafter(list, last_point, new_point);
       // }
       Vert *new_point = new Vert(vec_p);
-      list.insert(it_last, new_point);
+      list.insert(it_last, *new_point);
 
       if (!clockwise) {
         it_last++;
@@ -139,7 +139,6 @@ static int generate_arc_from_point_to_point(VertList &list,
 //     ListBase *list, tPerimeterPoint *from, tPerimeterPoint *to, int subdivisions, bool is_left)
 static int generate_semi_circle_from_point_to_point(VertList &list,
                                                     VertList::iterator &it_from,
-                                                    Vert &to,
                                                     const double2 center_pt,
                                                     const uint subdivisions,
                                                     const bool is_left)
@@ -181,7 +180,7 @@ static int generate_semi_circle_from_point_to_point(VertList &list,
     // last_point = new_point;
     Vert *new_point = new Vert(vec_p);
     it_from++;
-    list.insert(it_from, new_point);
+    list.insert(it_from, *new_point);
   }
 
   return num_points - 1;
@@ -240,14 +239,14 @@ static int generate_perimeter_cap(VertList &list,
 
   // BLI_addtail(list, p_pt);
   // BLI_addtail(list, p_pt_inv);
-  list.push_back(p_pt);
+  list.push_back(*p_pt);
   VertList::iterator it_p_pt = list.end();
-  list.push_back(p_pt_inv);
+  list.push_back(*p_pt_inv);
 
   int num_points = 0;
   if (cap_type == CAP_ROUND) {
     num_points += generate_semi_circle_from_point_to_point(
-        list, it_p_pt, *p_pt_inv, point, subdivisions, is_left);
+        list, it_p_pt, point, subdivisions, is_left);
   }
 
   return num_points + 2;
@@ -274,17 +273,17 @@ static Polyline polyline_offset_intern(Polyline &pline,
   VertList perimeter_right_side, perimeter_left_side;
   int num_perimeter_points = 0;
 
-  Vert *first = pline.verts.front();
-  Vert *last = pline.verts.back();
+  Vert first = pline.verts.front();
+  Vert last = pline.verts.back();
 
-  double first_radius = pline_radius * first->radius;
-  double last_radius = pline_radius * last->radius;
+  double first_radius = pline_radius * first.radius;
+  double last_radius = pline_radius * last.radius;
 
-  Vert *first_next;
-  Vert *last_prev;
+  Vert first_next;
+  Vert last_prev;
   if (pline.num_verts > 1) {
-    first_next = std::next(pline.verts.begin(), 1);
-    last_prev = std::prev(pline.verts.end(), 1);
+    first_next = *std::next(pline.verts.begin(), 1);
+    last_prev = *std::prev(pline.verts.end(), 1);
   }
   else {
     first_next = first;
@@ -300,10 +299,10 @@ static Polyline polyline_offset_intern(Polyline &pline,
   // copy_v3_v3(first_next_pt, &first_next->x);
   // copy_v3_v3(last_prev_pt, &last_prev->x);
 
-  double2 first_pt = double2(first->co);
-  double2 last_pt = double2(last->co);
-  double2 first_next_pt = double2(first_next->co);
-  double2 last_prev_pt = double2(last_prev->co);
+  double2 first_pt = double2(first.co);
+  double2 last_pt = double2(last.co);
+  double2 first_next_pt = double2(first_next.co);
+  double2 last_prev_pt = double2(last_prev.co);
 
   // /* edgecase if single point */
   // if (pline->num_verts == 1) {
@@ -464,8 +463,8 @@ static Polyline polyline_offset_intern(Polyline &pline,
       Vert *normal_prev = new Vert(nvec_prev_pt);
       Vert *normal_next = new Vert(nvec_next_pt);
 
-      perimeter_left_side.push_back(normal_prev);
-      perimeter_right_side.push_back(normal_next);
+      perimeter_left_side.push_back(*normal_prev);
+      perimeter_right_side.push_back(*normal_next);
 
       // BLI_addtail(perimeter_left_side, normal_prev);
       // BLI_addtail(perimeter_right_side, normal_next);
@@ -495,9 +494,9 @@ static Polyline polyline_offset_intern(Polyline &pline,
 
         // BLI_addtail(perimeter_left_side, normal_prev);
         // BLI_addtail(perimeter_left_side, normal_next);
-        perimeter_left_side.push_back(normal_prev);
+        perimeter_left_side.push_back(*normal_prev);
         VertList::iterator it_prev = perimeter_left_side.end();
-        perimeter_left_side.push_back(normal_next);
+        perimeter_left_side.push_back(*normal_next);
         VertList::iterator it_next = perimeter_left_side.end();
 
         num_perimeter_points += 2;
@@ -523,7 +522,7 @@ static Polyline polyline_offset_intern(Polyline &pline,
         // num_perimeter_points++;
 
         Vert *miter_right = new Vert(miter_right_pt);
-        perimeter_right_side.push_back(miter_right);
+        perimeter_right_side.push_back(*miter_right);
 
         num_perimeter_points++;
       }
@@ -550,9 +549,9 @@ static Polyline polyline_offset_intern(Polyline &pline,
 
         // BLI_addtail(perimeter_right_side, normal_prev);
         // BLI_addtail(perimeter_right_side, normal_next);
-        perimeter_right_side.push_back(normal_prev);
+        perimeter_right_side.push_back(*normal_prev);
         VertList::iterator it_prev = perimeter_right_side.end();
-        perimeter_right_side.push_back(normal_next);
+        perimeter_right_side.push_back(*normal_next);
         VertList::iterator it_next = perimeter_right_side.end();
 
         num_perimeter_points += 2;
@@ -578,7 +577,7 @@ static Polyline polyline_offset_intern(Polyline &pline,
         // num_perimeter_points++;
 
         Vert *miter_left = new Vert(miter_left_pt);
-        perimeter_left_side.push_back(miter_left);
+        perimeter_left_side.push_back(*miter_left);
 
         num_perimeter_points++;
       }
@@ -596,26 +595,26 @@ static Polyline polyline_offset_intern(Polyline &pline,
   // ListBase *perimeter_list = perimeter_left_side;
 
   perimeter_right_side.reverse();
-  perimeter_left_side.push_back(perimeter_right_side);
-  VertList perimeter_list = VertList(perimeter_left_side);
+  perimeter_left_side.splice(perimeter_left_side.end(), perimeter_right_side);
+  VertList perimeter_list = perimeter_left_side;
 
   /* close by creating a point close to the first (make a small gap) */
   // float close_pt[3];
   // tPerimeterPoint *close_first = (tPerimeterPoint *)perimeter_list->first;
   // tPerimeterPoint *close_last = (tPerimeterPoint *)perimeter_list->last;
   // interp_v3_v3v3(close_pt, &close_last->x, &close_first->x, 0.99f);
-  Vert *close_first = perimeter_list.front();
-  Vert *close_last = perimeter_list.back();
-  double2 close_pt = double2::interpolate(close_first->co, close_last->co, 0.99f);
+  Vert close_first = perimeter_list.front();
+  Vert close_last = perimeter_list.back();
+  double2 close_pt = double2::interpolate(close_first.co, close_last.co, 0.99f);
 
   // if (compare_v3v3(close_pt, &close_first->x, FLT_EPSILON) == false) {
   //   tPerimeterPoint *close_p_pt = new tPerimeterPoint(close_pt, true);
   //   BLI_addtail(perimeter_list, close_p_pt);
   //   num_perimeter_points++;
   // }
-  if (double2::compare(close_pt, close_first->co, DBL_EPSILON) == false) {
+  if (double2::compare(close_pt, close_first.co, DBL_EPSILON) == false) {
     Vert *close_p_pt = new Vert(close_pt);
-    perimeter_list.push_back(close_p_pt);
+    perimeter_list.push_back(*close_p_pt);
     num_perimeter_points++;
   }
 
