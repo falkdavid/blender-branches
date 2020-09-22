@@ -124,7 +124,7 @@ struct double2 {
 
   void normalize(const double length)
   {
-    BLI_assert(!is_length_zero());
+    BLI_assert(!compare_zero());
     if (length == 0.0) {
       x = 0.0;
       y = 0.0;

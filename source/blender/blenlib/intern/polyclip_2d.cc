@@ -25,7 +25,11 @@
 #include "BLI_map.hh"
 #include "BLI_vector.hh"
 
+#include "BLI_polyclip_2d.hh"
+
+extern "C" {
 #include "BLI_polyclip_2d.h"
+}
 
 #define MIN_MITER_LENGTH 0.0001
 #define CUT_OFF_ANGLE 0.0001

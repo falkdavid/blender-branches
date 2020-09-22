@@ -14,83 +14,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#pragma once
-
 /** \file
  * \ingroup bli
  */
-
-#ifdef __cplusplus
-
-#  include <list>
-
-#  include "BLI_double2.hh"
-#  include "BLI_double3.hh"
-
-namespace blender::polyclip {
-
-typedef std::list<Vert> VertList;
-
-enum CapType {
-  CAP_ROUND = 0,
-  CAP_FLAT = 1,
-  CAP_MAX,
-};
-
-struct tPerimeterPoint {
-  struct tPerimeterPoint *next, *prev;
-  float x, y, z;
-  bool is_left;
-
-  tPerimeterPoint(float co[3], bool is_left) : is_left(is_left)
-  {
-    copy_v3_v3(&x, co);
-  }
-};
-
-struct Vert {
-  double3 co;
-  double radius;
-
-  Vert() = default;
-
-  Vert(double3 co, double radius = 0) : co(co), radius(radius)
-  {
-  }
-
-  Vert(double2 co, double radius = 0) : co(co.x, co.y, 0), radius(radius)
-  {
-  }
-
-  Vert(double x, double y, double z, double radius = 0) : co(x, y, z), radius(radius)
-  {
-  }
-};
-
-struct Polyline {
-  VertList verts;
-  uint64_t num_verts;
-
-  Polyline() = default;
-
-  Polyline(VertList &verts) : verts(verts)
-  {
-    num_verts = verts.size();
-  }
-};
-
-struct Path : Polyline {
-  bool isClosed;
-};
-
-typedef std::list<Path> Paths;
-
-} /* namespace blender::polyclip */
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
@@ -100,7 +26,3 @@ void BLI_polyline_offset(const double *verts,
                          uint end_cap_t,
                          double **r_offset_verts,
                          uint *r_num_offset_verts);
-
-#ifdef __cplusplus
-}
-#endif
