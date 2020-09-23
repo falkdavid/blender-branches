@@ -259,11 +259,11 @@ static int generate_perimeter_cap(VertList &list,
  * this radius.
  * \return: perimeter polyline.
  */
-static Polyline polyline_offset_intern(Polyline &pline,
-                                       const uint subdivisions,
-                                       const double pline_radius,
-                                       CapType start_cap_t,
-                                       CapType end_cap_t)
+Polyline polyline_offset(Polyline &pline,
+                         const uint subdivisions,
+                         const double pline_radius,
+                         CapType start_cap_t,
+                         CapType end_cap_t)
 {
   /* sanity check */
   if (pline.num_verts < 1) {
@@ -651,7 +651,7 @@ void BLI_polyline_offset(const double *verts,
     pline.verts.push_back(blender::polyclip::Vert(co, radius));
   }
 
-  blender::polyclip::Polyline offset_pline = polyline_offset_intern(
+  blender::polyclip::Polyline offset_pline = polyline_offset(
       pline,
       subdivisions,
       radius,

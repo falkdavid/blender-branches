@@ -79,4 +79,10 @@ struct Polygon {
   Polylines holes;
 };
 
+Polyline polyline_offset(Polyline &pline,
+                         const uint subdivisions,
+                         const double pline_radius,
+                         CapType start_cap_t,
+                         CapType end_cap_t);
+
 } /* namespace blender::polyclip */
