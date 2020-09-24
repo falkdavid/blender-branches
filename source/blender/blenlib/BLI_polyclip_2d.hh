@@ -50,6 +50,12 @@ struct Vert {
   Vert(double x, double y, double z, double radius = 0) : co(x, y, z), radius(radius)
   {
   }
+
+  friend std::ostream &operator<<(std::ostream &stream, const Vert &v)
+  {
+    stream << "(" << v.co.x << ", " << v.co.y << ", " << v.co.z << ")";
+    return stream;
+  }
 };
 
 typedef std::list<Vert> VertList;
@@ -63,6 +69,16 @@ struct Polyline {
   Polyline(VertList &verts) : verts(verts)
   {
     num_verts = verts.size();
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const Polyline &v)
+  {
+    stream << "{";
+    for (auto it : v.verts) {
+      stream << it << ", ";
+    }
+    stream << "}";
+    return stream;
   }
 };
 

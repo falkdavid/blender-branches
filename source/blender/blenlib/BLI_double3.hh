@@ -231,6 +231,12 @@ struct double3 {
     return double3(fabs(a.x), fabs(a.y), fabs(a.z));
   }
 
+  static bool compare(const double3 &a, const double3 &b, const double limit)
+  {
+    return std::abs(a.x - b.x) <= limit && std::abs(a.y - b.y) <= limit &&
+           std::abs(a.z - b.z) <= limit;
+  }
+
   static int dominant_axis(const double3 &a)
   {
     double x = (a.x >= 0) ? a.x : -a.x;

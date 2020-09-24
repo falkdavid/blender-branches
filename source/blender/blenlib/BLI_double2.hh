@@ -117,14 +117,18 @@ struct double2 {
   void normalize()
   {
     double l = length();
-    BLI_assert(l != 0);
-    x /= l;
-    y /= l;
+    if (l == 0.0) {
+      x = 0.0;
+      y = 0.0;
+    }
+    else {
+      x /= l;
+      y /= l;
+    }
   }
 
   void normalize(const double length)
   {
-    BLI_assert(!compare_zero());
     if (length == 0.0) {
       x = 0.0;
       y = 0.0;

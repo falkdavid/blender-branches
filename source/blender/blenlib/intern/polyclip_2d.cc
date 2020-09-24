@@ -164,7 +164,7 @@ static int generate_semi_circle_from_point_to_point(VertList &list,
   double angle_incr = M_PI / (double)(num_points - 1);
 
   // tPerimeterPoint *last_point = from;
-  for (int i = 1; i < num_points; i++) {
+  for (int i = 1; i < num_points - 1; i++) {
     // float angle = i * angle_incr;
     double angle = (double)i * angle_incr;
 
@@ -178,7 +178,7 @@ static int generate_semi_circle_from_point_to_point(VertList &list,
     // BLI_insertlinkafter(list, last_point, new_point);
 
     // last_point = new_point;
-    Vert *new_point = new Vert(vec_p);
+    Vert *new_point = new Vert(vec_p + center_pt);
     it_from++;
     list.insert(it_from, *new_point);
   }
@@ -239,8 +239,7 @@ static int generate_perimeter_cap(VertList &list,
 
   // BLI_addtail(list, p_pt);
   // BLI_addtail(list, p_pt_inv);
-  list.push_back(*p_pt);
-  VertList::iterator it_p_pt = list.end();
+  VertList::iterator it_p_pt = list.insert(list.end(), *p_pt);
   list.push_back(*p_pt_inv);
 
   int num_points = 0;
@@ -283,7 +282,7 @@ Polyline polyline_offset(Polyline &pline,
   Vert last_prev;
   if (pline.num_verts > 1) {
     first_next = *std::next(pline.verts.begin(), 1);
-    last_prev = *std::prev(pline.verts.end(), 1);
+    last_prev = *std::prev(pline.verts.end(), 2);
   }
   else {
     first_next = first;
@@ -336,7 +335,8 @@ Polyline polyline_offset(Polyline &pline,
   // float miter_left_pt[3], miter_right_pt[3];
 
   // for (int i = 1; i < gps->tot_points - 1; i++) {
-  for (auto it = std::next(pline.verts.begin()); it != std::prev(pline.verts.end()); ++it) {
+  auto it = std::next(pline.verts.begin());
+  for (uint i = 1; i < pline.num_verts - 1; ++i, ++it) {
     // bGPDspoint *curr = &gps->points[i];
     // bGPDspoint *prev = &gps->points[i - 1];
     // bGPDspoint *next = &gps->points[i + 1];
@@ -494,10 +494,10 @@ Polyline polyline_offset(Polyline &pline,
 
         // BLI_addtail(perimeter_left_side, normal_prev);
         // BLI_addtail(perimeter_left_side, normal_next);
-        perimeter_left_side.push_back(*normal_prev);
-        VertList::iterator it_prev = perimeter_left_side.end();
-        perimeter_left_side.push_back(*normal_next);
-        VertList::iterator it_next = perimeter_left_side.end();
+        VertList::iterator it_prev = perimeter_left_side.insert(perimeter_left_side.end(),
+                                                                *normal_prev);
+        VertList::iterator it_next = perimeter_left_side.insert(perimeter_left_side.end(),
+                                                                *normal_next);
 
         num_perimeter_points += 2;
 
@@ -549,10 +549,10 @@ Polyline polyline_offset(Polyline &pline,
 
         // BLI_addtail(perimeter_right_side, normal_prev);
         // BLI_addtail(perimeter_right_side, normal_next);
-        perimeter_right_side.push_back(*normal_prev);
-        VertList::iterator it_prev = perimeter_right_side.end();
-        perimeter_right_side.push_back(*normal_next);
-        VertList::iterator it_next = perimeter_right_side.end();
+        VertList::iterator it_prev = perimeter_right_side.insert(perimeter_right_side.end(),
+                                                                 *normal_prev);
+        VertList::iterator it_next = perimeter_right_side.insert(perimeter_right_side.end(),
+                                                                 *normal_next);
 
         num_perimeter_points += 2;
 
