@@ -40,7 +40,6 @@ static void generate_arc_from_point_to_point(VertList &list,
                                              VertList::iterator &it_to,
                                              const double2 center_pt,
                                              const uint subdivisions,
-                                             const bool clockwise,
                                              const bool is_left)
 {
   double2 from_pt = double2((*it_from).co);
@@ -51,31 +50,20 @@ static void generate_arc_from_point_to_point(VertList &list,
     return;
   }
 
-  double dot = double2::dot(vec_from, vec_to);
-  double det = double2::cross(vec_from, vec_to);
-  double angle = clockwise ? M_PI - std::atan2(-det, -dot) : std::atan2(-det, -dot) + M_PI;
+  /* The dot product is proportional to the sine and the determinant to the cosine of the angle
+   * between the vectors. Taking the atan2 of those two will give an angle between -180 and 180
+   * degrees. The sign will determine the direction of rotation. */
+  double angle = std::atan2(double2::cross(vec_from, vec_to), double2::dot(vec_from, vec_to));
+  uint num_points = (uint)std::floor((subdivisions + 2) * (std::abs(angle) / M_PI));
 
-  uint num_points = (uint)std::floor((subdivisions + 2) * (angle / M_PI));
   if (num_points > 0) {
     double angle_incr = angle / (double)num_points;
-
-    double2 vec_t;
-    VertList::iterator it_last = it_to;
-    if (clockwise) {
-      // it_last = it_to;
-      vec_t = vec_to;
-    }
-    else {
-      // it_last = std::next(it_from);
-      vec_t = vec_from;
-    }
-
-    for (uint i = 0; i < num_points - 1; i++) {
-      double tmp_angle = (double)(i + 1) * angle_incr;
-      double2 vec_p = center_pt + double2::rotate(vec_t, tmp_angle);
+    for (uint i = 1; i < num_points; i++) {
+      double tmp_angle = (double)i * angle_incr;
+      double2 vec_p = center_pt + double2::rotate(vec_from, tmp_angle);
 
       Vert *new_point = new Vert(vec_p);
-      list.insert(it_last, *new_point);
+      list.insert(it_to, *new_point);
     }
   }
 }
@@ -103,13 +91,13 @@ static void generate_semi_circle_from_point_to_point(VertList &list,
   }
 }
 
-static void generate_perimeter_cap(VertList &list,
-                                   const double2 point,
-                                   const double2 other_point,
-                                   const double radius,
-                                   const uint subdivisions,
-                                   const CapType cap_type,
-                                   const bool is_left)
+static void generate_end_cap(VertList &list,
+                             const double2 point,
+                             const double2 other_point,
+                             const double radius,
+                             const uint subdivisions,
+                             const CapType cap_type,
+                             const bool is_left)
 {
   double2 cap_vec = other_point - point;
   cap_vec.normalize();
@@ -157,7 +145,7 @@ Polyline polyline_offset(Polyline &pline,
     return Polyline();
   }
 
-  VertList perimeter_right_side, perimeter_left_side;
+  VertList right_side, left_side;
 
   Vert first = pline.verts.front();
   Vert last = pline.verts.back();
@@ -188,13 +176,8 @@ Polyline polyline_offset(Polyline &pline,
   }
 
   /* generate points for start cap */
-  generate_perimeter_cap(perimeter_right_side,
-                         first_pt,
-                         first_next_pt,
-                         first_radius,
-                         subdivisions,
-                         start_cap_t,
-                         false);
+  generate_end_cap(
+      right_side, first_pt, first_next_pt, first_radius, subdivisions, start_cap_t, false);
 
   /* generate perimeter points  */
   auto it = std::next(pline.verts.begin());
@@ -263,8 +246,8 @@ Polyline polyline_offset(Polyline &pline,
 
       Vert *normal_prev = new Vert(nvec_prev_pt);
       Vert *normal_next = new Vert(nvec_next_pt);
-      perimeter_left_side.push_back(*normal_prev);
-      perimeter_right_side.push_back(*normal_next);
+      left_side.push_back(*normal_prev);
+      right_side.push_back(*normal_next);
     }
     else {
       /* bend to the left */
@@ -278,13 +261,10 @@ Polyline polyline_offset(Polyline &pline,
         Vert *normal_prev = new Vert(nvec_prev_pt);
         Vert *normal_next = new Vert(nvec_next_pt);
 
-        VertList::iterator it_prev = perimeter_left_side.insert(perimeter_left_side.end(),
-                                                                *normal_prev);
-        VertList::iterator it_next = perimeter_left_side.insert(perimeter_left_side.end(),
-                                                                *normal_next);
+        VertList::iterator it_prev = left_side.insert(left_side.end(), *normal_prev);
+        VertList::iterator it_next = left_side.insert(left_side.end(), *normal_next);
 
-        generate_arc_from_point_to_point(
-            perimeter_left_side, it_prev, it_next, curr_pt, subdivisions, true, true);
+        generate_arc_from_point_to_point(left_side, it_prev, it_next, curr_pt, subdivisions, true);
 
         double2 miter_right_pt;
         if (miter_length < prev_length && miter_length < next_length) {
@@ -295,7 +275,7 @@ Polyline polyline_offset(Polyline &pline,
         }
 
         Vert *miter_right = new Vert(miter_right_pt);
-        perimeter_right_side.push_back(*miter_right);
+        right_side.push_back(*miter_right);
       }
       /* bend to the right */
       else {
@@ -308,13 +288,11 @@ Polyline polyline_offset(Polyline &pline,
         Vert *normal_prev = new Vert(nvec_prev_pt);
         Vert *normal_next = new Vert(nvec_next_pt);
 
-        VertList::iterator it_prev = perimeter_right_side.insert(perimeter_right_side.end(),
-                                                                 *normal_prev);
-        VertList::iterator it_next = perimeter_right_side.insert(perimeter_right_side.end(),
-                                                                 *normal_next);
+        VertList::iterator it_prev = right_side.insert(right_side.end(), *normal_prev);
+        VertList::iterator it_next = right_side.insert(right_side.end(), *normal_next);
 
         generate_arc_from_point_to_point(
-            perimeter_right_side, it_prev, it_next, curr_pt, subdivisions, false, false);
+            right_side, it_prev, it_next, curr_pt, subdivisions, false);
 
         double2 miter_left_pt;
         if (miter_length < prev_length && miter_length < next_length) {
@@ -325,31 +303,30 @@ Polyline polyline_offset(Polyline &pline,
         }
 
         Vert *miter_left = new Vert(miter_left_pt);
-        perimeter_left_side.push_back(*miter_left);
+        left_side.push_back(*miter_left);
       }
     }
   }
 
   /* generate points for end cap */
-  generate_perimeter_cap(
-      perimeter_right_side, last_pt, last_prev_pt, last_radius, subdivisions, end_cap_t, false);
+  generate_end_cap(right_side, last_pt, last_prev_pt, last_radius, subdivisions, end_cap_t, false);
 
   /* merge both sides to one list */
-  perimeter_right_side.reverse();
-  perimeter_left_side.splice(perimeter_left_side.end(), perimeter_right_side);
-  VertList perimeter_list = perimeter_left_side;
+  right_side.reverse();
+  left_side.splice(left_side.end(), right_side);
+  VertList offset_vert_list = left_side;
 
   /* close by creating a point close to the first (make a small gap) */
-  Vert close_first = perimeter_list.front();
-  Vert close_last = perimeter_list.back();
+  Vert close_first = offset_vert_list.front();
+  Vert close_last = offset_vert_list.back();
   double2 close_pt = double2::interpolate(close_first.co, close_last.co, 0.99f);
 
   if (double2::compare(close_pt, close_first.co, DBL_EPSILON) == false) {
     Vert *close_p_pt = new Vert(close_pt);
-    perimeter_list.push_back(*close_p_pt);
+    offset_vert_list.push_back(*close_p_pt);
   }
 
-  return Polyline(perimeter_list);
+  return Polyline(offset_vert_list);
 }
 
 } /* namespace blender::polyclip */
