@@ -4979,29 +4979,44 @@ static int gpencil_stroke_offset_exec(bContext *C, wmOperator *op)
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = (bGPdata *)ob->data;
   const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
+  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
   /* sanity checks */
   if (ELEM(NULL, gpd)) {
     return OPERATOR_CANCELLED;
   }
 
-  /* Go through each editable selected stroke */
-  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (gps->flag & GP_STROKE_SELECT) {
-      bGPDstroke *offset_stroke = BKE_gpencil_stroke_offset(gpd, gpl, gps, subdivisions);
+  /* Loop over all frames and strokes */
+  CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
+    bGPDframe *init_gpf = (is_multiedit) ? gpl->frames.first : gpl->actframe;
 
-      if (offset_stroke == NULL) {
-        continue;
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && (is_multiedit))) {
+
+        if (gpf == NULL) {
+          continue;
+        }
+
+        /* Loop backwards so we can add new strokes to the end */
+        LISTBASE_FOREACH_BACKWARD_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
+          if (gps->flag & GP_STROKE_SELECT) {
+            bGPDstroke *offset_stroke = BKE_gpencil_stroke_offset(gpd, gpl, gps, subdivisions);
+
+            if (offset_stroke == NULL) {
+              continue;
+            }
+
+            /* remove first stroke */
+            BLI_remlink(&gpf->strokes, gps);
+            BKE_gpencil_free_stroke(gps);
+
+            BLI_addtail(&gpf->strokes, offset_stroke);
+          }
+        }
       }
-
-      /* remove first stroke */
-      BLI_remlink(&gpf_->strokes, gps);
-      BKE_gpencil_free_stroke(gps);
-
-      BLI_addtail(&gpf_->strokes, offset_stroke);
     }
   }
-  GP_EDITABLE_STROKES_END(gpstroke_iter);
+  CTX_DATA_END;
 
   /* notifiers */
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
