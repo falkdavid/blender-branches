@@ -2620,7 +2620,7 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
                                       bGPDstroke *gps,
                                       uint subdivisions)
 {
-#define POINT_DIM 4
+#define POINT_DIM 3
   if (gps->totpoints < 1) {
     return NULL;
   }
@@ -2632,7 +2632,7 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
   double *stroke_points = MEM_callocN(sizeof(double) * POINT_DIM * num_points, __func__);
   for (uint i = 0; i < num_points; i++) {
     bGPDspoint *pt = &gps->points[i];
-    copy_v3db_v3fl(&stroke_points[i * POINT_DIM], &pt->x);
+    copy_v2db_v2fl(&stroke_points[i * POINT_DIM], &pt->x);
     stroke_points[i * POINT_DIM + (POINT_DIM - 1)] = (double)pt->pressure;
   }
 
@@ -2657,16 +2657,17 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
 
   for (uint i = 0; i < r_num_perimeter_stroke_points; i++) {
     bGPDspoint *pt = &perimeter_stroke->points[i];
-    copy_v3fl_v3db(&pt->x, &r_perimeter_stroke_points[i * (POINT_DIM - 1)]);
+    copy_v2fl_v2db(&pt->x, &r_perimeter_stroke_points[i * (POINT_DIM - 1)]);
+    pt->z = 0.0f;
 
-    /* Set pressure to zero and strength to one */
+    /* Set pressure to zero and strength to one. */
     pt->pressure = 0.0f;
     pt->strength = 1.0f;
     pt->flag |= GP_SPOINT_SELECT;
   }
   perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
 
-  /* Project stroke to view plane. */
+  /* TODO: Project stroke to (view) plane. */
 
   BKE_gpencil_stroke_geometry_update(perimeter_stroke);
 

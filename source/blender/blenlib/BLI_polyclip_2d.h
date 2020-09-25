@@ -18,6 +18,15 @@
  * \ingroup bli
  */
 
+/**
+ * Generates the offset of a polyline by taking the radius of each vertex into account.
+ * \param verts: The input vertices. Expected to be a flat 3d array with x,y and the radius.
+ * \param num_verts: The number of vertices.
+ * \param radius: The radius of the polyline. Every vertex radius is a factor of this radius.
+ * \param subdivisions: The number of subdivisions along the end caps and corners (n / 180deg).
+ * \param r_offset_verts: Returning array of offset points. This will be a flat 2d array with x and y.
+ * \param r_num_offset_verts: Number of returning vertices.
+ */
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
                          const double radius,

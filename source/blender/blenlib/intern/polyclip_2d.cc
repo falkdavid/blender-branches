@@ -334,10 +334,6 @@ Polyline polyline_offset(Polyline &pline,
 /* Wrapper for C. */
 extern "C" {
 
-/**
- * \param verts:
- *
- */
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
                          const double radius,
@@ -351,8 +347,8 @@ void BLI_polyline_offset(const double *verts,
 
   /* Fill pline with data from verts */
   for (uint i = 0; i < num_verts; i++) {
-    blender::double3 co = blender::double3(verts[i * 4], verts[i * 4 + 1], verts[i * 4 + 2]);
-    double radius = verts[i * 4 + 3];
+    blender::double2 co = blender::double2(verts[i * 3], verts[i * 3 + 1]);
+    double radius = verts[i * 3 + 2];
     pline.verts.push_back(blender::polyclip::Vert(co, radius));
   }
   pline.num_verts = num_verts;
@@ -370,7 +366,7 @@ void BLI_polyline_offset(const double *verts,
   blender::polyclip::VertList::iterator it = offset_pline.verts.begin();
   for (uint i = 0; i < num_offset_verts; i++, it++) {
     blender::polyclip::Vert vert = *it;
-    copy_v3_v3_db(&offset_verts[i * 3], vert.co);
+    copy_v2_v2_db(&offset_verts[i * 2], blender::double2(vert.co));
   }
 
   *r_offset_verts = offset_verts;
