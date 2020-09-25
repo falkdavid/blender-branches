@@ -4969,3 +4969,65 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Offset stroke
+ * \{ */
+
+static int gpencil_stroke_offset_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = CTX_data_active_object(C);
+  bGPdata *gpd = (bGPdata *)ob->data;
+  const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
+
+  /* sanity checks */
+  if (ELEM(NULL, gpd)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Go through each editable selected stroke */
+  GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
+    if (gps->flag & GP_STROKE_SELECT) {
+      bGPDstroke *offset_stroke = BKE_gpencil_stroke_offset(gpd, gpl, gps, subdivisions);
+
+      if (offset_stroke == NULL) {
+        continue;
+      }
+
+      /* remove first stroke */
+      BLI_remlink(&gpf_->strokes, gps);
+      BKE_gpencil_free_stroke(gps);
+
+      BLI_addtail(&gpf_->strokes, offset_stroke);
+    }
+  }
+  GP_EDITABLE_STROKES_END(gpstroke_iter);
+
+  /* notifiers */
+  DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+
+  return OPERATOR_FINISHED;
+}
+
+void GPENCIL_OT_stroke_offset(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  /* identifiers */
+  ot->name = "Offset stroke";
+  ot->idname = "GPENCIL_OT_stroke_offset";
+  ot->description = "Offsets the stroke and deletes the old one";
+
+  /* api callbacks */
+  ot->exec = gpencil_stroke_offset_exec;
+  ot->poll = gpencil_active_layer_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  prop = RNA_def_int(ot->srna, "subdivisions", 4, 0, 100, "Subdivisions", "", 0, 50);
+}
+
+/** \} */
