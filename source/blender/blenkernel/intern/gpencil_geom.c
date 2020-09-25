@@ -2613,12 +2613,12 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
 }
 
 /**
- * Offsets a stroke and returns it's perimeter as a stroke projected to the view.
+ *
  */
-bGPDstroke *BKE_gpencil_stroke_to_perimeter(bGPdata *gpd,
-                                            bGPDlayer *gpl,
-                                            bGPDstroke *gps,
-                                            uint subdivisions)
+bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
+                                      bGPDlayer *gpl,
+                                      bGPDstroke *gps,
+                                      uint subdivisions)
 {
 #define POINT_DIM 4
   if (gps->totpoints < 1) {
@@ -2629,7 +2629,7 @@ bGPDstroke *BKE_gpencil_stroke_to_perimeter(bGPdata *gpd,
   double defaultpixsize = 1000.0 / (double)gpd->pixfactor;
   double stroke_radius = ((double)(gps->thickness + gpl->line_change) / defaultpixsize) / 2.0;
 
-  double *stroke_points = MEM_callocN(sizeof(double) * POINT_DIM, __func__);
+  double *stroke_points = MEM_callocN(sizeof(double) * POINT_DIM * num_points, __func__);
   for (uint i = 0; i < num_points; i++) {
     bGPDspoint *pt = &gps->points[i];
     copy_v3db_v3fl(&stroke_points[i * POINT_DIM], &pt->x);
@@ -2657,7 +2657,7 @@ bGPDstroke *BKE_gpencil_stroke_to_perimeter(bGPdata *gpd,
 
   for (uint i = 0; i < r_num_perimeter_stroke_points; i++) {
     bGPDspoint *pt = &perimeter_stroke->points[i];
-    copy_v3fl_v3db(&pt->x, &r_perimeter_stroke_points[i * POINT_DIM]);
+    copy_v3fl_v3db(&pt->x, &r_perimeter_stroke_points[i * (POINT_DIM - 1)]);
 
     /* Set pressure to zero and strength to one */
     pt->pressure = 0.0f;
@@ -2671,7 +2671,7 @@ bGPDstroke *BKE_gpencil_stroke_to_perimeter(bGPdata *gpd,
   BKE_gpencil_stroke_geometry_update(perimeter_stroke);
 
   MEM_freeN(stroke_points);
-  MEM_freeN(r_perimeter_stroke_points);
+  MEM_SAFE_FREE(r_perimeter_stroke_points);
 
   return perimeter_stroke;
 #undef POINT_DIM
