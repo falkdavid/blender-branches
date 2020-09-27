@@ -194,12 +194,20 @@ struct double2 {
 
   struct isect_result {
     enum {
+      /* Segments are colinear. */
       LINE_LINE_COLINEAR = -1,
+      /* Segments do not intersect. */
       LINE_LINE_NONE = 0,
+      /* Segments intersect at the ends. */
       LINE_LINE_EXACT = 1,
+      /* Segments intersect at a single point and not the ends. */
       LINE_LINE_CROSS = 2,
     } kind;
+    /* Factor of intersection of the first segment where 0.0 is the start and 1.0 the end of the
+     * segment. */
     double lambda;
+    /* Factor of intersection of the second segment where 0.0 is the start and 1.0 the end of the
+     * segment. */
     double mu;
   };
 
