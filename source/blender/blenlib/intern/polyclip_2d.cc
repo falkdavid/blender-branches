@@ -35,6 +35,10 @@ extern "C" {
 #define CUT_OFF_ANGLE 0.0001
 namespace blender::polyclip {
 
+/* -------------------------------------------------------------------- */
+/** \name Polyline offsetting
+ * \{ */
+
 static void generate_arc_from_point_to_point(VertList &list,
                                              VertList::iterator &it_from,
                                              VertList::iterator &it_to,
@@ -141,7 +145,7 @@ Polyline polyline_offset(Polyline &pline,
                          CapType end_cap_t)
 {
   /* sanity check */
-  if (pline.num_verts < 1) {
+  if (pline.verts.size() < 1) {
     return Polyline();
   }
 
@@ -155,7 +159,7 @@ Polyline polyline_offset(Polyline &pline,
 
   Vert first_next;
   Vert last_prev;
-  if (pline.num_verts > 1) {
+  if (pline.verts.size() > 1) {
     first_next = *std::next(pline.verts.begin(), 1);
     last_prev = *std::prev(pline.verts.end(), 2);
   }
@@ -170,7 +174,7 @@ Polyline polyline_offset(Polyline &pline,
   double2 last_prev_pt = double2(last_prev.co);
 
   /* edgecase if single point */
-  if (pline.num_verts == 1) {
+  if (pline.verts.size() == 1) {
     first_next_pt.x += 1.0;
     last_prev_pt.x -= 1.0;
   }
@@ -181,7 +185,7 @@ Polyline polyline_offset(Polyline &pline,
 
   /* generate perimeter points  */
   auto it = std::next(pline.verts.begin());
-  for (uint i = 1; i < pline.num_verts - 1; ++i, ++it) {
+  for (uint i = 1; i < pline.verts.size() - 1; ++i, ++it) {
     Vert curr = *it;
     Vert prev = *std::prev(it);
     Vert next = *std::next(it);
@@ -329,6 +333,8 @@ Polyline polyline_offset(Polyline &pline,
   return Polyline(offset_vert_list);
 }
 
+/* \} */
+
 } /* namespace blender::polyclip */
 
 /* Wrapper for C. */
@@ -351,7 +357,6 @@ void BLI_polyline_offset(const double *verts,
     double radius = verts[i * 3 + 2];
     pline.verts.push_back(blender::polyclip::Vert(co, radius));
   }
-  pline.num_verts = num_verts;
 
   blender::polyclip::Polyline offset_pline = polyline_offset(
       pline,
@@ -360,7 +365,7 @@ void BLI_polyline_offset(const double *verts,
       static_cast<blender::polyclip::CapType>(start_cap_t),
       static_cast<blender::polyclip::CapType>(end_cap_t));
 
-  uint num_offset_verts = offset_pline.num_verts;
+  uint num_offset_verts = offset_pline.verts.size();
   double *offset_verts = (double *)MEM_callocN(sizeof(double) * num_offset_verts * 3, __func__);
 
   blender::polyclip::VertList::iterator it = offset_pline.verts.begin();

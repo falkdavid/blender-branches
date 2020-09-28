@@ -33,42 +33,49 @@ enum CapType {
   CAP_MAX,
 };
 
+enum ClipType {
+  CT_INTERSECTION,
+  CT_UNION,
+  CT_DIFFERENCE,
+  CT_EXCLUSIVEOR
+};
+
+enum FillType {
+  FT_EVEN_ODD,
+  FT_NON_ZERO
+};
+
 struct Vert {
-  double3 co;
+  double2 co;
   double radius;
 
   Vert() = default;
 
-  Vert(double3 co, double radius = 0) : co(co), radius(radius)
+  Vert(double2 co, double radius = 0) : co(co), radius(radius)
   {
   }
 
-  Vert(double2 co, double radius = 0) : co(co.x, co.y, 0), radius(radius)
-  {
-  }
-
-  Vert(double x, double y, double z, double radius = 0) : co(x, y, z), radius(radius)
+  Vert(double x, double y, double radius = 0) : co(x, y), radius(radius)
   {
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const Vert &v)
   {
-    stream << "(" << v.co.x << ", " << v.co.y << ", " << v.co.z << ")";
+    stream << "(" << v.co.x << ", " << v.co.y << ")";
     return stream;
   }
 };
 
 typedef std::list<Vert> VertList;
+typedef std::list<double2> PointList;
 
 struct Polyline {
   VertList verts;
-  uint64_t num_verts;
-
+  
   Polyline() = default;
 
   Polyline(VertList &verts) : verts(verts)
   {
-    num_verts = verts.size();
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const Polyline &v)
