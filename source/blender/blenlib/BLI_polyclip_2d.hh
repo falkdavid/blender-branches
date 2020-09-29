@@ -71,10 +71,11 @@ typedef std::list<double2> PointList;
 
 struct Polyline {
   VertList verts;
+  bool is_closed;
   
   Polyline() = default;
 
-  Polyline(VertList &verts) : verts(verts)
+  Polyline(VertList &verts, bool is_closed = false) : verts(verts), is_closed(is_closed)
   {
   }
 
@@ -90,12 +91,6 @@ struct Polyline {
 };
 
 typedef std::list<Polyline> Polylines;
-
-struct Path : Polyline {
-  bool isClosed;
-};
-
-typedef std::list<Path> Paths;
 
 struct Polygon {
   Polyline contour;
