@@ -146,7 +146,7 @@ bool RNA_property_copy(
   PropertyRNA *prop_src = prop;
 
   /* Ensure we get real property data,
-   * be it an actual RNA property, or an IDProperty in disguise. */
+   * be it an actual RNA property, or an #IDProperty in disguise. */
   prop_dst = rna_ensure_property_realdata(&prop_dst, ptr);
   prop_src = rna_ensure_property_realdata(&prop_src, fromptr);
 
@@ -886,9 +886,11 @@ static void rna_property_override_apply_ex(Main *bmain,
     if (!do_insert != !ELEM(opop->operation,
                             IDOVERRIDE_LIBRARY_OP_INSERT_AFTER,
                             IDOVERRIDE_LIBRARY_OP_INSERT_BEFORE)) {
+#ifndef NDEBUG
       if (!do_insert) {
         printf("Skipping insert override operations in first pass (%s)!\n", op->rna_path);
       }
+#endif
       continue;
     }
 
@@ -914,10 +916,10 @@ static void rna_property_override_apply_ex(Main *bmain,
           /* This is rather fragile, but the fact that local override IDs may have a different name
            * than their linked reference makes it necessary.
            * Basically, here we are considering that if we cannot find the original linked ID in
-           * the local override we are (re-)applying the operations, then it may be because soe of
+           * the local override we are (re-)applying the operations, then it may be because of
            * those operations have already been applied, and we may already have the local ID
            * pointer we want to set.
-           * This happens e.g. during resync of an override, since we have already remapped all ID
+           * This happens e.g. during re-sync of an override, since we have already remapped all ID
            * pointers to their expected values.
            * In that case we simply try to get the property from the local expected name. */
         }
@@ -972,18 +974,22 @@ static void rna_property_override_apply_ex(Main *bmain,
       ptr_item_src = &private_ptr_item_src;
       ptr_item_storage = &private_ptr_item_storage;
 
+#ifndef NDEBUG
       if (ptr_item_dst->type == NULL) {
-        printf("Failed to find destination sub-item '%s' of '%s' in new override data '%s'\n",
+        printf("Failed to find destination sub-item '%s' (%d) of '%s' in new override data '%s'\n",
                opop->subitem_reference_name,
+               opop->subitem_reference_index,
                op->rna_path,
                ptr_dst->owner_id->name);
       }
       if (ptr_item_src->type == NULL) {
-        printf("Failed to find source sub-item '%s' of '%s' in old override data '%s'\n",
+        printf("Failed to find source sub-item '%s' (%d) of '%s' in old override data '%s'\n",
                opop->subitem_local_name,
+               opop->subitem_local_index,
                op->rna_path,
                ptr_src->owner_id->name);
       }
+#endif
     }
 
     if (!rna_property_override_operation_apply(bmain,
