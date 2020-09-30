@@ -8,14 +8,37 @@
 
 namespace blender::polyclip::tests {
 
-TEST(polyclip2d, triple_linked_list)
+TEST(polyclip2d, clip_path01)
 {
-  TripleLinkedList<double2> list;
-  // list.insert_back({1.0, 1.0});
-  // list.insert_back({2.0, 2.0});
-  // list.insert_back({3.0, 3.0});
+  ClipPath list;
+  double2 A = {1.0, 2.0};
+  double2 B = {2.0, 3.0};
+  double2 C = {3.0, 4.0};
 
-  std::cout << list;
+  auto *node_A = list.insert_back(A);
+  auto *node_B = list.insert_back(B);
+  auto *node_C = list.insert_back(C);
+  // std::cout << list;
+
+  EXPECT_EQ(list.size(), 3);
+  EXPECT_EQ(node_A->data, A);
+  EXPECT_EQ(node_B->data, B);
+  EXPECT_EQ(node_C->data, C);
+
+  list.remove(node_A);
+  // std::cout << list;
+
+  EXPECT_EQ(list.size(), 2);
+  EXPECT_EQ(list.front(), node_B);
+}
+
+TEST(polyclip2d, clip_path02)
+{
+  PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
+  ClipPath list = ClipPath(plist);
+  // std::cout << list;
+
+  EXPECT_EQ(list.size(), 3);
 }
 
 static bool compare_vertlists(const VertList &a, const VertList &b, double limit)

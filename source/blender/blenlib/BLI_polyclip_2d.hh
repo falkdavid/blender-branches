@@ -88,23 +88,24 @@ struct Polygon {
   Polylines holes;
 };
 
-template<typename T> struct TLNode {
-  T data;
-  TLNode<T> *next;
-  TLNode<T> *prev;
-  TLNode<T> *link;
-
-  TLNode() = default;
-  TLNode(const T &data) : data(data), next(nullptr), prev(nullptr), link(nullptr)
-  {
-  }
-};
-
 template<typename T> class TripleLinkedList {
  private:
   uint size_;
-  TLNode<T> *head;
-  TLNode<T> *tail;
+
+  struct Node {
+    T data;
+    Node *next;
+    Node *prev;
+    Node *link;
+
+    Node() = default;
+    Node(const T &data) : data(data), next(nullptr), prev(nullptr), link(nullptr)
+    {
+    }
+  };
+
+  Node *head;
+  Node *tail;
 
  public:
   TripleLinkedList()
@@ -120,10 +121,10 @@ template<typename T> class TripleLinkedList {
   class Iterator {
    private:
     uint idx_;
-    TLNode<T> *current_;
+    Node *current_;
 
    public:
-    Iterator(TLNode<T> *current) : current_(current)
+    Iterator(Node *current) : current_(current)
     {
     }
 
@@ -140,36 +141,44 @@ template<typename T> class TripleLinkedList {
       return iterator;
     }
 
+    Iterator &operator--()
+    {
+      current_ = current_->prev;
+      return *this;
+    }
+
+    Iterator operator--(int)
+    {
+      Iterator iterator = *this;
+      --*this;
+      return iterator;
+    }
+
     bool operator!=(const Iterator &iterator) const
     {
       return current_ != iterator.current_;
     }
 
-    TLNode<T> *operator*() const
+    Node *operator*() const
     {
       return current_;
-    }
-
-    T operator->() const
-    {
-      return current_->data;
     }
   };
 
   uint size()
   {
     return size_;
-  };
+  }
 
-  TLNode<T> *front()
+  Node *front()
   {
     return head;
-  };
+  }
 
-  TLNode<T> *back()
+  Node *back()
   {
     return tail;
-  };
+  }
 
   Iterator begin() const
   {
@@ -183,23 +192,24 @@ template<typename T> class TripleLinkedList {
 
   friend std::ostream &operator<<(std::ostream &stream, const TripleLinkedList<T> &l)
   {
+    stream << "[";
     for (auto elem : l) {
-      stream << elem << ", ";
+      stream << elem->data << ", ";
     }
-    stream << "\n";
+    stream << "]\n";
     return stream;
   }
 
-  TLNode<T> *search(const T &data);
-  TLNode<T> *insert_front(const T &data);
-  TLNode<T> *insert_back(const T &data);
-  TLNode<T> *insert_after(TLNode<T> *insert_node, const T &data);
-  TLNode<T> *insert_before(TLNode<T> *insert_node, const T &data);
-  void link(TLNode<T> *nodeA, TLNode<T> *nodeB);
-  void remove(TLNode<T> *node);
+  Node *search(const T &data);
+  Node *insert_front(const T &data);
+  Node *insert_back(const T &data);
+  Node *insert_after(Node *insert_node, const T &data);
+  Node *insert_before(Node *insert_node, const T &data);
+  void link(Node *nodeA, Node *nodeB);
+  void remove(Node *node);
 };
 
-// typedef TripleLinkedList<double2> ClipPath;
+typedef TripleLinkedList<double2> ClipPath;
 
 Polyline polyline_offset(Polyline &pline,
                          const uint subdivisions,
