@@ -33,13 +33,167 @@ extern "C" {
 
 #define MIN_MITER_LENGTH 0.0001
 #define CUT_OFF_ANGLE 0.0001
+
 namespace blender::polyclip {
+
+template<typename T> TripleLinkedList<T>::TripleLinkedList(const std::list<T> &list)
+{
+  for (auto elem : list) {
+    insert_back(elem);
+  }
+}
+
+template<typename T> TripleLinkedList<T>::~TripleLinkedList()
+{
+  TLNode<T> *node, *next_node;
+  for (node = this->head; node != nullptr; node = next_node) {
+    next_node = node->next;
+    remove(node);
+  }
+}
+
+/**
+ * Linear search for data in the list.
+ * \param data: Data to search for.
+ * \returns: Pointer to the TLNode or `nullptr` if the data was not found.
+ */
+template<typename T> TLNode<T> *TripleLinkedList<T>::search(const T &data)
+{
+  TLNode<T> *node;
+  for (node = this->head; node != nullptr; node = node->next) {
+    if (node->data == data) {
+      break;
+    }
+  }
+
+  return node;
+}
+
+/**
+ * Inserts data after "insert_node".
+ * \param insert_node: Pointer to the node to insert the data after.
+ * \param data: The data to insert.
+ * \returns: Pointer to the inserted node.
+ */
+template<typename T>
+TLNode<T> *TripleLinkedList<T>::insert_after(TLNode<T> *insert_node, const T &data)
+{
+  BLI_assert(insert_node != nullptr);
+  TLNode<T> *node = new TLNode<T>(data);
+  node->prev = insert_node;
+  if (insert_node->next == nullptr) {
+    this->tail = node;
+  }
+  else {
+    node->next = insert_node->next;
+    insert_node->next->prev = node;
+  }
+  insert_node->next = node;
+
+  this->size_++;
+  return node;
+}
+
+/**
+ * Inserts data before "insert_node".
+ * \param insert_node: Pointer to the node to insert the data before.
+ * \param data: The data to insert.
+ * \returns: Pointer to the inserted node.
+ */
+template<typename T>
+TLNode<T> *TripleLinkedList<T>::insert_before(TLNode<T> *insert_node, const T &data)
+{
+  BLI_assert(insert_node != nullptr);
+  TLNode<T> *node = new TLNode<T>(data);
+  node->next = insert_node;
+  if (insert_node->prev == nullptr) {
+    this->head = node;
+  }
+  else {
+    node->prev = insert_node->prev;
+    insert_node->prev->next = node;
+  }
+  insert_node->prev = node;
+
+  this->size_++;
+  return node;
+}
+
+/**
+ * Inserts data at the beginning of the list.
+ * \param data: The data to insert.
+ * \returns: Pointer to the inserted node.
+ */
+template<typename T> TLNode<T> *TripleLinkedList<T>::insert_front(const T &data)
+{
+  if (this->head == nullptr) {
+    TLNode<T> *node = new TLNode<T>(data);
+    this->head = node;
+    this->tail = node;
+    this->size_++;
+    return node;
+  }
+  return insert_before(this->head, data);
+}
+
+/**
+ * Inserts data at the end of the list.
+ * \param data: The data to insert.
+ * \returns: Pointer to the inserted node.
+ */
+template<typename T> TLNode<T> *TripleLinkedList<T>::insert_back(const T &data)
+{
+  if (this->tail == nullptr) {
+    TLNode<T> *node = new TLNode<T>(data);
+    this->head = node;
+    this->tail = node;
+    this->size_++;
+    return node;
+  }
+  return insert_after(this->tail, data);
+}
+
+/**
+ * Links the two nodes together.
+ * \param nodeA: First node.
+ * \param nodeB: Second node.
+ */
+template<typename T> void TripleLinkedList<T>::link(TLNode<T> *nodeA, TLNode<T> *nodeB)
+{
+  if (nodeA == nullptr || nodeB == nullptr) {
+    return;
+  }
+
+  nodeA->link = nodeB;
+  nodeB->link = nodeA;
+}
+
+template<typename T> void TripleLinkedList<T>::remove(TLNode<T> *node)
+{
+  if (node == nullptr) {
+    return;
+  }
+
+  if (node->prev == nullptr) {
+    this->head = node->next;
+  }
+  else {
+    node->prev->next = node->next;
+  }
+  if (node->next == nullptr) {
+    this->tail = node->prev;
+  }
+  else {
+    node->next->prev = node->prev;
+  }
+
+  delete node;
+  this->size_--;
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Polyline clipping
  * \{ */
-
-
 
 /* \} */
 
