@@ -227,7 +227,7 @@ void ED_node_set_active_viewer_key(SpaceNode *snode)
   }
 }
 
-void snode_group_offset(SpaceNode *snode, float *x, float *y)
+void space_node_group_offset(SpaceNode *snode, float *x, float *y)
 {
   bNodeTreePath *path = snode->treepath.last;
 
@@ -627,7 +627,7 @@ static void node_main_region_init(wmWindowManager *wm, ARegion *region)
 
 static void node_main_region_draw(const bContext *C, ARegion *region)
 {
-  drawnodespace(C, region);
+  node_draw_space(C, region);
 }
 
 /* ************* dropboxes ************* */
