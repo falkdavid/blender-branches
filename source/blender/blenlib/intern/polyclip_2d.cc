@@ -40,7 +40,10 @@ namespace blender::polyclip {
 /** \name TripleLinkedList implementation
  * \{ */
 
-template<typename T> TripleLinkedList<T>::TripleLinkedList(const std::list<T> &list)
+/**
+ * Create a LinkedChain from a std::list.
+ */
+template<typename T> LinkedChain<T>::LinkedChain(const std::list<T> &list)
 {
   this->head = nullptr;
   this->tail = nullptr;
@@ -51,7 +54,7 @@ template<typename T> TripleLinkedList<T>::TripleLinkedList(const std::list<T> &l
   }
 }
 
-template<typename T> TripleLinkedList<T>::~TripleLinkedList()
+template<typename T> LinkedChain<T>::~LinkedChain()
 {
   Node *node, *next_node;
   for (node = this->head; node != nullptr; node = next_node) {
@@ -65,7 +68,7 @@ template<typename T> TripleLinkedList<T>::~TripleLinkedList()
  * \param data: Data to search for.
  * \returns: Pointer to the TLNode or `nullptr` if the data was not found.
  */
-template<typename T> typename TripleLinkedList<T>::Node *TripleLinkedList<T>::search(const T &data)
+template<typename T> typename LinkedChain<T>::Node *LinkedChain<T>::search(const T &data)
 {
   Node *node;
   for (node = this->head; node != nullptr; node = node->next) {
@@ -84,7 +87,7 @@ template<typename T> typename TripleLinkedList<T>::Node *TripleLinkedList<T>::se
  * \returns: Pointer to the inserted node.
  */
 template<typename T>
-typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_after(Node *insert_node,
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_after(Node *insert_node,
                                                                       const T &data)
 {
   BLI_assert(insert_node != nullptr);
@@ -110,7 +113,7 @@ typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_after(Node *inse
  * \returns: Pointer to the inserted node.
  */
 template<typename T>
-typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_before(Node *insert_node,
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_before(Node *insert_node,
                                                                        const T &data)
 {
   BLI_assert(insert_node != nullptr);
@@ -135,7 +138,7 @@ typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_before(Node *ins
  * \returns: Pointer to the inserted node.
  */
 template<typename T>
-typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_front(const T &data)
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_front(const T &data)
 {
   if (this->head == nullptr) {
     Node *node = new Node(data);
@@ -153,7 +156,7 @@ typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_front(const T &d
  * \returns: Pointer to the inserted node.
  */
 template<typename T>
-typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_back(const T &data)
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_back(const T &data)
 {
   if (this->tail == nullptr) {
     Node *node = new Node(data);
@@ -170,7 +173,7 @@ typename TripleLinkedList<T>::Node *TripleLinkedList<T>::insert_back(const T &da
  * \param nodeA: First node.
  * \param nodeB: Second node.
  */
-template<typename T> void TripleLinkedList<T>::link(Node *nodeA, Node *nodeB)
+template<typename T> void LinkedChain<T>::link(Node *nodeA, Node *nodeB)
 {
   if (nodeA == nullptr || nodeB == nullptr) {
     return;
@@ -180,7 +183,7 @@ template<typename T> void TripleLinkedList<T>::link(Node *nodeA, Node *nodeB)
   nodeB->link = nodeA;
 }
 
-template<typename T> void TripleLinkedList<T>::remove(Node *node)
+template<typename T> void LinkedChain<T>::remove(Node *node)
 {
   if (node == nullptr) {
     return;
@@ -203,7 +206,7 @@ template<typename T> void TripleLinkedList<T>::remove(Node *node)
   this->size_--;
 }
 
-template class TripleLinkedList<double2>;
+template class LinkedChain<double2>;
 /* \} */
 
 /* -------------------------------------------------------------------- */

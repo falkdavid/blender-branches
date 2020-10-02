@@ -8,7 +8,7 @@
 
 namespace blender::polyclip::tests {
 
-TEST(polyclip2d, clip_path01)
+TEST(polyclip2d, clip_path_insert)
 {
   ClipPath list;
   double2 A = {1.0, 2.0};
@@ -32,13 +32,46 @@ TEST(polyclip2d, clip_path01)
   EXPECT_EQ(list.front(), node_B);
 }
 
-TEST(polyclip2d, clip_path02)
+TEST(polyclip2d, clip_path_from_list)
 {
   PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
   ClipPath list = ClipPath(plist);
   // std::cout << list;
 
   EXPECT_EQ(list.size(), 3);
+}
+
+TEST(polyclip2d, clip_path_search)
+{
+  double2 A = {1.0, 2.0};
+  double2 B = {2.0, 3.0};
+  double2 C = {3.0, 4.0};
+  PointList plist = {A, B, C};
+  ClipPath list = ClipPath(plist);
+  // std::cout << list;
+
+  auto node_A = list.search(A);
+  EXPECT_EQ(node_A->data, A);
+
+  auto node_B = list.search(B);
+  EXPECT_EQ(node_B->data, B);
+
+  auto node_C = list.search(C);
+  EXPECT_EQ(node_C->data, C);
+}
+
+TEST(polyclip2d, clip_path_pair_iterate)
+{
+  PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
+  ClipPath list = ClipPath(plist);
+
+  auto list_it = plist.begin();
+  for (auto it = list.begin_pair(); it != list.end_pair(); ++it) {
+    auto edge = *it;
+    // std::cout << edge.first->data << edge.second->data << "\n";
+    EXPECT_EQ(edge.first->data, *list_it);
+    ++list_it;
+  }
 }
 
 static bool compare_vertlists(const VertList &a, const VertList &b, double limit)
@@ -62,8 +95,8 @@ TEST(polyclip2d, offset_polyline_simple01)
   VertList expected_verts = {{1, 1}, {2, 0}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}, {0.00999999, 1}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 0, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
-  std::cout << out << "\n";
+  Polyline out = polyline_offset(pline, 1, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
+  // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
   EXPECT_TRUE(compare_vertlists(out.verts, expected_verts, FLT_EPSILON));
@@ -76,7 +109,7 @@ TEST(polyclip2d, offset_polyline_simple02)
   Polyline pline = Polyline(verts);
 
   Polyline out = polyline_offset(pline, 0, 1.0, CapType::CAP_FLAT, CapType::CAP_FLAT);
-  std::cout << out << "\n";
+  // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
   EXPECT_TRUE(compare_vertlists(out.verts, expected_verts, FLT_EPSILON));
@@ -89,7 +122,7 @@ TEST(polyclip2d, offset_polyline_simple03)
       {1, 1}, {2, 1}, {3, 0}, {2, -1}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}, {0.00999999, 1}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 0, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
+  Polyline out = polyline_offset(pline, 1, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
   std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
@@ -101,10 +134,10 @@ TEST(polyclip2d, offset_polyline_simple04)
   VertList verts = {{0, 0, 1.0}, {2, 0, 1.0}, {2, 2, 1.0}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 0, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
+  Polyline out = polyline_offset(pline, 1, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
   std::cout << out << "\n";
 
-  // EXPECT_EQ(out.verts.size(), 11);
+  EXPECT_EQ(out.verts.size(), 11);
 }
 
 }  // namespace blender::polyclip::tests
