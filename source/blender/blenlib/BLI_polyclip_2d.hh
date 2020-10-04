@@ -37,8 +37,16 @@ enum ClipType { CT_INTERSECTION, CT_UNION, CT_DIFFERENCE, CT_EXCLUSIVEOR };
 enum FillType { FT_EVEN_ODD, FT_NON_ZERO };
 
 template<typename T> class LinkedChain {
- private:
-  uint size_;
+ public:
+  LinkedChain()
+  {
+    size_ = 0;
+    head = nullptr;
+    tail = nullptr;
+  }
+
+  LinkedChain(const std::list<T> &list);
+  ~LinkedChain();
 
   struct Node {
     T data;
@@ -52,20 +60,6 @@ template<typename T> class LinkedChain {
     }
   };
 
-  Node *head;
-  Node *tail;
-
- public:
-  LinkedChain()
-  {
-    size_ = 0;
-    head = nullptr;
-    tail = nullptr;
-  }
-
-  LinkedChain(const std::list<T> &list);
-  ~LinkedChain();
-
   class Iterator {
    private:
     Node *current_;
@@ -75,8 +69,25 @@ template<typename T> class LinkedChain {
     {
     }
 
+    void switch_link()
+    {
+      BLI_assert(current_ != nullptr);
+      current_ = current_->link;
+    }
+
+    static Iterator next(const Iterator &it)
+    {
+      return Iterator(it.current_->next);
+    }
+
+    static Iterator prev(const Iterator &it)
+    {
+      return Iterator(it.current_->prev);
+    }
+
     Iterator &operator++()
     {
+      BLI_assert(current_ != nullptr);
       current_ = current_->next;
       return *this;
     }
@@ -90,6 +101,7 @@ template<typename T> class LinkedChain {
 
     Iterator &operator--()
     {
+      BLI_assert(current_ != nullptr);
       current_ = current_->prev;
       return *this;
     }
@@ -106,6 +118,11 @@ template<typename T> class LinkedChain {
       return current_ != iterator.current_;
     }
 
+    bool operator==(const Iterator &iterator) const
+    {
+      return current_ == iterator.current_;
+    }
+
     Node *operator*() const
     {
       return current_;
@@ -114,36 +131,89 @@ template<typename T> class LinkedChain {
 
   class PairIterator {
    private:
-    std::pair<Node *, Node *> node_pair;
+    std::pair<Iterator, Iterator> pair_;
 
    public:
-    PairIterator() = default;
-    PairIterator(Node *first, Node *second) : node_pair(first, second)
+    PairIterator() : pair_(nullptr, nullptr)
     {
+    }
+
+    PairIterator(Node *first, Node *second) : pair_(first, second)
+    {
+    }
+
+    PairIterator(Iterator first, Iterator second) : pair_(first, second)
+    {
+    }
+
+    static PairIterator next(const PairIterator &it)
+    {
+      return PairIterator(Iterator::next(it.pair_.first), Iterator::next(it.pair_.second));
+    }
+
+    static PairIterator prev(const PairIterator &it)
+    {
+      return PairIterator(Iterator::prev(it.pair_.first), Iterator::prev(it.pair_.second));
     }
 
     PairIterator &operator++()
     {
-      node_pair.first = node_pair.first->next;
-      node_pair.second = node_pair.second->next;
+      pair_.first++;
+      pair_.second++;
       return *this;
     }
 
-    bool operator!=(const PairIterator &iterator) const
+    bool operator!=(const PairIterator &it) const
     {
-      return node_pair.first != iterator.node_pair.first &&
-             node_pair.second != iterator.node_pair.second;
+      return pair_.first != it.pair_.first && pair_.second != it.pair_.second;
     }
 
     std::pair<Node *, Node *> operator*() const
     {
-      return node_pair;
+      return std::pair(*pair_.first, *pair_.second);
+    }
+
+    PairIterator &incr_first()
+    {
+      pair_.first++;
+      return *this;
+    }
+
+    PairIterator &incr_second()
+    {
+      pair_.second++;
+      return *this;
+    }
+
+    void set_first(Node *node)
+    {
+      pair_.first = Iterator(node);
+    }
+
+    void set_second(Node *node)
+    {
+      pair_.second = Iterator(node);
+    }
+
+    void set_first(Iterator &it)
+    {
+      pair_.first = Iterator(it);
+    }
+
+    void set_second(Iterator &it)
+    {
+      pair_.second = Iterator(it);
     }
   };
 
   uint size()
   {
     return size_;
+  }
+
+  bool empty()
+  {
+    return size_ == 0;
   }
 
   Node *front()
@@ -199,6 +269,14 @@ template<typename T> class LinkedChain {
   Node *insert_before(Node *insert_node, const T &data);
   void link(Node *nodeA, Node *nodeB);
   void remove(Node *node);
+  void link_ends();
+  void unlink_ends();
+
+ private:
+  uint size_;
+
+  Node *head;
+  Node *tail;
 };
 
 typedef LinkedChain<double2> ClipPath;
@@ -226,6 +304,7 @@ struct Vert {
 
 typedef std::list<Vert> VertList;
 typedef std::list<double2> PointList;
+typedef std::pair<double2, double2> Edge;
 
 struct Polyline {
   VertList verts;
@@ -254,6 +333,9 @@ struct Polygon {
   Polyline contour;
   Polylines holes;
 };
+
+ClipPath point_list_find_intersections_brute_force(const PointList &list);
+PointList clip_path_get_outer_boundary(ClipPath &path);
 
 Polyline polyline_offset(Polyline &pline,
                          const uint subdivisions,

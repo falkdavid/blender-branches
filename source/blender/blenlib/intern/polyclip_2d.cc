@@ -87,8 +87,7 @@ template<typename T> typename LinkedChain<T>::Node *LinkedChain<T>::search(const
  * \returns: Pointer to the inserted node.
  */
 template<typename T>
-typename LinkedChain<T>::Node *LinkedChain<T>::insert_after(Node *insert_node,
-                                                                      const T &data)
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_after(Node *insert_node, const T &data)
 {
   BLI_assert(insert_node != nullptr);
   Node *node = new Node(data);
@@ -113,8 +112,7 @@ typename LinkedChain<T>::Node *LinkedChain<T>::insert_after(Node *insert_node,
  * \returns: Pointer to the inserted node.
  */
 template<typename T>
-typename LinkedChain<T>::Node *LinkedChain<T>::insert_before(Node *insert_node,
-                                                                       const T &data)
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_before(Node *insert_node, const T &data)
 {
   BLI_assert(insert_node != nullptr);
   Node *node = new Node(data);
@@ -137,8 +135,7 @@ typename LinkedChain<T>::Node *LinkedChain<T>::insert_before(Node *insert_node,
  * \param data: The data to insert.
  * \returns: Pointer to the inserted node.
  */
-template<typename T>
-typename LinkedChain<T>::Node *LinkedChain<T>::insert_front(const T &data)
+template<typename T> typename LinkedChain<T>::Node *LinkedChain<T>::insert_front(const T &data)
 {
   if (this->head == nullptr) {
     Node *node = new Node(data);
@@ -155,8 +152,7 @@ typename LinkedChain<T>::Node *LinkedChain<T>::insert_front(const T &data)
  * \param data: The data to insert.
  * \returns: Pointer to the inserted node.
  */
-template<typename T>
-typename LinkedChain<T>::Node *LinkedChain<T>::insert_back(const T &data)
+template<typename T> typename LinkedChain<T>::Node *LinkedChain<T>::insert_back(const T &data)
 {
   if (this->tail == nullptr) {
     Node *node = new Node(data);
@@ -183,6 +179,10 @@ template<typename T> void LinkedChain<T>::link(Node *nodeA, Node *nodeB)
   nodeB->link = nodeA;
 }
 
+/**
+ * Removes the node from the list and deletes it.
+ * \param node: The node to be removed and deleted.
+ */
 template<typename T> void LinkedChain<T>::remove(Node *node)
 {
   if (node == nullptr) {
@@ -206,12 +206,116 @@ template<typename T> void LinkedChain<T>::remove(Node *node)
   this->size_--;
 }
 
+/**
+ * Connects first and last element of the chain togther to form a loop.
+ */
+template<typename T> void LinkedChain<T>::link_ends()
+{
+  if (size_ < 2) {
+    return;
+  }
+
+  head->prev = tail;
+  tail->next = head;
+}
+
+/**
+ * Deconnects the first and last element of the chain.
+ */
+template<typename T> void LinkedChain<T>::unlink_ends()
+{
+  if (size_ < 2) {
+    return;
+  }
+
+  head->prev = nullptr;
+  tail->next = nullptr;
+}
+
 template class LinkedChain<double2>;
 /* \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Polyline clipping
  * \{ */
+
+static Edge edge_from_node_pair(const std::pair<ClipPath::Node *, ClipPath::Node *> &node_pair)
+{
+  return Edge(node_pair.first->data, node_pair.second->data);
+}
+
+ClipPath point_list_find_intersections_brute_force(const PointList &list)
+{
+  ClipPath path = ClipPath(list);
+
+  /* Iterate over all pairs of edges (edgeA, edgeB). */
+  auto it_edgeA = path.begin_pair();
+  while (it_edgeA != path.end_pair()) {
+    auto edgeA = *it_edgeA;
+    bool found_intersection = false;
+
+    auto it_edgeB = ClipPath::PairIterator::next(it_edgeA);
+    while (it_edgeB != path.end_pair()) {
+      auto edgeB = *it_edgeB;
+      Edge A = edge_from_node_pair(edgeA);
+      Edge B = edge_from_node_pair(edgeB);
+      std::cout << "{" << A.first << ", " << A.second << "} x ";
+      std::cout << "{" << B.first << ", " << B.second << "}\n";
+
+      auto result = double2::isect_seg_seg(A.first, A.second, B.first, B.second);
+      if (result.kind == result.LINE_LINE_CROSS) {
+        double2 isect_pt = double2::interpolate(A.first, A.second, result.lambda);
+        std::cout << "Found intersection at " << isect_pt << "!\n";
+        path.insert_after(edgeA.first, isect_pt);
+        path.insert_after(edgeB.first, isect_pt);
+
+        /* Go to the next edge by skipping over the insersection points */
+        it_edgeB.set_first(edgeB.second);
+        it_edgeB.incr_second();
+
+        found_intersection = true;
+      }
+      else {
+        ++it_edgeB;
+      }
+    }
+
+    if (found_intersection) {
+      /* Go to the next edge by skipping over the insersection points */
+      it_edgeA.set_first(edgeA.second);
+      it_edgeA.incr_second();
+    }
+    else {
+      ++it_edgeA;
+    }
+  }
+
+  return path;
+}
+
+PointList clip_path_get_outer_boundary(ClipPath &path)
+{
+  PointList outer;
+
+  auto start = std::min_element(
+      path.begin(), path.end(), [](const ClipPath::Node *a, const ClipPath::Node *b) {
+        return a->data.x < b->data.x;
+      });
+  outer.push_back((*start)->data);
+
+  path.link_ends();
+  for (auto it = ClipPath::Iterator::next(start); it != start; ++it) {
+    auto vert = *it;
+    outer.push_back(vert->data);
+
+    if (vert->link != nullptr) {
+      it.switch_link();
+    }
+  }
+  path.unlink_ends();
+
+  return outer;
+}
 
 /* \} */
 
@@ -520,6 +624,52 @@ Polyline polyline_offset(Polyline &pline,
 /* Wrapper for C. */
 extern "C" {
 
+using namespace blender;
+
+void BLI_polyline_outer_boundary(const double *verts,
+                                 uint num_verts,
+                                 CLIP_METHOD method,
+                                 double **r_boundary_verts,
+                                 uint *r_num_boundary_verts)
+{
+  blender::polyclip::PointList pline;
+
+  /* Fill pline with data from verts. */
+  for (uint i = 0; i < num_verts; i++) {
+    blender::double2 co = blender::double2(verts[i * 2], verts[i * 2 + 1]);
+    pline.push_back(co);
+  }
+
+  blender::polyclip::ClipPath clip_path;
+  switch (method) {
+    case BRUTE_FORCE:
+      clip_path = blender::polyclip::point_list_find_intersections_brute_force(pline);
+      break;
+
+    default:
+      break;
+  }
+
+  blender::polyclip::PointList outer_boundary = blender::polyclip::clip_path_get_outer_boundary(clip_path);
+  uint num_boundary_vert = outer_boundary.size();
+  if (num_boundary_vert == 0) {
+    *r_boundary_verts = NULL;
+    *r_num_boundary_verts = 0;
+    return;
+  }
+
+  /* Allocate and populate returning flat array of boundary vertices. */
+  double *boundary_verts = (double *)MEM_callocN(sizeof(double) * num_boundary_vert * 3, __func__);
+  blender::polyclip::PointList::iterator it = outer_boundary.begin();
+  for (uint i = 0; i < num_boundary_vert; i++, it++) {
+    blender::double2 vert = *it;
+    copy_v2_v2_db(&boundary_verts[i * 2], vert);
+  }
+
+  *r_boundary_verts = boundary_verts;
+  *r_num_boundary_verts = num_boundary_vert;
+}
+
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
                          const double radius,
@@ -531,7 +681,7 @@ void BLI_polyline_offset(const double *verts,
 {
   blender::polyclip::Polyline pline;
 
-  /* Fill pline with data from verts */
+  /* Fill pline with data from verts. */
   for (uint i = 0; i < num_verts; i++) {
     blender::double2 co = blender::double2(verts[i * 3], verts[i * 3 + 1]);
     double radius = verts[i * 3 + 2];
@@ -546,8 +696,14 @@ void BLI_polyline_offset(const double *verts,
       static_cast<blender::polyclip::CapType>(end_cap_t));
 
   uint num_offset_verts = offset_pline.verts.size();
-  double *offset_verts = (double *)MEM_callocN(sizeof(double) * num_offset_verts * 3, __func__);
+  if (num_offset_verts == 0) {
+    *r_offset_verts = NULL;
+    *r_num_offset_verts = 0;
+    return;
+  }
 
+  /* Allocate and populate returning flat array of offset vertices. */
+  double *offset_verts = (double *)MEM_callocN(sizeof(double) * num_offset_verts * 3, __func__);
   blender::polyclip::VertList::iterator it = offset_pline.verts.begin();
   for (uint i = 0; i < num_offset_verts; i++, it++) {
     blender::polyclip::Vert vert = *it;

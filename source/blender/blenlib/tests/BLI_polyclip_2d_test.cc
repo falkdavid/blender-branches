@@ -24,12 +24,6 @@ TEST(polyclip2d, clip_path_insert)
   EXPECT_EQ(node_A->data, A);
   EXPECT_EQ(node_B->data, B);
   EXPECT_EQ(node_C->data, C);
-
-  list.remove(node_A);
-  // std::cout << list;
-
-  EXPECT_EQ(list.size(), 2);
-  EXPECT_EQ(list.front(), node_B);
 }
 
 TEST(polyclip2d, clip_path_from_list)
@@ -60,6 +54,32 @@ TEST(polyclip2d, clip_path_search)
   EXPECT_EQ(node_C->data, C);
 }
 
+TEST(polyclip2d, clip_path_remove)
+{
+  ClipPath list;
+  double2 A = {1.0, 2.0};
+  double2 B = {2.0, 3.0};
+  double2 C = {3.0, 4.0};
+
+  auto *node_A = list.insert_back(A);
+  auto *node_B = list.insert_back(B);
+  auto *node_C = list.insert_back(C);
+  // std::cout << list;
+
+  EXPECT_EQ(list.size(), 3);
+  list.remove(node_A);
+
+  EXPECT_EQ(list.size(), 2);
+  EXPECT_EQ(list.front(), node_B);
+  list.remove(node_B);
+
+  EXPECT_EQ(list.size(), 1);
+  EXPECT_EQ(list.front(), node_C);
+  list.remove(node_C);
+
+  EXPECT_TRUE(list.empty());
+}
+
 TEST(polyclip2d, clip_path_pair_iterate)
 {
   PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
@@ -72,6 +92,29 @@ TEST(polyclip2d, clip_path_pair_iterate)
     EXPECT_EQ(edge.first->data, *list_it);
     ++list_it;
   }
+}
+
+TEST(polyclip2d, clip_path_get_outer_boundary)
+{
+  PointList plist = {{1.0, 2.0}, {2.0, 1.0}, {1.0, 0.0}, {0.0, 1.0}};
+  PointList plist_expected = {{0.0, 1.0}, {1.0, 2.0}, {2.0, 1.0}, {1.0, 0.0}};
+  ClipPath path = ClipPath(plist);
+
+  PointList outer = clip_path_get_outer_boundary(path);
+  auto it_exp = plist_expected.begin();
+  for (auto pt : outer) {
+    EXPECT_EQ(pt, *it_exp);
+    it_exp++;
+  }
+}
+
+TEST(polyclip2d, clip_path_itersect_brute_force)
+{
+  PointList plist = {{0.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {1.0, 0.0}};
+  // PointList plist_expected = {{0.0, 1.0}, {1.0, 2.0}, {2.0, 1.0}, {1.0, 0.0}};
+
+  ClipPath result = point_list_find_intersections_brute_force(plist);
+  std::cout << result << "\n";
 }
 
 static bool compare_vertlists(const VertList &a, const VertList &b, double limit)
@@ -123,7 +166,7 @@ TEST(polyclip2d, offset_polyline_simple03)
   Polyline pline = Polyline(verts);
 
   Polyline out = polyline_offset(pline, 1, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
-  std::cout << out << "\n";
+  // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
   EXPECT_TRUE(compare_vertlists(out.verts, expected_verts, FLT_EPSILON));
@@ -135,7 +178,7 @@ TEST(polyclip2d, offset_polyline_simple04)
   Polyline pline = Polyline(verts);
 
   Polyline out = polyline_offset(pline, 1, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
-  std::cout << out << "\n";
+  // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), 11);
 }
