@@ -2613,7 +2613,66 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
 }
 
 /**
- *
+ * Calculates the outer boundary of the stroke.
+ */
+void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps)
+{
+#define POINT_DIM 2
+  if (gps->totpoints < 1) {
+    return;
+  }
+
+  uint num_points = (uint)gps->totpoints;
+  double *stroke_points = (double *)MEM_mallocN(sizeof(double) * POINT_DIM * num_points, __func__);
+  for (uint i = 0; i < num_points; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    copy_v2db_v2fl(&stroke_points[i * POINT_DIM], &pt->x);
+  }
+
+  double *r_boundary_stroke_points;
+  uint r_num_boundary_stroke_points;
+  BLI_polyline_outer_boundary(stroke_points,
+                              num_points,
+                              BRUTE_FORCE,
+                              &r_boundary_stroke_points,
+                              &r_num_boundary_stroke_points);
+
+  if (r_boundary_stroke_points == NULL) {
+    MEM_freeN(stroke_points);
+    return;
+  }
+
+  gps->totpoints = r_num_boundary_stroke_points;
+  gps->points = MEM_recallocN(gps->points, sizeof(*gps->points) * gps->totpoints);
+  if (gps->dvert != NULL) {
+    gps->dvert = MEM_recallocN(gps->dvert, sizeof(*gps->dvert) * gps->totpoints);
+  }
+
+  for (uint i = 0; i < gps->totpoints; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    copy_v2fl_v2db(&pt->x, &r_boundary_stroke_points[i * POINT_DIM]);
+    /* FIXME: calculate z via projection.  */
+    pt->z = 0.0f;
+
+    /* Set pressure to zero and strength to one. */
+    pt->pressure = 0.0f;
+    pt->strength = 1.0f;
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+  gps->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* TODO: Project stroke to (view) plane. */
+
+  BKE_gpencil_stroke_geometry_update(gps);
+
+  MEM_SAFE_FREE(stroke_points);
+  MEM_SAFE_FREE(r_boundary_stroke_points);
+#undef POINT_DIM
+}
+
+/**
+ * Returns the outline of a stroke as a new stroke by calculating the polyline offset for each
+ * point taking the radius into account. The returned stroke is cyclic.
  */
 bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
                                       bGPDlayer *gpl,
@@ -2636,28 +2695,28 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
     stroke_points[i * POINT_DIM + (POINT_DIM - 1)] = (double)pt->pressure;
   }
 
-  double *r_perimeter_stroke_points;
-  uint r_num_perimeter_stroke_points;
+  double *r_offset_stroke_points;
+  uint r_num_offset_stroke_points;
   BLI_polyline_offset(stroke_points,
                       num_points,
                       stroke_radius,
                       subdivisions,
                       (uint)gps->caps[0],
                       (uint)gps->caps[1],
-                      &r_perimeter_stroke_points,
-                      &r_num_perimeter_stroke_points);
+                      &r_offset_stroke_points,
+                      &r_num_offset_stroke_points);
 
-  if (r_perimeter_stroke_points == NULL) {
+  if (r_offset_stroke_points == NULL) {
     MEM_freeN(stroke_points);
     return NULL;
   }
 
-  bGPDstroke *perimeter_stroke = BKE_gpencil_stroke_new(
-      gps->mat_nr, r_num_perimeter_stroke_points, 1);
+  bGPDstroke *offset_stroke = BKE_gpencil_stroke_new(gps->mat_nr, r_num_offset_stroke_points, 1);
 
-  for (uint i = 0; i < r_num_perimeter_stroke_points; i++) {
-    bGPDspoint *pt = &perimeter_stroke->points[i];
-    copy_v2fl_v2db(&pt->x, &r_perimeter_stroke_points[i * (POINT_DIM - 1)]);
+  for (uint i = 0; i < r_num_offset_stroke_points; i++) {
+    bGPDspoint *pt = &offset_stroke->points[i];
+    copy_v2fl_v2db(&pt->x, &r_offset_stroke_points[i * (POINT_DIM - 1)]);
+    /* FIXME: calculate z via projection.  */
     pt->z = 0.0f;
 
     /* Set pressure to zero and strength to one. */
@@ -2665,16 +2724,16 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
     pt->strength = 1.0f;
     pt->flag |= GP_SPOINT_SELECT;
   }
-  perimeter_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+  offset_stroke->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
 
   /* TODO: Project stroke to (view) plane. */
 
-  BKE_gpencil_stroke_geometry_update(perimeter_stroke);
+  BKE_gpencil_stroke_geometry_update(offset_stroke);
 
-  MEM_freeN(stroke_points);
-  MEM_SAFE_FREE(r_perimeter_stroke_points);
+  MEM_SAFE_FREE(stroke_points);
+  MEM_SAFE_FREE(r_offset_stroke_points);
 
-  return perimeter_stroke;
+  return offset_stroke;
 #undef POINT_DIM
 }
 /** \} */

@@ -4984,6 +4984,51 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Stroke to outer boundary
+ * \{ */
+
+static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = CTX_data_active_object(C);
+  bGPdata *gpd = (bGPdata *)ob->data;
+
+  /* sanity checks */
+  if (ELEM(NULL, gpd)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  GP_EDITABLE_STROKES_BEGIN (gps_iter, C, gpl, gps) {
+    if (gps->flag & GP_STROKE_SELECT && gps->flag & GP_STROKE_CYCLIC) {
+      BKE_gpencil_stroke_outer_boundary(gps);
+    }
+  }
+  GP_EDITABLE_STROKES_END(gps_iter);
+
+  /* notifiers */
+  DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
+
+  return OPERATOR_FINISHED;
+}
+
+void GPENCIL_OT_stroke_outer_boundary(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Stroke to outer boundary";
+  ot->idname = "GPENCIL_OT_stroke_outer_boundary";
+  ot->description = "Calcluates the outer boundary of a stroke";
+
+  /* api callbacks */
+  ot->exec = gpencil_stroke_outer_boundary_exec;
+  ot->poll = gpencil_active_layer_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Offset stroke
  * \{ */
 

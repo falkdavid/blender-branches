@@ -45,8 +45,12 @@ template<typename T> class LinkedChain {
     tail = nullptr;
   }
 
+  LinkedChain(const LinkedChain<T> &src);
   LinkedChain(const std::list<T> &list);
+
   ~LinkedChain();
+
+  LinkedChain<T> &operator=(LinkedChain<T> src);
 
   struct Node {
     T data;
@@ -54,8 +58,8 @@ template<typename T> class LinkedChain {
     Node *prev;
     Node *link;
 
-    Node() = default;
-    Node(const T &data) : data(data), next(nullptr), prev(nullptr), link(nullptr)
+    Node(const T &data, Node *next = nullptr, Node *prev = nullptr, Node *link = nullptr)
+        : data(data), next(next), prev(prev), link(link)
     {
     }
   };

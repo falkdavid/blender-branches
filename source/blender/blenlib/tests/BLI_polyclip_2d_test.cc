@@ -26,6 +26,61 @@ TEST(polyclip2d, clip_path_insert)
   EXPECT_EQ(node_C->data, C);
 }
 
+TEST(polyclip2d, clip_path_insert2)
+{
+  ClipPath list;
+  double2 A = {1.0, 2.0};
+  double2 B = {2.0, 3.0};
+  double2 C = {3.0, 4.0};
+
+  auto *node_A = list.insert_back(A);
+  auto *node_B = list.insert_back(B);
+  auto *node_C = list.insert_back(C);
+  // std::cout << list;
+
+  EXPECT_EQ(list.size(), 3);
+  EXPECT_EQ(node_A->next, node_B);
+  EXPECT_EQ(node_B->next, node_C);
+  EXPECT_EQ(node_C->next, nullptr);
+  EXPECT_EQ(node_A->prev, nullptr);
+  EXPECT_EQ(node_B->prev, node_A);
+  EXPECT_EQ(node_C->prev, node_B);
+}
+
+TEST(polyclip2d, clip_path_copy)
+{
+  PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
+  ClipPath list = ClipPath(plist);
+  ClipPath list2 = ClipPath(list);
+
+  EXPECT_EQ(list2.size(), 3);
+
+  auto it1 = list.begin();
+  auto it2 = list2.begin();
+  for (auto elem : plist) {
+    EXPECT_NE(*it1, *it2);
+    EXPECT_EQ(elem, (*it2)->data);
+    ++it1;
+    ++it2;
+  }
+}
+
+TEST(polyclip2d, clip_path_assign)
+{
+  PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
+  ClipPath list = ClipPath(plist);
+  ClipPath list2 = ClipPath(plist);
+
+  list.insert_back({4.0, 5.0});
+  list2 = list;
+
+  auto it = list2.begin();
+  for (auto elem : list) {
+    EXPECT_EQ(elem->data, (*it)->data);
+    ++it;
+  }
+}
+
 TEST(polyclip2d, clip_path_from_list)
 {
   PointList plist = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
@@ -33,6 +88,11 @@ TEST(polyclip2d, clip_path_from_list)
   // std::cout << list;
 
   EXPECT_EQ(list.size(), 3);
+  auto it = list.begin();
+  for (auto elem : list) {
+    EXPECT_EQ(elem->data, (*it)->data);
+    ++it;
+  }
 }
 
 TEST(polyclip2d, clip_path_search)

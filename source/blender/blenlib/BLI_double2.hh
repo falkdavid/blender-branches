@@ -192,6 +192,23 @@ struct double2 {
     return std::abs(a.x - b.x) <= limit && std::abs(a.y - b.y) <= limit;
   }
 
+  /**
+   * Return 1 if a, b, c are in counter-clockwise order (e.g. c lies to the left of the line a->b), -1 if
+   * the order is clockwise and 0 when they are colinear.
+   * Note: this is a nonrobust implementation.
+   */
+  static int orientation(const double2 &a, const double2 &b, const double2 &c)
+  {
+    double r = (a.x - c.x) * (b.y - c.y) - (a.y - c.y) * (b.x - c.x);
+    if (r > 0.0) {
+      return 1;
+    }
+    else if (r < 0.0) {
+      return -1;
+    }
+    return 0;
+  }
+
   struct isect_result {
     enum {
       /* Segments are colinear. */
