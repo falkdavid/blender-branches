@@ -723,6 +723,50 @@ void BLI_polyline_outer_boundary(const double *verts,
   *r_num_boundary_verts = num_boundary_vert;
 }
 
+void BLI_polyline_isect_self(const double *verts,
+                             uint num_verts,
+                             CLIP_METHOD method,
+                             double **r_isect_verts,
+                             uint *r_num_isect_verts)
+{
+  polyclip::PointList pline;
+
+  /* Fill pline with data from verts. */
+  for (uint i = 0; i < num_verts; i++) {
+    double2 co = double2(verts[i * 2], verts[i * 2 + 1]);
+    pline.push_back(co);
+  }
+
+  polyclip::ClipPath clip_path;
+  switch (method) {
+    case BRUTE_FORCE:
+      clip_path = polyclip::point_list_find_intersections_brute_force(pline);
+      break;
+    case BRUTE_FORCE_AABB:
+      break;
+    default:
+      break;
+  }
+
+  uint num_isect_vert = clip_path.size();
+  if (num_isect_vert == 0) {
+    *r_isect_verts = NULL;
+    *r_num_isect_verts = 0;
+    return;
+  }
+
+  /* Allocate and populate returning flat array of isect vertices. */
+  double *isect_verts = (double *)MEM_mallocN(sizeof(double) * num_isect_vert * 2, __func__);
+  auto it = clip_path.begin();
+  for (uint i = 0; i < num_isect_vert; i++, it++) {
+    double2 vert = (*it)->data;
+    copy_v2_v2_db(&isect_verts[i * 2], vert);
+  }
+
+  *r_isect_verts = isect_verts;
+  *r_num_isect_verts = num_isect_vert;
+}
+
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
                          const double radius,

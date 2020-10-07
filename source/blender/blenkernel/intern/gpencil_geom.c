@@ -2670,6 +2670,58 @@ void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps)
 #undef POINT_DIM
 }
 
+void BKE_gpencil_stroke_isect_self(bGPDstroke *gps)
+{
+#define POINT_DIM 2
+  if (gps->totpoints < 1) {
+    return;
+  }
+
+  uint num_points = (uint)gps->totpoints;
+  double *stroke_points = (double *)MEM_mallocN(sizeof(double) * POINT_DIM * num_points, __func__);
+  for (uint i = 0; i < num_points; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    copy_v2db_v2fl(&stroke_points[i * POINT_DIM], &pt->x);
+  }
+
+  double *r_isect_stroke_points;
+  uint r_num_isect_stroke_points;
+  BLI_polyline_isect_self(
+      stroke_points, num_points, BRUTE_FORCE, &r_isect_stroke_points, &r_num_isect_stroke_points);
+
+  if (r_isect_stroke_points == NULL) {
+    MEM_freeN(stroke_points);
+    return;
+  }
+
+  gps->totpoints = r_num_isect_stroke_points;
+  gps->points = MEM_recallocN(gps->points, sizeof(*gps->points) * gps->totpoints);
+  if (gps->dvert != NULL) {
+    gps->dvert = MEM_recallocN(gps->dvert, sizeof(*gps->dvert) * gps->totpoints);
+  }
+
+  for (uint i = 0; i < gps->totpoints; i++) {
+    bGPDspoint *pt = &gps->points[i];
+    copy_v2fl_v2db(&pt->x, &r_isect_stroke_points[i * POINT_DIM]);
+    /* FIXME: calculate z via projection.  */
+    pt->z = 0.0f;
+
+    /* Set pressure to zero and strength to one. */
+    pt->pressure = 0.0f;
+    pt->strength = 1.0f;
+    pt->flag |= GP_SPOINT_SELECT;
+  }
+  gps->flag |= GP_STROKE_SELECT | GP_STROKE_CYCLIC;
+
+  /* TODO: Project stroke to (view) plane. */
+
+  BKE_gpencil_stroke_geometry_update(gps);
+
+  MEM_SAFE_FREE(stroke_points);
+  MEM_SAFE_FREE(r_isect_stroke_points);
+#undef POINT_DIM
+}
+
 /**
  * Returns the outline of a stroke as a new stroke by calculating the polyline offset for each
  * point taking the radius into account. The returned stroke is cyclic.

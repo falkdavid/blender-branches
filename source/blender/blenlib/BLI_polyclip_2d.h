@@ -47,6 +47,12 @@ void BLI_polyline_outer_boundary(const double *verts,
                                  double **r_boundary_verts,
                                  uint *r_num_boundary_verts);
 
+void BLI_polyline_isect_self(const double *verts,
+                             uint num_verts,
+                             CLIP_METHOD method,
+                             double **r_isect_verts,
+                             uint *r_num_isect_verts);
+
 /**
  * Generates the offset of a polyline by taking the radius of each vertex into account.
  * \param verts: The input vertices. Expected to be a flat 3d array with x,y and the radius.
