@@ -271,11 +271,13 @@ ClipPath point_list_find_intersections_brute_force(const PointList &list)
 {
   ClipPath path = ClipPath(list);
 
+  /* Close path */
+  path.insert_back(list.front());
+
   /* Iterate over all pairs of edges (edgeA, edgeB). */
   auto it_edgeA = path.begin_pair();
   while (it_edgeA != path.end_pair()) {
     auto edgeA = *it_edgeA;
-    bool found_intersection = false;
 
     auto it_edgeB = ClipPath::PairIterator::next(it_edgeA);
     while (it_edgeB != path.end_pair()) {
@@ -286,31 +288,28 @@ ClipPath point_list_find_intersections_brute_force(const PointList &list)
       auto result = double2::isect_seg_seg(A.first, A.second, B.first, B.second);
       if (result.kind == result.LINE_LINE_CROSS) {
         double2 isect_pt = double2::interpolate(A.first, A.second, result.lambda);
-        std::cout << "Found intersection at " << isect_pt << "!\n";
+        // std::cout << "Found intersection at " << isect_pt << "!\n";
         ClipPath::Node *nodeA = path.insert_after(edgeA.first, isect_pt);
         ClipPath::Node *nodeB = path.insert_after(edgeB.first, isect_pt);
         path.link(nodeA, nodeB);
 
-        /* Go to the next edge by skipping over the insersection points */
+        it_edgeA.set_second(nodeA);
+        edgeA = *it_edgeA;
+        
+        /* Go to the next edge B by skipping over the insersection points */
         it_edgeB.set_first(edgeB.second);
         it_edgeB.incr_second();
-
-        found_intersection = true;
       }
       else {
         ++it_edgeB;
       }
     }
 
-    if (found_intersection) {
-      /* Go to the next edge by skipping over the insersection points */
-      it_edgeA.set_first(edgeA.second);
-      it_edgeA.incr_second();
-    }
-    else {
-      ++it_edgeA;
-    }
+    ++it_edgeA;
   }
+
+  /* Remove duplicate last point. */
+  path.remove(path.back());
 
   return path;
 }
@@ -320,39 +319,41 @@ PointList clip_path_get_outer_boundary(ClipPath &path)
   PointList outer;
 
   /* Find the left-most point (x minimum). Break ties with the y minimum. */
-  auto start = std::min_element(
+  auto min_elem = std::min_element(
       path.begin(), path.end(), [](const ClipPath::Node *a, const ClipPath::Node *b) {
         if (a->data.x == b->data.x) {
           return a->data.y < b->data.y;
         }
         return a->data.x < b->data.x;
       });
-  double2 current_pt = (*start)->data;
-  double2 next_pt = (*start)->next->data;
-  outer.push_back(current_pt);
+
+  /* Connect the ends of the path to form a loop. */
+  path.link_ends();
 
   /* Figure out if the outside is to the left or right of the first edge. */
-  double2 outside_pt = {current_pt.x - 1.0, current_pt.y};
-  int orient = double2::orientation(outside_pt, current_pt, next_pt) > 0 ? 1 : -1;
+  double2 current_pt = (*min_elem)->data;
+  double2 next_pt = (*min_elem)->next->data;
+  double2 prev_pt = (*min_elem)->prev->data;
+  int orient = double2::orientation(current_pt, next_pt, prev_pt) > 0 ? -1 : 1;
 
-  /* Keep track of the direction of iteration in the linked list, e.g. forward or backward. Start
-   * iterating forward. */
-  bool forward = true;
+  /* Keep track of the direction of iteration in the linked list, e.g. forward or backward. Always
+   * start iterating clockwise so that the edge-direction of the boundary is also clockwise. */
+  bool forward = (orient == 1);
 
-  path.link_ends();
-  auto it = ClipPath::Iterator::next(start);
-  while (it != start) {
+  outer.push_back(current_pt);
+  auto it = (forward == true) ? ClipPath::Iterator::next(min_elem) :
+                                ClipPath::Iterator::prev(min_elem);
+  while (it != min_elem) {
     auto vert = *it;
     outer.push_back(vert->data);
 
+    /* At intersection point, always iterate towards the outside. */
     if (vert->link != nullptr) {
       current_pt = vert->data;
-      next_pt = vert->next->data;
+      next_pt = (forward == true) ? vert->next->data : vert->prev->data;
       double2 link_next_pt = vert->link->next->data;
-      if (double2::orientation(current_pt, next_pt, link_next_pt) != orient) {
-        forward = !forward;
-        orient *= -1;
-      }
+      forward = (double2::orientation(current_pt, next_pt, link_next_pt) == 1);
+
       it.switch_link();
     }
 
@@ -363,6 +364,8 @@ PointList clip_path_get_outer_boundary(ClipPath &path)
       --it;
     }
   }
+
+  /* Avoid infinite loops by disconnecting the ends. */
   path.unlink_ends();
 
   return outer;
@@ -683,18 +686,18 @@ void BLI_polyline_outer_boundary(const double *verts,
                                  double **r_boundary_verts,
                                  uint *r_num_boundary_verts)
 {
-  blender::polyclip::PointList pline;
+  polyclip::PointList pline;
 
   /* Fill pline with data from verts. */
   for (uint i = 0; i < num_verts; i++) {
-    blender::double2 co = blender::double2(verts[i * 2], verts[i * 2 + 1]);
+    double2 co = double2(verts[i * 2], verts[i * 2 + 1]);
     pline.push_back(co);
   }
 
-  blender::polyclip::ClipPath clip_path;
+  polyclip::ClipPath clip_path;
   switch (method) {
     case BRUTE_FORCE:
-      clip_path = blender::polyclip::point_list_find_intersections_brute_force(pline);
+      clip_path = polyclip::point_list_find_intersections_brute_force(pline);
       break;
     case BRUTE_FORCE_AABB:
       break;
@@ -702,7 +705,7 @@ void BLI_polyline_outer_boundary(const double *verts,
       break;
   }
 
-  blender::polyclip::PointList outer_boundary = blender::polyclip::clip_path_get_outer_boundary(
+  polyclip::PointList outer_boundary = polyclip::clip_path_get_outer_boundary(
       clip_path);
   uint num_boundary_vert = outer_boundary.size();
   if (num_boundary_vert == 0) {
@@ -713,9 +716,9 @@ void BLI_polyline_outer_boundary(const double *verts,
 
   /* Allocate and populate returning flat array of boundary vertices. */
   double *boundary_verts = (double *)MEM_mallocN(sizeof(double) * num_boundary_vert * 2, __func__);
-  blender::polyclip::PointList::iterator it = outer_boundary.begin();
+  polyclip::PointList::iterator it = outer_boundary.begin();
   for (uint i = 0; i < num_boundary_vert; i++, it++) {
-    blender::double2 vert = *it;
+    double2 vert = *it;
     copy_v2_v2_db(&boundary_verts[i * 2], vert);
   }
 
@@ -776,21 +779,21 @@ void BLI_polyline_offset(const double *verts,
                          double **r_offset_verts,
                          uint *r_num_offset_verts)
 {
-  blender::polyclip::Polyline pline;
+  polyclip::Polyline pline;
 
   /* Fill pline with data from verts. */
   for (uint i = 0; i < num_verts; i++) {
-    blender::double2 co = blender::double2(verts[i * 3], verts[i * 3 + 1]);
+    double2 co = double2(verts[i * 3], verts[i * 3 + 1]);
     double radius = verts[i * 3 + 2];
-    pline.verts.push_back(blender::polyclip::Vert(co, radius));
+    pline.verts.push_back(polyclip::Vert(co, radius));
   }
 
-  blender::polyclip::Polyline offset_pline = polyline_offset(
+  polyclip::Polyline offset_pline = polyline_offset(
       pline,
       subdivisions,
       radius,
-      static_cast<blender::polyclip::CapType>(start_cap_t),
-      static_cast<blender::polyclip::CapType>(end_cap_t));
+      static_cast<polyclip::CapType>(start_cap_t),
+      static_cast<polyclip::CapType>(end_cap_t));
 
   uint num_offset_verts = offset_pline.verts.size();
   if (num_offset_verts == 0) {
@@ -801,10 +804,10 @@ void BLI_polyline_offset(const double *verts,
 
   /* Allocate and populate returning flat array of offset vertices. */
   double *offset_verts = (double *)MEM_callocN(sizeof(double) * num_offset_verts * 3, __func__);
-  blender::polyclip::VertList::iterator it = offset_pline.verts.begin();
+  polyclip::VertList::iterator it = offset_pline.verts.begin();
   for (uint i = 0; i < num_offset_verts; i++, it++) {
-    blender::polyclip::Vert vert = *it;
-    copy_v2_v2_db(&offset_verts[i * 2], blender::double2(vert.co));
+    polyclip::Vert vert = *it;
+    copy_v2_v2_db(&offset_verts[i * 2], double2(vert.co));
   }
 
   *r_offset_verts = offset_verts;
