@@ -266,42 +266,38 @@ template class LinkedChain<double2>;
 /** \name Polyline clipping
  * \{ */
 
-static Edge edge_from_node_pair(const std::pair<ClipPath::Node *, ClipPath::Node *> &node_pair)
-{
-  return Edge(node_pair.first->data, node_pair.second->data);
-}
-
 ClipPath point_list_find_intersections_brute_force(const PointList &list)
 {
   ClipPath path = ClipPath(list);
 
-  /* Close path */
+  /* Duplicate first point to the back so we can find intersections at the last edge. */
   path.insert_back(list.front());
 
   /* Iterate over all pairs of edges (edgeA, edgeB). */
   auto it_edgeA = path.begin_pair();
   while (it_edgeA != path.end_pair()) {
-    auto edgeA = *it_edgeA;
+    auto node_edgeA = *it_edgeA;
 
     auto it_edgeB = ClipPath::PairIterator::next(it_edgeA);
     while (it_edgeB != path.end_pair()) {
-      auto edgeB = *it_edgeB;
-      Edge A = edge_from_node_pair(edgeA);
-      Edge B = edge_from_node_pair(edgeB);
+      auto node_edgeB = *it_edgeB;
+      Edge A = Edge(node_edgeA.first->data, node_edgeA.second->data);
+      Edge B = Edge(node_edgeB.first->data, node_edgeB.second->data);
 
       auto result = double2::isect_seg_seg(A.first, A.second, B.first, B.second);
       if (result.kind == result.LINE_LINE_CROSS) {
         double2 isect_pt = double2::interpolate(A.first, A.second, result.lambda);
-        // std::cout << "Found intersection at " << isect_pt << "!\n";
-        ClipPath::Node *nodeA = path.insert_after(edgeA.first, isect_pt);
-        ClipPath::Node *nodeB = path.insert_after(edgeB.first, isect_pt);
+
+        ClipPath::Node *nodeA = path.insert_after(node_edgeA.first, isect_pt);
+        ClipPath::Node *nodeB = path.insert_after(node_edgeB.first, isect_pt);
         path.link(nodeA, nodeB);
 
+        /* Shrink edge A so it is no longer a split edge. */
         it_edgeA.set_second(nodeA);
-        edgeA = *it_edgeA;
-        
+        node_edgeA = *it_edgeA;
+
         /* Go to the next edge B by skipping over the insersection points */
-        it_edgeB.set_first(edgeB.second);
+        it_edgeB.set_first(node_edgeB.second);
         it_edgeB.incr_second();
       }
       else {
@@ -717,8 +713,7 @@ void BLI_polyline_outer_boundary(const double *verts,
       break;
   }
 
-  polyclip::PointList outer_boundary = polyclip::clip_path_get_outer_boundary(
-      clip_path);
+  polyclip::PointList outer_boundary = polyclip::clip_path_get_outer_boundary(clip_path);
   uint num_boundary_vert = outer_boundary.size();
   if (num_boundary_vert == 0) {
     *r_boundary_verts = NULL;
@@ -800,12 +795,11 @@ void BLI_polyline_offset(const double *verts,
     pline.verts.push_back(polyclip::Vert(co, radius));
   }
 
-  polyclip::Polyline offset_pline = polyline_offset(
-      pline,
-      subdivisions,
-      radius,
-      static_cast<polyclip::CapType>(start_cap_t),
-      static_cast<polyclip::CapType>(end_cap_t));
+  polyclip::Polyline offset_pline = polyline_offset(pline,
+                                                    subdivisions,
+                                                    radius,
+                                                    static_cast<polyclip::CapType>(start_cap_t),
+                                                    static_cast<polyclip::CapType>(end_cap_t));
 
   uint num_offset_verts = offset_pline.verts.size();
   if (num_offset_verts == 0) {
