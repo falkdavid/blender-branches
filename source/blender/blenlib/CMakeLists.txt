@@ -338,6 +338,18 @@ if(WITH_GMP)
   )
 endif()
 
+if(WITH_CLIPPER)
+  add_definitions(-DWITH_CLIPPER)
+  
+  list(APPEND INC_SYS
+    "/data/delta/workspaces/clipper/build_linux/include/polyclipping/"
+  )
+
+  list(APPEND LIB
+    "/data/delta/workspaces/clipper/build_linux/lib/libpolyclipping.so"
+  )
+endif()
+
 if(WIN32)
   list(APPEND INC
     ../../../intern/utfconv

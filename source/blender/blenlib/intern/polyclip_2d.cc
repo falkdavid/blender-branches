@@ -27,6 +27,10 @@
 
 #include "BLI_polyclip_2d.hh"
 
+#ifdef WITH_CLIPPER
+#  include "clipper.hpp"
+#endif
+
 extern "C" {
 #include "BLI_polyclip_2d.h"
 }
@@ -674,6 +678,14 @@ Polyline polyline_offset(Polyline &pline,
 /* \} */
 
 } /* namespace blender::polyclip */
+
+#ifdef WITH_CLIPPER
+void test()
+{
+  ClipperLib::Clipper c;
+  ClipperLib::Paths paths;
+}
+#endif
 
 /* Wrapper for C. */
 extern "C" {
