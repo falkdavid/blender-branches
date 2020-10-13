@@ -21,6 +21,8 @@
  */
 
 #include <list>
+#include <queue>
+#include <set>
 
 #include "BLI_double2.hh"
 #include "BLI_double3.hh"
@@ -284,6 +286,7 @@ template<typename T> class LinkedChain {
 };
 
 typedef LinkedChain<double2> ClipPath;
+typedef std::list<ClipPath> ClipPaths;
 
 struct Vert {
   double2 co;
@@ -336,6 +339,90 @@ typedef std::list<Polyline> Polylines;
 struct Polygon {
   Polyline contour;
   Polylines holes;
+};
+
+class PolyclipBentleyOttmann {
+ public:
+  PolyclipBentleyOttmann()
+  {
+  }
+
+  struct Edge {
+    Edge() = default;
+
+    Edge(ClipPath::Node *first, ClipPath::Node *second, const double2 sweep_pt, bool x_dir = true)
+        : first(first), second(second), sweep_pt(sweep_pt), x_dir(x_dir)
+    {
+    }
+
+    Edge(std::pair<ClipPath::Node *, ClipPath::Node *> node_pair,
+         const double2 sweep_pt,
+         bool x_dir = true)
+        : first(node_pair.first), second(node_pair.second), sweep_pt(sweep_pt), x_dir(x_dir)
+    {
+    }
+
+    ClipPath::Node *first;
+    ClipPath::Node *second;
+    double2 sweep_pt;
+    /* True = +X; False = -X*/
+    bool x_dir;
+
+    static double y_intercept(const Edge &edge, const double x);
+    friend bool operator<(const Edge &e1, const Edge &e2);
+
+    friend std::ostream &operator<<(std::ostream &stream, const Edge &e)
+    {
+      return stream << "Edge from " << e.first->data << " to " << e.second->data;
+    }
+  };
+
+  struct Event {
+    enum Type { EMPTY = 0, START, END, INTERSECTION };
+
+    Event() = default;
+    Event(const double2 point, const Edge edge, Type type) : pt(point), edge(edge), type(type)
+    {
+    }
+
+    Event(const double2 isect_point, const Edge edge, const Edge isect_edge)
+        : pt(isect_point), edge(edge), isect_edge(isect_edge)
+    {
+      type = INTERSECTION;
+    }
+
+    double2 pt;
+    Edge edge;
+    Edge isect_edge;
+    Type type;
+
+    friend bool operator==(const Event &a, const Event &b)
+    {
+      return a.pt == b.pt && a.type == b.type;
+    }
+
+    friend bool operator>(const Event &e1, const Event &e2)
+    {
+      if (e1.pt.x == e2.pt.x) {
+        return e1.pt.y > e2.pt.y;
+      }
+      return e1.pt.x > e2.pt.x;
+    };
+
+    friend std::ostream &operator<<(std::ostream &stream, const Event &e)
+    {
+      const char *type_name[] = {"EMPTY", "START", "END", "INTERSECTION"};
+      return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge;
+    }
+  };
+
+  ClipPath find_intersections(const PointList &list);
+
+ private:
+  std::priority_queue<Event, std::deque<Event>, std::greater<Event>> event_queue;
+  std::set<Edge> sweep_line_edges;
+
+  Event check_edge_edge_isect(const Edge &e1, const Edge &e2);
 };
 
 ClipPath point_list_find_intersections_brute_force(const PointList &list);

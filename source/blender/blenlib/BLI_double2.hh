@@ -187,9 +187,23 @@ struct double2 {
     return double2(-a.x, -a.y);
   }
 
-  static bool compare(const double2 &a, const double2 &b, const double limit)
+  static constexpr bool compare_limit(const double2 &a, const double2 &b, const double limit)
   {
     return std::abs(a.x - b.x) <= limit && std::abs(a.y - b.y) <= limit;
+  }
+
+  static constexpr bool compare_less(const double2 &a, const double2 &b)
+  {
+    if (a.x < b.x) {
+      return true;
+    }
+    else if (a.x > b.x) {
+      return false;
+    }
+    else if (a.y < b.y) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -197,7 +211,7 @@ struct double2 {
    * the order is clockwise and 0 when they are colinear.
    * Note: this is a nonrobust implementation.
    */
-  static int orientation(const double2 &a, const double2 &b, const double2 &c)
+  static constexpr int orientation(const double2 &a, const double2 &b, const double2 &c)
   {
     double r = (a.x - c.x) * (b.y - c.y) - (a.y - c.y) * (b.x - c.x);
     if (r > 0.0) {

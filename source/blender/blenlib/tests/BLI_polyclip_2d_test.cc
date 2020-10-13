@@ -217,12 +217,12 @@ TEST(polyclip2d, clip_path_get_outer_boundary3)
   auto it_exp = plist_expected.begin();
   for (auto pt : outer) {
     // std::cout << pt << "?=" << *it_exp << std::endl;
-    EXPECT_TRUE(double2::compare(pt, *it_exp, FLT_EPSILON));
+    EXPECT_TRUE(double2::compare_limit(pt, *it_exp, FLT_EPSILON));
     it_exp++;
   }
 }
 
-TEST(polyclip2d, clip_path_itersect_brute_force)
+TEST(polyclip2d, clip_path_intersect_brute_force)
 {
   PointList plist = {{0.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {1.0, 0.0}};
   // PointList plist_expected = {{0.0, 1.0}, {1.0, 2.0}, {2.0, 1.0}, {1.0, 0.0}};
@@ -231,12 +231,21 @@ TEST(polyclip2d, clip_path_itersect_brute_force)
   std::cout << result << "\n";
 }
 
+TEST(polyclip2d, clip_path_intersect_bentley_ottman)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {1.0, 0.0}};
+
+  ClipPath result = bo.find_intersections(plist);
+  std::cout << result;
+}
+
 static bool compare_vertlists(const VertList &a, const VertList &b, double limit)
 {
   bool same = true;
   auto it_b = b.begin();
   for (auto it_a : a) {
-    if (double2::compare(it_a.co, it_b->co, limit) == false) {
+    if (double2::compare_limit(it_a.co, it_b->co, limit) == false) {
       std::cout << it_a.co << " != " << (*it_b).co << "\n";
       same = false;
       break;

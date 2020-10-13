@@ -41,7 +41,7 @@ extern "C" {
 namespace blender::polyclip {
 
 /* -------------------------------------------------------------------- */
-/** \name TripleLinkedList implementation
+/** \name LinkedChain implementation
  * \{ */
 
 /**
@@ -258,9 +258,9 @@ template<typename T> void LinkedChain<T>::unlink_ends()
   head->prev = nullptr;
   tail->next = nullptr;
 }
+/* \} */
 
 template class LinkedChain<double2>;
-/* \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Polyline clipping
@@ -369,6 +369,234 @@ PointList clip_path_get_outer_boundary(ClipPath &path)
   path.unlink_ends();
 
   return outer;
+}
+
+double PolyclipBentleyOttmann::Edge::y_intercept(const Edge &edge, const double x)
+{
+  double2 edge_start = edge.x_dir ? edge.first->data : edge.second->data;
+  double2 edge_end = edge.x_dir ? edge.second->data : edge.first->data;
+  double start_x = edge_start.x;
+  double start_y = edge_start.y;
+  double end_x = edge_end.x;
+  double end_y = edge_end.y;
+  if (x <= start_x) {
+    return start_y;
+  }
+  if (x >= end_x) {
+    return end_y;
+  }
+
+  double x_dist = end_x - start_x;
+  if (IS_EQ(x_dist, 0.0)) {
+    /* edge is vertical, return smallest y */
+    return start_y < end_y ? start_y : end_y;
+  }
+  double dx0 = x - start_x;
+  double dx1 = end_x - x;
+
+  double fac, ifac;
+  if (dx0 > dx1) {
+    ifac = dx0 / x_dist;
+    fac = 1.0 - ifac;
+  }
+  else {
+    fac = dx1 / x_dist;
+    ifac = 1.0 - fac;
+  }
+
+  return start_y * fac + end_y * ifac;
+}
+
+bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttmann::Edge &e2)
+{
+  if (&e1 == &e2) {
+    return true;
+  }
+
+  double2 e1_start = e1.x_dir ? e1.first->data : e1.second->data;
+  double2 e1_end = e1.x_dir ? e1.second->data : e1.first->data;
+  double2 e2_start = e2.x_dir ? e2.first->data : e2.second->data;
+  double2 e2_end = e2.x_dir ? e2.second->data : e2.first->data;
+
+  /* If the edge is vertical pick the lower point as the sweep point. */
+  double2 sweep_pt = (e1.first->data.x == e1.second->data.x) ? e1_start : e1.sweep_pt;
+  if (!(sweep_pt == e2.sweep_pt)) {
+    /* Calculate the y intercept of the second edge. */
+    double y_icept = PolyclipBentleyOttmann::Edge::y_intercept(e2, sweep_pt.x);
+    if (sweep_pt.y < y_icept) {
+      return false;
+    }
+    if (sweep_pt.y > y_icept) {
+      return true;
+    }
+  }
+
+  /* Edges intersect at start point. */
+  if (e1_start == sweep_pt) {
+    if (e2_end == sweep_pt) {
+      return double2::compare_less(e1_end, e2_start);
+    }
+    int cmp = double2::orientation(e1_start, e1_end, e2_end);
+    if (cmp != 0) {
+      return cmp < 0;
+    }
+    return double2::compare_less(e1_end, e2_end);
+  }
+  /* Edges intersect at end point. */
+  if (e1_end == sweep_pt) {
+    if (e2_start == sweep_pt) {
+      return double2::compare_less(e1_start, e2_end);
+    }
+    int cmp = double2::orientation(e1_start, e1_end, e2_start);
+    if (cmp != 0) {
+      return cmp < 0;
+    }
+    return double2::compare_less(e1_start, e2_start);
+  }
+
+  if (sweep_pt == e2.sweep_pt) {
+    if (e2.sweep_pt == e2_end) {
+      int cmp = double2::orientation(e1_start, e1_end, e2_start);
+      if (cmp != 0) {
+        return cmp < 0;
+      }
+      return double2::compare_less(e1_start, e2_start);
+    }
+    int cmp = double2::orientation(e1_start, e1_end, e2_end);
+    if (cmp != 0) {
+      return cmp < 0;
+    }
+    return double2::compare_less(e1_end, e2_end);
+  }
+
+  if (e2_start == sweep_pt) {
+    int cmp = double2::orientation(e1_start, e1_end, e2_end);
+    if (cmp != 0) {
+      return cmp < 0;
+    }
+    return double2::compare_less(e1_end, e2_end);
+  }
+
+  if (e2_end == sweep_pt) {
+    int cmp = double2::orientation(e1_start, e1_end, e2_start);
+    if (cmp != 0) {
+      return cmp < 0;
+    }
+    return double2::compare_less(e1_start, e2_start);
+  }
+
+  return true;
+}
+
+PolyclipBentleyOttmann::Event PolyclipBentleyOttmann::check_edge_edge_isect(
+    const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttmann::Edge &e2)
+{
+  auto result = double2::isect_seg_seg(
+      e1.first->data, e1.second->data, e2.first->data, e2.second->data);
+  if (result.kind == double2::isect_result::LINE_LINE_CROSS) {
+    double2 isect_pt = double2::interpolate(e1.first->data, e1.second->data, result.lambda);
+    return Event(isect_pt, e1, e2);
+  }
+  else {
+    return Event();
+  }
+}
+
+ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
+{
+  ClipPath clip_path = ClipPath(list);
+  for (auto it = clip_path.begin_pair(); it != clip_path.end_pair(); ++it) {
+    auto node_edge = *it;
+    Event start_event, end_event;
+    /* Make the edge point in +X (or +Y if vertical). */
+    if (double2::compare_less(node_edge.first->data, node_edge.second->data) == true) {
+      Edge edge = Edge(node_edge, node_edge.first->data, true);
+      start_event = Event(edge.first->data, edge, Event::START);
+      end_event = Event(edge.second->data, edge, Event::END);
+    }
+    else {
+      Edge edge = Edge(node_edge, node_edge.second->data, false);
+      start_event = Event(edge.second->data, edge, Event::START);
+      end_event = Event(edge.first->data, edge, Event::END);
+    }
+
+    event_queue.push(start_event);
+    event_queue.push(end_event);
+  }
+
+  while (!event_queue.empty()) {
+    Event event = event_queue.top();
+    event_queue.pop();
+
+    if (event.type == Event::INTERSECTION) {
+      /* Pop duplicates from the event queue. */
+      while (event == event_queue.top()) {
+        event_queue.pop();
+      }
+
+      std::cout << event << std::endl;
+
+      auto itA = sweep_line_edges.find(event.edge);
+      auto itB = sweep_line_edges.find(event.isect_edge);
+
+      event.edge.sweep_pt = event.pt;
+      event.isect_edge.sweep_pt = event.pt;
+
+      auto isect_nodeA = clip_path.insert_after(event.edge.first, event.pt);
+      auto isect_nodeB = clip_path.insert_after(event.isect_edge.first, event.pt);
+
+      // event.edge.first = isect_nodeA;
+      // event.isect_edge.first = isect_nodeB;
+
+      std::cout << *itA << std::endl;
+      std::cout << *itB << std::endl;
+    }
+    else if (event.type == Event::START) {
+      /* Insert the new edge into the sweep line set. */
+      auto it = sweep_line_edges.insert(event.edge);
+
+      if (it.second) {
+        auto current = it.first;
+        auto next = std::next(current);
+        auto prev = std::prev(current);
+
+        if (next != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*current, *next);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+
+        if (prev != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*current, *prev);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+      }
+    }
+    else if (event.type == Event::END) {
+      event.edge.sweep_pt = event.pt;
+      /* Find the edge and remove it from the sweep line set. */
+      auto it = sweep_line_edges.find(event.edge);
+
+      if (it != sweep_line_edges.end()) {
+        auto next = std::next(it);
+        auto prev = std::prev(it);
+
+        sweep_line_edges.erase(it);
+
+        if (next != sweep_line_edges.end() && prev != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*prev, *next);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+      }
+    }
+  }
+
+  return clip_path;
 }
 
 /* \} */
@@ -663,7 +891,7 @@ Polyline polyline_offset(Polyline &pline,
   Vert close_last = offset_vert_list.back();
   double2 close_pt = double2::interpolate(close_first.co, close_last.co, 0.99f);
 
-  if (double2::compare(close_pt, close_first.co, DBL_EPSILON) == false) {
+  if (double2::compare_limit(close_pt, close_first.co, DBL_EPSILON) == false) {
     Vert *close_p_pt = new Vert(close_pt);
     offset_vert_list.push_back(*close_p_pt);
   }
@@ -676,11 +904,11 @@ Polyline polyline_offset(Polyline &pline,
 } /* namespace blender::polyclip */
 
 #ifdef WITH_CLIPPER
-void test()
-{
-  ClipperLib::Clipper c;
-  ClipperLib::Paths paths;
-}
+// void test()
+// {
+//   ClipperLib::Clipper c;
+//   ClipperLib::Paths paths;
+// }
 #endif
 
 /* Wrapper for C. */
