@@ -270,9 +270,6 @@ ClipPath point_list_find_intersections_brute_force(const PointList &list)
 {
   ClipPath path = ClipPath(list);
 
-  /* Duplicate first point to the back so we can find intersections at the last edge. */
-  path.insert_back(list.front());
-
   /* Iterate over all pairs of edges (edgeA, edgeB). */
   auto it_edgeA = path.begin_pair();
   while (it_edgeA != path.end_pair()) {
@@ -307,9 +304,6 @@ ClipPath point_list_find_intersections_brute_force(const PointList &list)
 
     ++it_edgeA;
   }
-
-  /* Remove duplicate last point. */
-  path.remove(path.back());
 
   return path;
 }
@@ -409,8 +403,8 @@ double PolyclipBentleyOttmann::Edge::y_intercept(const Edge &edge, const double 
 
 bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttmann::Edge &e2)
 {
-  if (&e1 == &e2) {
-    return true;
+  if (e1 == e2) {
+    return false;
   }
 
   double2 e1_start = e1.x_dir ? e1.first->data : e1.second->data;
@@ -419,21 +413,22 @@ bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttm
   double2 e2_end = e2.x_dir ? e2.second->data : e2.first->data;
 
   /* If the edge is vertical pick the lower point as the sweep point. */
-  double2 sweep_pt = (e1.first->data.x == e1.second->data.x) ? e1_start : e1.sweep_pt;
-  if (!(sweep_pt == e2.sweep_pt)) {
+  double2 sweep_pt_e1 = (e1.first->data.x == e1.second->data.x) ? e1_start : e1.sweep_pt;
+  double2 sweep_pt_e2 = (e2.first->data.x == e2.second->data.x) ? e2_start : e2.sweep_pt;
+  if (!(sweep_pt_e1 == sweep_pt_e2)) {
     /* Calculate the y intercept of the second edge. */
-    double y_icept = PolyclipBentleyOttmann::Edge::y_intercept(e2, sweep_pt.x);
-    if (sweep_pt.y < y_icept) {
+    double y_icept = PolyclipBentleyOttmann::Edge::y_intercept(e2, sweep_pt_e1.x);
+    if (sweep_pt_e1.y < y_icept) {
       return false;
     }
-    if (sweep_pt.y > y_icept) {
+    if (sweep_pt_e1.y > y_icept) {
       return true;
     }
   }
 
   /* Edges intersect at start point. */
-  if (e1_start == sweep_pt) {
-    if (e2_end == sweep_pt) {
+  if (e1_start == sweep_pt_e1 && e2_start == sweep_pt_e1 && e2_start == sweep_pt_e2) {
+    if (e2_end == sweep_pt_e1) {
       return double2::compare_less(e1_end, e2_start);
     }
     int cmp = double2::orientation(e1_start, e1_end, e2_end);
@@ -443,8 +438,8 @@ bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttm
     return double2::compare_less(e1_end, e2_end);
   }
   /* Edges intersect at end point. */
-  if (e1_end == sweep_pt) {
-    if (e2_start == sweep_pt) {
+  if (e1_end == sweep_pt_e1 && e2_end == sweep_pt_e1 && e2_end == sweep_pt_e2) {
+    if (e2_start == sweep_pt_e1) {
       return double2::compare_less(e1_start, e2_end);
     }
     int cmp = double2::orientation(e1_start, e1_end, e2_start);
@@ -453,9 +448,9 @@ bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttm
     }
     return double2::compare_less(e1_start, e2_start);
   }
-
-  if (sweep_pt == e2.sweep_pt) {
-    if (e2.sweep_pt == e2_end) {
+  /* Edges intersect at sweep points. */
+  if (sweep_pt_e2 == sweep_pt_e1) {
+    if (sweep_pt_e2 == e2_end) {
       int cmp = double2::orientation(e1_start, e1_end, e2_start);
       if (cmp != 0) {
         return cmp < 0;
@@ -469,15 +464,25 @@ bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttm
     return double2::compare_less(e1_end, e2_end);
   }
 
-  if (e2_start == sweep_pt) {
+  if (e2_start == sweep_pt_e1) {
     int cmp = double2::orientation(e1_start, e1_end, e2_end);
     if (cmp != 0) {
       return cmp < 0;
     }
     return double2::compare_less(e1_end, e2_end);
   }
+  /* Edgecase for vertical edges. This happens when there is no y intercept for e2 and the y of the
+   * start point is returned. In this case the edges do not intersect at their start point. We need
+   * to figure out on what side e2.start of e1 lies.*/
+  else if (e2_start.x > sweep_pt_e1.x) {
+    int cmp = double2::orientation(e1_start, e1_end, e2_start);
+    if (cmp != 0) {
+      return cmp < 0;
+    }
+    return double2::compare_less(e1_end, e2_start);
+  }
 
-  if (e2_end == sweep_pt) {
+  if (e2_end == sweep_pt_e1) {
     int cmp = double2::orientation(e1_start, e1_end, e2_start);
     if (cmp != 0) {
       return cmp < 0;
@@ -485,7 +490,7 @@ bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttm
     return double2::compare_less(e1_start, e2_start);
   }
 
-  return true;
+  return false;
 }
 
 PolyclipBentleyOttmann::Event PolyclipBentleyOttmann::check_edge_edge_isect(
@@ -505,6 +510,7 @@ PolyclipBentleyOttmann::Event PolyclipBentleyOttmann::check_edge_edge_isect(
 ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
 {
   ClipPath clip_path = ClipPath(list);
+
   for (auto it = clip_path.begin_pair(); it != clip_path.end_pair(); ++it) {
     auto node_edge = *it;
     Event start_event, end_event;
@@ -528,30 +534,100 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
     Event event = event_queue.top();
     event_queue.pop();
 
+    std::cout << event << std::endl;
+
+    auto print = [](const Edge &e) { std::cout << "\n" << e; };
+    std::cout << "Before sweep_line_edges: ";
+    std::for_each(sweep_line_edges.begin(), sweep_line_edges.end(), print);
+    std::cout << std::endl;
+
     if (event.type == Event::INTERSECTION) {
       /* Pop duplicates from the event queue. */
       while (event == event_queue.top()) {
         event_queue.pop();
       }
 
-      std::cout << event << std::endl;
+      auto itA = sweep_line_edges.extract(event.edge);
+      auto itB = sweep_line_edges.extract(event.isect_edge);
 
-      auto itA = sweep_line_edges.find(event.edge);
-      auto itB = sweep_line_edges.find(event.isect_edge);
+      if (itA.empty() || itB.empty()) {
+        std::cout << "Error: could not extract intersecting edges!";
+      }
 
-      event.edge.sweep_pt = event.pt;
-      event.isect_edge.sweep_pt = event.pt;
+      BLI_assert(!itA.empty() && !itB.empty());
 
-      auto isect_nodeA = clip_path.insert_after(event.edge.first, event.pt);
-      auto isect_nodeB = clip_path.insert_after(event.isect_edge.first, event.pt);
+      ClipPath::Node *isect_nodeA, *isect_nodeB;
+      // std::cout << clip_path << std::endl;
+      if (event.edge.x_dir) {
+        isect_nodeA = clip_path.insert_after(itA.value().sweep_node, event.pt);
+      }
+      else {
+        isect_nodeA = clip_path.insert_before(itA.value().sweep_node, event.pt);
+      }
 
-      // event.edge.first = isect_nodeA;
-      // event.isect_edge.first = isect_nodeB;
+      // std::cout << clip_path << " sweep_pt: " << event.edge.sweep_pt << std::endl;
 
-      std::cout << *itA << std::endl;
-      std::cout << *itB << std::endl;
+      if (event.isect_edge.x_dir) {
+        isect_nodeB = clip_path.insert_after(itB.value().sweep_node, event.pt);
+      }
+      else {
+        isect_nodeB = clip_path.insert_before(itB.value().sweep_node, event.pt);
+      }
+
+      // std::cout << clip_path << " sweep_pt: " << event.isect_edge.sweep_pt << std::endl;
+
+      clip_path.link(isect_nodeA, isect_nodeB);
+
+      itA.value().sweep_pt = event.pt;
+      itB.value().sweep_pt = event.pt;
+
+      itA.value().sweep_node = isect_nodeA;
+      itB.value().sweep_node = isect_nodeB;
+
+      auto node_A = sweep_line_edges.insert(std::move(itA)).position;
+      auto node_B = sweep_line_edges.insert(std::move(itB)).position;
+
+      BLI_assert(node_A != node_B);
+
+      if (std::next(node_B) == node_A) {
+        auto next = std::next(node_A);
+        auto prev = std::prev(node_B);
+
+        if (next != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*node_A, *next);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+
+        if (prev != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*node_B, *prev);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+      }
+      else if (std::next(node_A) == node_B) {
+        auto next = std::next(node_B);
+        auto prev = std::prev(node_A);
+
+        if (next != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*node_B, *next);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+
+        if (prev != sweep_line_edges.end()) {
+          Event e = check_edge_edge_isect(*node_A, *prev);
+          if (e.type != Event::Type::EMPTY) {
+            event_queue.push(e);
+          }
+        }
+      }
     }
     else if (event.type == Event::START) {
+      event.edge.sweep_pt = event.pt;
       /* Insert the new edge into the sweep line set. */
       auto it = sweep_line_edges.insert(event.edge);
 
@@ -567,12 +643,15 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
           }
         }
 
-        if (prev != sweep_line_edges.end()) {
+        if (prev != sweep_line_edges.end() && prev != current) {
           Event e = check_edge_edge_isect(*current, *prev);
           if (e.type != Event::Type::EMPTY) {
             event_queue.push(e);
           }
         }
+      }
+      else {
+        std::cout << "Error: Event edge " << event.edge << " was not inserted!" << std::endl;
       }
     }
     else if (event.type == Event::END) {
@@ -593,7 +672,14 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
           }
         }
       }
+      else {
+        std::cout << "Error: Event edge " << event.edge << " could not be deleted!" << std::endl;
+      }
     }
+
+    std::cout << "After sweep_line_edges: ";
+    std::for_each(sweep_line_edges.begin(), sweep_line_edges.end(), print);
+    std::cout << std::endl;
   }
 
   return clip_path;
@@ -932,11 +1018,17 @@ void BLI_polyline_outer_boundary(const double *verts,
 
   polyclip::ClipPath clip_path;
   switch (method) {
-    case BRUTE_FORCE:
+    case BRUTE_FORCE: {
       clip_path = polyclip::point_list_find_intersections_brute_force(pline);
       break;
+    }
     case BRUTE_FORCE_AABB:
       break;
+    case BENTLEY_OTTMANN: {
+      polyclip::PolyclipBentleyOttmann bo;
+      clip_path = bo.find_intersections(pline);
+      break;
+    }
     default:
       break;
   }
@@ -977,11 +1069,17 @@ void BLI_polyline_isect_self(const double *verts,
 
   polyclip::ClipPath clip_path;
   switch (method) {
-    case BRUTE_FORCE:
+    case BRUTE_FORCE: {
       clip_path = polyclip::point_list_find_intersections_brute_force(pline);
       break;
+    }
     case BRUTE_FORCE_AABB:
       break;
+    case BENTLEY_OTTMANN: {
+      polyclip::PolyclipBentleyOttmann bo;
+      clip_path = bo.find_intersections(pline);
+      break;
+    }
     default:
       break;
   }

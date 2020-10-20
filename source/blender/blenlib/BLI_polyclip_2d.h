@@ -29,6 +29,8 @@ typedef enum CLIP_METHOD {
   /* Brute force algorithm with bounding box checking. Skips intersection check for edge pairs that
      don't have overlapping bounding boxes. */
   BRUTE_FORCE_AABB,
+
+  BENTLEY_OTTMANN,
 } CLIP_METHOD;
 
 /**

@@ -8,6 +8,55 @@
 
 namespace blender::polyclip::tests {
 
+static bool compare_vertlists(const VertList &a, const VertList &b, double limit)
+{
+  bool same = true;
+  auto it_b = b.begin();
+  for (auto it_a : a) {
+    if (double2::compare_limit(it_a.co, it_b->co, limit) == false) {
+      std::cout << it_a.co << " != " << (*it_b).co << "\n";
+      same = false;
+      break;
+    }
+    ++it_b;
+  }
+  return same;
+}
+
+static bool compare_clip_paths(const ClipPath &a, const ClipPath &b, double limit)
+{
+  if (a.size() != b.size()) {
+    std::cout << "ClipPath sizes are not equal!" << std::endl;
+    return false;
+  }
+
+  bool same = true;
+  auto it_b = b.begin();
+  for (auto it_a = a.begin(); it_a != a.end(); ++it_a) {
+    auto node_a = *it_a;
+    auto node_b = *it_b;
+    bool cmp = double2::compare_limit(node_a->data, node_b->data, limit);
+    EXPECT_TRUE(cmp);
+    if (!cmp) {
+      std::cout << node_a->data << " is not equal to " << node_b->data << " (limit=" << limit
+                << ")" << std::endl;
+    }
+
+    ++it_b;
+  }
+  return same;
+}
+
+static std::ostream &operator<<(std::ostream &stream, const PointList &plist)
+{
+  stream << "[";
+  for (auto pt : plist) {
+    stream << pt << ", ";
+  }
+  stream << "]";
+  return stream;
+}
+
 TEST(polyclip2d, clip_path_insert)
 {
   ClipPath list;
@@ -169,11 +218,7 @@ TEST(polyclip2d, clip_path_get_outer_boundary)
       {0.0, 0.0}, {0.5, 0.5}, {0.0, 1.0}, {1.0, 1.0}, {0.5, 0.5}, {1.0, 0.0}};
 
   PointList outer = clip_path_get_outer_boundary(path);
-  auto it_exp = plist_expected.begin();
-  for (auto pt : outer) {
-    EXPECT_EQ(pt, *it_exp);
-    it_exp++;
-  }
+  EXPECT_TRUE(compare_clip_paths(outer, plist_expected, FLT_EPSILON));
 }
 
 TEST(polyclip2d, clip_path_get_outer_boundary2)
@@ -191,11 +236,7 @@ TEST(polyclip2d, clip_path_get_outer_boundary2)
       {0.0, 0.0}, {0.5, 0.5}, {0.0, 1.0}, {1.0, 1.0}, {0.5, 0.5}, {1.0, 0.0}};
 
   PointList outer = clip_path_get_outer_boundary(path);
-  auto it_exp = plist_expected.begin();
-  for (auto pt : outer) {
-    EXPECT_EQ(pt, *it_exp);
-    it_exp++;
-  }
+  EXPECT_TRUE(compare_clip_paths(outer, plist_expected, FLT_EPSILON));
 }
 
 TEST(polyclip2d, clip_path_get_outer_boundary3)
@@ -214,45 +255,172 @@ TEST(polyclip2d, clip_path_get_outer_boundary3)
                               {0.5, 1}};
 
   PointList outer = clip_path_get_outer_boundary(path);
-  auto it_exp = plist_expected.begin();
-  for (auto pt : outer) {
-    // std::cout << pt << "?=" << *it_exp << std::endl;
-    EXPECT_TRUE(double2::compare_limit(pt, *it_exp, FLT_EPSILON));
-    it_exp++;
-  }
+  EXPECT_TRUE(compare_clip_paths(outer, plist_expected, FLT_EPSILON));
 }
 
 TEST(polyclip2d, clip_path_intersect_brute_force)
 {
   PointList plist = {{0.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {1.0, 0.0}};
-  // PointList plist_expected = {{0.0, 1.0}, {1.0, 2.0}, {2.0, 1.0}, {1.0, 0.0}};
+  PointList plist_expected = {
+      {0.0, 0.0}, {0.5, 0.5}, {1.0, 1.0}, {0.0, 1.0}, {0.5, 0.5}, {1.0, 0.0}};
 
   ClipPath result = point_list_find_intersections_brute_force(plist);
-  std::cout << result << "\n";
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
 }
 
-TEST(polyclip2d, clip_path_intersect_bentley_ottman)
+TEST(polyclip2d, clip_path_intersect_bentley_ottman01)
 {
   PolyclipBentleyOttmann bo;
-  PointList plist = {{0.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {1.0, 0.0}};
+  PointList plist = {{0, 0}, {1, 1}, {0, 1}, {1, 0}};
+  PointList plist_expected = {{0, 0}, {0.5, 0.5}, {1, 1}, {0, 1}, {0.5, 0.5}, {1, 0}};
 
   ClipPath result = bo.find_intersections(plist);
-  std::cout << result;
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
 }
 
-static bool compare_vertlists(const VertList &a, const VertList &b, double limit)
+TEST(polyclip2d, clip_path_intersect_bentley_ottman02)
 {
-  bool same = true;
-  auto it_b = b.begin();
-  for (auto it_a : a) {
-    if (double2::compare_limit(it_a.co, it_b->co, limit) == false) {
-      std::cout << it_a.co << " != " << (*it_b).co << "\n";
-      same = false;
-      break;
-    }
-    ++it_b;
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0, 0}, {1, 2}, {0, 2}, {1, 1}, {0, 1}};
+  PointList plist_expected = {{0, 0},
+                              {0.5, 1},
+                              {(2.0 / 3.0), (4.0 / 3.0)},
+                              {1, 2},
+                              {0, 2},
+                              {(2.0 / 3.0), (4.0 / 3.0)},
+                              {1, 1},
+                              {0.5, 1},
+                              {0, 1}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
   }
-  return same;
+}
+
+TEST(polyclip2d, clip_path_intersect_bentley_ottman03)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0, 0}, {3, 2}, {1, 2}, {3, 1}, {1, 0}, {3, 0}, {0, 2}};
+  PointList plist_expected = {{0, 0},
+                              {1.5, 1},
+                              {(15.0 / 7.0), (10.0 / 7.0)},
+                              {3, 2},
+                              {1, 2},
+                              {(15.0 / 7.0), (10.0 / 7.0)},
+                              {3, 1},
+                              {(15.0 / 7.0), (4.0 / 7.0)},
+                              {1, 0},
+                              {3, 0},
+                              {(15.0 / 7.0), (4.0 / 7.0)},
+                              {1.5, 1},
+                              {0, 2}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_bentley_ottman04)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0, 0}, {3, 2}, {2, 2}, {3, 0}, {1, 2}, {1, 0}};
+  PointList plist_expected = {{0, 0},
+                              {1, 2.0 / 3.0},
+                              {1.8, 1.2},
+                              {2.25, 1.5},
+                              {3, 2},
+                              {2, 2},
+                              {2.25, 1.5},
+                              {3, 0},
+                              {1.8, 1.2},
+                              {1, 2},
+                              {1, 2.0 / 3.0},
+                              {1, 0}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_bentley_ottman05)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{4, 3}, {1, 0}, {3, 0}, {0, 3}, {0, 1}, {3, 4}, {1, 4}, {4, 1}};
+  PointList plist_expected = {{4, 3},
+                              {3, 2},
+                              {2, 1},
+                              {1, 0},
+                              {3, 0},
+                              {2, 1},
+                              {1, 2},
+                              {0, 3},
+                              {0, 1},
+                              {1, 2},
+                              {2, 3},
+                              {3, 4},
+                              {1, 4},
+                              {2, 3},
+                              {3, 2},
+                              {4, 1}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_bentley_ottman06)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0, 0}, {2, 0}, {2, 2}, {4, 2}, {0, 0}};
+  PointList plist_expected = {{0, 0}, {2, 0}, {2, 1}, {2, 2}, {4, 2}, {2, 1}, {0, 0}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_bentley_ottman07)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0, 0}, {1, 3}, {2, 4}, {3, 3}, {2, 2}, {0, 1}, {1, 4}, {3, 2}, {1, 0}};
+  PointList plist_expected = {{0, 0},
+                              {0.4, 1.2},
+                              {1, 3},
+                              {1.5, 3.5},
+                              {2, 4},
+                              {3, 3},
+                              {2.5, 2.5},
+                              {2, 2},
+                              {0.4, 1.2},
+                              {0, 1},
+                              {1, 4},
+                              {1.5, 3.5},
+                              {2.5, 2.5},
+                              {3, 2},
+                              {1, 0}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
 }
 
 TEST(polyclip2d, offset_polyline_simple01)

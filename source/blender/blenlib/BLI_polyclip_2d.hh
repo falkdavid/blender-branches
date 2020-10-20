@@ -212,22 +212,22 @@ template<typename T> class LinkedChain {
     }
   };
 
-  uint size()
+  uint size() const
   {
     return size_;
   }
 
-  bool empty()
+  bool empty() const
   {
     return size_ == 0;
   }
 
-  Node *front()
+  Node *front() const
   {
     return head;
   }
 
-  Node *back()
+  Node *back() const
   {
     return tail;
   }
@@ -264,7 +264,7 @@ template<typename T> class LinkedChain {
     for (auto elem : l) {
       stream << elem->data << ", ";
     }
-    stream << "]\n";
+    stream << "]";
     return stream;
   }
 
@@ -353,6 +353,7 @@ class PolyclipBentleyOttmann {
     Edge(ClipPath::Node *first, ClipPath::Node *second, const double2 sweep_pt, bool x_dir = true)
         : first(first), second(second), sweep_pt(sweep_pt), x_dir(x_dir)
     {
+      sweep_node = x_dir ? first : second;
     }
 
     Edge(std::pair<ClipPath::Node *, ClipPath::Node *> node_pair,
@@ -360,20 +361,27 @@ class PolyclipBentleyOttmann {
          bool x_dir = true)
         : first(node_pair.first), second(node_pair.second), sweep_pt(sweep_pt), x_dir(x_dir)
     {
+      sweep_node = x_dir ? first : second;
     }
 
     ClipPath::Node *first;
     ClipPath::Node *second;
     double2 sweep_pt;
+    ClipPath::Node *sweep_node;
     /* True = +X; False = -X*/
     bool x_dir;
 
     static double y_intercept(const Edge &edge, const double x);
     friend bool operator<(const Edge &e1, const Edge &e2);
 
+    friend bool operator==(const Edge &e1, const Edge &e2)
+    {
+      return e1.first->data == e2.first->data && e1.second->data == e2.second->data;
+    }
+
     friend std::ostream &operator<<(std::ostream &stream, const Edge &e)
     {
-      return stream << "Edge from " << e.first->data << " to " << e.second->data;
+      return stream << e.first->data << "--" << e.second->data;
     }
   };
 
@@ -404,6 +412,9 @@ class PolyclipBentleyOttmann {
     friend bool operator>(const Event &e1, const Event &e2)
     {
       if (e1.pt.x == e2.pt.x) {
+        if (e1.pt.y == e2.pt.y) {
+          return e1.type < e2.type;
+        }
         return e1.pt.y > e2.pt.y;
       }
       return e1.pt.x > e2.pt.x;
@@ -412,7 +423,11 @@ class PolyclipBentleyOttmann {
     friend std::ostream &operator<<(std::ostream &stream, const Event &e)
     {
       const char *type_name[] = {"EMPTY", "START", "END", "INTERSECTION"};
-      return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge;
+      if (e.type != INTERSECTION) {
+        return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge;
+      }
+      return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge << " x "
+                    << e.isect_edge;
     }
   };
 
@@ -433,5 +448,11 @@ Polyline polyline_offset(Polyline &pline,
                          const double pline_radius,
                          CapType start_cap_t,
                          CapType end_cap_t);
+
+/* For Debugging only */
+
+// void debug_output(std::ostream &stream) {
+//   std::cout << stream;
+// }
 
 } /* namespace blender::polyclip */
