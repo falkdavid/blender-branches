@@ -223,6 +223,14 @@ struct double2 {
     return 0;
   }
 
+  static constexpr double slope(const double2 &a, const double2 &b)
+  {
+    if (a.x == b.x) {
+      return a.y < b.y ? INFINITY : -INFINITY;
+    }
+    return (b.y - a.y) / (b.x - a.x);
+  }
+
   struct isect_result {
     enum {
       /* Segments are colinear. */

@@ -2633,7 +2633,7 @@ void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps)
   uint r_num_boundary_stroke_points;
   BLI_polyline_outer_boundary(stroke_points,
                               num_points,
-                              BRUTE_FORCE,
+                              BENTLEY_OTTMANN,
                               &r_boundary_stroke_points,
                               &r_num_boundary_stroke_points);
 
@@ -2686,8 +2686,11 @@ void BKE_gpencil_stroke_isect_self(bGPDstroke *gps)
 
   double *r_isect_stroke_points;
   uint r_num_isect_stroke_points;
-  BLI_polyline_isect_self(
-      stroke_points, num_points, BRUTE_FORCE, &r_isect_stroke_points, &r_num_isect_stroke_points);
+  BLI_polyline_isect_self(stroke_points,
+                          num_points,
+                          BENTLEY_OTTMANN,
+                          &r_isect_stroke_points,
+                          &r_num_isect_stroke_points);
 
   if (r_isect_stroke_points == NULL) {
     MEM_freeN(stroke_points);

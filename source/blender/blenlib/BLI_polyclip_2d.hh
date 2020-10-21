@@ -349,15 +349,14 @@ class PolyclipBentleyOttmann {
 
   struct Edge {
     Edge() = default;
-
-    Edge(ClipPath::Node *first, ClipPath::Node *second, const double2 sweep_pt, bool x_dir = true)
+    Edge(ClipPath::Node *first, ClipPath::Node *second, const double2 *sweep_pt, bool x_dir = true)
         : first(first), second(second), sweep_pt(sweep_pt), x_dir(x_dir)
     {
       sweep_node = x_dir ? first : second;
     }
 
     Edge(std::pair<ClipPath::Node *, ClipPath::Node *> node_pair,
-         const double2 sweep_pt,
+         const double2 *sweep_pt,
          bool x_dir = true)
         : first(node_pair.first), second(node_pair.second), sweep_pt(sweep_pt), x_dir(x_dir)
     {
@@ -366,7 +365,7 @@ class PolyclipBentleyOttmann {
 
     ClipPath::Node *first;
     ClipPath::Node *second;
-    double2 sweep_pt;
+    const double2 *sweep_pt;
     ClipPath::Node *sweep_node;
     /* True = +X; False = -X*/
     bool x_dir;
@@ -381,14 +380,21 @@ class PolyclipBentleyOttmann {
 
     friend std::ostream &operator<<(std::ostream &stream, const Edge &e)
     {
-      return stream << e.first->data << "--" << e.second->data;
+      if (e.x_dir) {
+        return stream << e.first->data << "--" << e.second->data;
+      }
+      return stream << e.second->data << "--" << e.first->data;
     }
   };
 
   struct Event {
     enum Type { EMPTY = 0, START, END, INTERSECTION };
 
-    Event() = default;
+    Event()
+    {
+      type = EMPTY;
+    }
+
     Event(const double2 point, const Edge edge, Type type) : pt(point), edge(edge), type(type)
     {
     }
@@ -401,7 +407,7 @@ class PolyclipBentleyOttmann {
 
     double2 pt;
     Edge edge;
-    Edge isect_edge;
+    std::optional<Edge> isect_edge;
     Type type;
 
     friend bool operator==(const Event &a, const Event &b)
@@ -427,7 +433,7 @@ class PolyclipBentleyOttmann {
         return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge;
       }
       return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge << " x "
-                    << e.isect_edge;
+                    << e.isect_edge.value();
     }
   };
 
@@ -436,6 +442,8 @@ class PolyclipBentleyOttmann {
  private:
   std::priority_queue<Event, std::deque<Event>, std::greater<Event>> event_queue;
   std::set<Edge> sweep_line_edges;
+
+  double2 sweep_pt;
 
   Event check_edge_edge_isect(const Edge &e1, const Edge &e2);
 };
