@@ -349,14 +349,17 @@ class PolyclipBentleyOttmann {
 
   struct Edge {
     Edge() = default;
-    Edge(ClipPath::Node *first, ClipPath::Node *second, const double2 *sweep_pt, bool x_dir = true)
+    Edge(ClipPath::Node *first,
+         ClipPath::Node *second,
+         const std::pair<double2, bool> *sweep_pt,
+         bool x_dir = true)
         : first(first), second(second), sweep_pt(sweep_pt), x_dir(x_dir)
     {
       sweep_node = x_dir ? first : second;
     }
 
     Edge(std::pair<ClipPath::Node *, ClipPath::Node *> node_pair,
-         const double2 *sweep_pt,
+         const std::pair<double2, bool> *sweep_pt,
          bool x_dir = true)
         : first(node_pair.first), second(node_pair.second), sweep_pt(sweep_pt), x_dir(x_dir)
     {
@@ -365,8 +368,10 @@ class PolyclipBentleyOttmann {
 
     ClipPath::Node *first;
     ClipPath::Node *second;
-    const double2 *sweep_pt;
+    /* Pointer to node after which the next intersection should be inserted. */
     ClipPath::Node *sweep_node;
+    /* Pointer to the sweep pt, shared between Edge instances. */
+    const std::pair<double2, bool> *sweep_pt;
     /* True = +X; False = -X*/
     bool x_dir;
 
@@ -435,6 +440,12 @@ class PolyclipBentleyOttmann {
       return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge << " x "
                     << e.isect_edge.value();
     }
+
+    /* Returns true if events differ by a value less than limit. */
+    static bool compare_limit(const Event &e1, const Event &e2, double limit)
+    {
+      return double2::compare_limit(e1.pt, e2.pt, limit) && e1.type == e2.type;
+    }
   };
 
   ClipPath find_intersections(const PointList &list);
@@ -443,7 +454,7 @@ class PolyclipBentleyOttmann {
   std::priority_queue<Event, std::deque<Event>, std::greater<Event>> event_queue;
   std::set<Edge> sweep_line_edges;
 
-  double2 sweep_pt;
+  std::pair<double2, bool> sweep_pt;
 
   Event check_edge_edge_isect(const Edge &e1, const Edge &e2);
 };

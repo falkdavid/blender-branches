@@ -4999,7 +4999,7 @@ static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
 
   GP_EDITABLE_STROKES_BEGIN (gps_iter, C, gpl, gps) {
     if (gps->flag & GP_STROKE_SELECT && gps->flag & GP_STROKE_CYCLIC) {
-      BKE_gpencil_stroke_isect_self(gps);
+      BKE_gpencil_stroke_outer_boundary(gps);
     }
   }
   GP_EDITABLE_STROKES_END(gps_iter);
