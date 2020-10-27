@@ -59,6 +59,7 @@ template<typename T> class LinkedChain {
     Node *next;
     Node *prev;
     Node *link;
+    bool visited = false;
 
     Node(const T &data, Node *next = nullptr, Node *prev = nullptr, Node *link = nullptr)
         : data(data), next(next), prev(prev), link(link)
@@ -341,6 +342,15 @@ struct Polygon {
   Polylines holes;
 };
 
+class PolyclipBruteForce {
+ public:
+  PolyclipBruteForce()
+  {
+  }
+
+  ClipPath find_intersections(const PointList &list);
+};
+
 class PolyclipBentleyOttmann {
  public:
   PolyclipBentleyOttmann()
@@ -458,6 +468,8 @@ class PolyclipBentleyOttmann {
 
 ClipPath point_list_find_intersections_brute_force(const PointList &list);
 PointList clip_path_get_outer_boundary(ClipPath &path);
+
+ClipPath find_intersections(const PointList &list, uint method);
 
 Polyline polyline_offset(Polyline &pline,
                          const uint subdivisions,

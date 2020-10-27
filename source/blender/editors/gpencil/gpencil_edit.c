@@ -5003,10 +5003,17 @@ void GPENCIL_OT_stroke_merge_by_distance(wmOperatorType *ot)
 /** \name Stroke to outer boundary
  * \{ */
 
+typedef enum e_IntersectionAlgorithms {
+  BRUTE_FORCE = 0,
+  BRUTE_FORCE_AABB,
+  BENTLEY_OTTMANN,
+} e_IntersectionAlgorithms;
+
 static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = (bGPdata *)ob->data;
+  e_IntersectionAlgorithms algorithm = RNA_enum_get(op->ptr, "algorithm");
 
   /* sanity checks */
   if (ELEM(NULL, gpd)) {
@@ -5015,7 +5022,7 @@ static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
 
   GP_EDITABLE_STROKES_BEGIN (gps_iter, C, gpl, gps) {
     if (gps->flag & GP_STROKE_SELECT && gps->flag & GP_STROKE_CYCLIC) {
-      BKE_gpencil_stroke_outer_boundary(gps);
+      BKE_gpencil_stroke_outer_boundary(gps, algorithm);
     }
   }
   GP_EDITABLE_STROKES_END(gps_iter);
@@ -5029,6 +5036,15 @@ static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
 
 void GPENCIL_OT_stroke_outer_boundary(wmOperatorType *ot)
 {
+  PropertyRNA *prop;
+
+  static const EnumPropertyItem algorithm[] = {
+      {BRUTE_FORCE, "BRUTE_FORCE", 0, "Brute force", ""},
+      {BRUTE_FORCE_AABB, "BRUTE_FORCE_AABB", 0, "Brute force with boudning box checking", ""},
+      {BENTLEY_OTTMANN, "BENTLEY_OTTMANN", 0, "Bentley Ottmann algorithm", ""},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   /* identifiers */
   ot->name = "Stroke to outer boundary";
   ot->idname = "GPENCIL_OT_stroke_outer_boundary";
@@ -5037,6 +5053,13 @@ void GPENCIL_OT_stroke_outer_boundary(wmOperatorType *ot)
   /* api callbacks */
   ot->exec = gpencil_stroke_outer_boundary_exec;
   ot->poll = gpencil_active_layer_poll;
+
+  prop = RNA_def_enum(ot->srna,
+                      "algorithm",
+                      algorithm,
+                      BENTLEY_OTTMANN,
+                      "Algorithm",
+                      "The intersection algorithm to use for clipping");
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

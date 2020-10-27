@@ -49,11 +49,19 @@ void BLI_polyline_outer_boundary(const double *verts,
                                  double **r_boundary_verts,
                                  uint *r_num_boundary_verts);
 
-void BLI_polyline_isect_self(const double *verts,
-                             uint num_verts,
-                             CLIP_METHOD method,
-                             double **r_isect_verts,
-                             uint *r_num_isect_verts);
+/**
+ * Generates all the intersections of a polyline and inserts the points at the right places.
+ * \param verts: The input vertices. Expected to be a flat 2d array with x and y.
+ * \param num_verts: The number of vertices.
+ * \param r_boundary_verts: Returning array of verticies including the intersection points. This
+ * will be a flat array of x,y points or NULL if an error occured.
+ * \param r_num_boundary_verts: Number of returning vertices. Can be 0 if an error occured.
+ */
+void BLI_polyline_intersections(const double *verts,
+                                uint num_verts,
+                                CLIP_METHOD method,
+                                double **r_isect_verts,
+                                uint *r_num_isect_verts);
 
 /**
  * Generates the offset of a polyline by taking the radius of each vertex into account.

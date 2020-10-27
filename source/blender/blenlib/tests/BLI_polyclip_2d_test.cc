@@ -242,7 +242,8 @@ TEST(polyclip2d, clip_path_get_outer_boundary2)
 TEST(polyclip2d, clip_path_get_outer_boundary3)
 {
   PointList plist = {{0, 0}, {1, 2}, {0, 2}, {1, 1}, {0, 1}};
-  ClipPath path = point_list_find_intersections_brute_force(plist);
+  PolyclipBruteForce bf;
+  ClipPath path = bf.find_intersections(plist);
   // std::cout << path << "\n";
   PointList plist_expected = {{0, 0},
                               {0, 1},
@@ -263,8 +264,8 @@ TEST(polyclip2d, clip_path_intersect_brute_force)
   PointList plist = {{0.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {1.0, 0.0}};
   PointList plist_expected = {
       {0.0, 0.0}, {0.5, 0.5}, {1.0, 1.0}, {0.0, 1.0}, {0.5, 0.5}, {1.0, 0.0}};
-
-  ClipPath result = point_list_find_intersections_brute_force(plist);
+  PolyclipBruteForce bf;
+  ClipPath result = bf.find_intersections(plist);
   if (HasFailure()) {
     std::cout << "Expext: " << plist_expected << std::endl;
     std::cout << "Result: " << result << std::endl;

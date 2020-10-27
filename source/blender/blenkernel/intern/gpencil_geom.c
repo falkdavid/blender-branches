@@ -38,6 +38,8 @@
 #include "BLI_polyclip_2d.h"
 #include "BLI_polyfill_2d.h"
 
+#include "PIL_time_utildefines.h"
+
 #include "BLT_translation.h"
 
 #include "DNA_gpencil_modifier_types.h"
@@ -2615,7 +2617,7 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
 /**
  * Calculates the outer boundary of the stroke.
  */
-void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps)
+void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps, CLIP_METHOD method)
 {
 #define POINT_DIM 2
   if (gps->totpoints < 1) {
@@ -2631,12 +2633,10 @@ void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps)
 
   double *r_boundary_stroke_points;
   uint r_num_boundary_stroke_points;
-  BLI_polyline_outer_boundary(stroke_points,
-                              num_points,
-                              BENTLEY_OTTMANN,
-                              &r_boundary_stroke_points,
-                              &r_num_boundary_stroke_points);
-
+  TIMEIT_START(outer_boundary);
+  BLI_polyline_outer_boundary(
+      stroke_points, num_points, method, &r_boundary_stroke_points, &r_num_boundary_stroke_points);
+  TIMEIT_END(outer_boundary);
   if (r_boundary_stroke_points == NULL) {
     MEM_freeN(stroke_points);
     return;
@@ -2686,11 +2686,11 @@ void BKE_gpencil_stroke_isect_self(bGPDstroke *gps)
 
   double *r_isect_stroke_points;
   uint r_num_isect_stroke_points;
-  BLI_polyline_isect_self(stroke_points,
-                          num_points,
-                          BENTLEY_OTTMANN,
-                          &r_isect_stroke_points,
-                          &r_num_isect_stroke_points);
+  BLI_polyline_intersections(stroke_points,
+                             num_points,
+                             BENTLEY_OTTMANN,
+                             &r_isect_stroke_points,
+                             &r_num_isect_stroke_points);
 
   if (r_isect_stroke_points == NULL) {
     MEM_freeN(stroke_points);

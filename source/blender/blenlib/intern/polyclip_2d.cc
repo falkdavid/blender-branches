@@ -263,10 +263,74 @@ template<typename T> void LinkedChain<T>::unlink_ends()
 template class LinkedChain<double2>;
 
 /* -------------------------------------------------------------------- */
+/** \name Find outer boundary
+ * \{ */
+
+PointList clip_path_get_outer_boundary(ClipPath &path)
+{
+  PointList outer;
+
+  /* Find the left-most point (x minimum). Break ties with the y minimum. */
+  auto min_elem = std::min_element(
+      path.begin(), path.end(), [](const ClipPath::Node *a, const ClipPath::Node *b) {
+        if (a->data.x == b->data.x) {
+          return a->data.y < b->data.y;
+        }
+        return a->data.x < b->data.x;
+      });
+
+  /* Connect the ends of the path to form a loop. */
+  path.link_ends();
+
+  /* Figure out if the outside is to the left or right of the first edge. */
+  double2 current_pt = (*min_elem)->data;
+  double2 next_pt = (*min_elem)->next->data;
+  double2 prev_pt = (*min_elem)->prev->data;
+  int orient = double2::orientation(current_pt, next_pt, prev_pt) > 0 ? -1 : 1;
+
+  /* Keep track of the direction of iteration in the linked list, e.g. forward or backward. Always
+   * start iterating clockwise so that the edge-direction of the boundary is also clockwise. */
+  bool forward = (orient == 1);
+
+  outer.push_back(current_pt);
+  auto it = (forward == true) ? ClipPath::Iterator::next(min_elem) :
+                                ClipPath::Iterator::prev(min_elem);
+  while (it != min_elem && !(*it)->visited) {
+    auto vert = *it;
+    outer.push_back(vert->data);
+    vert->visited = true;
+
+    /* At intersection point, always iterate towards the outside. */
+    if (vert->link != nullptr) {
+      current_pt = vert->data;
+      next_pt = (forward == true) ? vert->next->data : vert->prev->data;
+      double2 link_next_pt = vert->link->next->data;
+      forward = (double2::orientation(current_pt, next_pt, link_next_pt) == 1);
+
+      it.switch_link();
+    }
+
+    if (forward) {
+      ++it;
+    }
+    else {
+      --it;
+    }
+  }
+
+  /* Avoid infinite loops by disconnecting the ends. */
+  path.unlink_ends();
+
+  return outer;
+}
+
+/* \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Polyline clipping
  * \{ */
 
-ClipPath point_list_find_intersections_brute_force(const PointList &list)
+ClipPath PolyclipBruteForce::find_intersections(const PointList &list)
 {
   ClipPath path = ClipPath(list);
 
@@ -306,63 +370,6 @@ ClipPath point_list_find_intersections_brute_force(const PointList &list)
   }
 
   return path;
-}
-
-PointList clip_path_get_outer_boundary(ClipPath &path)
-{
-  PointList outer;
-
-  /* Find the left-most point (x minimum). Break ties with the y minimum. */
-  auto min_elem = std::min_element(
-      path.begin(), path.end(), [](const ClipPath::Node *a, const ClipPath::Node *b) {
-        if (a->data.x == b->data.x) {
-          return a->data.y < b->data.y;
-        }
-        return a->data.x < b->data.x;
-      });
-
-  /* Connect the ends of the path to form a loop. */
-  path.link_ends();
-
-  /* Figure out if the outside is to the left or right of the first edge. */
-  double2 current_pt = (*min_elem)->data;
-  double2 next_pt = (*min_elem)->next->data;
-  double2 prev_pt = (*min_elem)->prev->data;
-  int orient = double2::orientation(current_pt, next_pt, prev_pt) > 0 ? -1 : 1;
-
-  /* Keep track of the direction of iteration in the linked list, e.g. forward or backward. Always
-   * start iterating clockwise so that the edge-direction of the boundary is also clockwise. */
-  bool forward = (orient == 1);
-
-  outer.push_back(current_pt);
-  auto it = (forward == true) ? ClipPath::Iterator::next(min_elem) :
-                                ClipPath::Iterator::prev(min_elem);
-  while (it != min_elem) {
-    auto vert = *it;
-    outer.push_back(vert->data);
-
-    /* At intersection point, always iterate towards the outside. */
-    if (vert->link != nullptr) {
-      current_pt = vert->data;
-      next_pt = (forward == true) ? vert->next->data : vert->prev->data;
-      double2 link_next_pt = vert->link->next->data;
-      forward = (double2::orientation(current_pt, next_pt, link_next_pt) == 1);
-
-      it.switch_link();
-    }
-
-    if (forward) {
-      ++it;
-    }
-    else {
-      --it;
-    }
-  }
-
-  /* Avoid infinite loops by disconnecting the ends. */
-  path.unlink_ends();
-
-  return outer;
 }
 
 double PolyclipBentleyOttmann::Edge::y_intercept(const Edge &edge, const double x)
@@ -717,6 +724,36 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
   return clip_path;
 }
 
+/**
+ * Calculate and insert intersection points of a polyline.
+ * \param list: The input polyline.
+ * \param method: The method/algorithm to be used.
+ * \returns a clip path with the original polyline and intersection points inserted at the right
+ * places.
+ */
+ClipPath find_intersections(const PointList &list, CLIP_METHOD method)
+{
+  ClipPath clip_path;
+  switch (method) {
+    case BRUTE_FORCE: {
+      PolyclipBruteForce bf;
+      clip_path = bf.find_intersections(list);
+      break;
+    }
+    case BRUTE_FORCE_AABB:
+      break;
+    case BENTLEY_OTTMANN: {
+      polyclip::PolyclipBentleyOttmann bo;
+      clip_path = bo.find_intersections(list);
+      break;
+    }
+    default:
+      break;
+  }
+
+  return clip_path;
+}
+
 /* \} */
 
 /* -------------------------------------------------------------------- */
@@ -1034,107 +1071,93 @@ extern "C" {
 
 using namespace blender;
 
+static polyclip::PointList point_list_from_flat_array(const double *verts, uint num_verts)
+{
+  polyclip::PointList pline;
+  /* Fill pline with data from verts. */
+  for (uint i = 0; i < num_verts; i++) {
+    double2 co = double2(verts[i * 2], verts[i * 2 + 1]);
+    pline.push_back(co);
+  }
+  return pline;
+}
+
+static void flat_array_from_point_list(polyclip::PointList &list,
+                                       double **r_array,
+                                       uint *r_size_array)
+{
+  uint num_points = list.size();
+  if (num_points == 0) {
+    *r_array = NULL;
+    *r_size_array = 0;
+    return;
+  }
+
+  double *point_array = (double *)MEM_mallocN(sizeof(double) * num_points * 2, __func__);
+  polyclip::PointList::iterator it = list.begin();
+  for (uint i = 0; i < num_points; i++, it++) {
+    double2 vert = *it;
+    copy_v2_v2_db(&point_array[i * 2], vert);
+  }
+  *r_array = point_array;
+  *r_size_array = num_points;
+}
+
+static void flat_array_from_clip_path(polyclip::ClipPath &list,
+                                      double **r_array,
+                                      uint *r_size_array)
+{
+  uint num_points = list.size();
+  if (num_points == 0) {
+    *r_array = NULL;
+    *r_size_array = 0;
+    return;
+  }
+
+  double *point_array = (double *)MEM_mallocN(sizeof(double) * num_points * 2, __func__);
+  auto it = list.begin();
+  for (uint i = 0; i < num_points; i++, it++) {
+    double2 vert = (*it)->data;
+    copy_v2_v2_db(&point_array[i * 2], vert);
+  }
+  *r_array = point_array;
+  *r_size_array = num_points;
+}
+
 void BLI_polyline_outer_boundary(const double *verts,
                                  uint num_verts,
                                  CLIP_METHOD method,
                                  double **r_boundary_verts,
                                  uint *r_num_boundary_verts)
 {
-  polyclip::PointList pline;
+  /* Convert flat array to point list. */
+  polyclip::PointList pline = point_list_from_flat_array(verts, num_verts);
 
-  /* Fill pline with data from verts. */
-  for (uint i = 0; i < num_verts; i++) {
-    double2 co = double2(verts[i * 2], verts[i * 2 + 1]);
-    pline.push_back(co);
-  }
+  /* Connect ends so we find intersections at the last edge. */
   pline.push_back(*pline.begin());
-
-  polyclip::ClipPath clip_path;
-  switch (method) {
-    case BRUTE_FORCE: {
-      clip_path = polyclip::point_list_find_intersections_brute_force(pline);
-      break;
-    }
-    case BRUTE_FORCE_AABB:
-      break;
-    case BENTLEY_OTTMANN: {
-      polyclip::PolyclipBentleyOttmann bo;
-      clip_path = bo.find_intersections(pline);
-      break;
-    }
-    default:
-      break;
-  }
+  polyclip::ClipPath clip_path = polyclip::find_intersections(pline, method);
   clip_path.remove(*clip_path.end());
 
+  /* Find the outer boundary and convert the point list back to a flat array. */
   polyclip::PointList outer_boundary = polyclip::clip_path_get_outer_boundary(clip_path);
-  uint num_boundary_vert = outer_boundary.size();
-  if (num_boundary_vert == 0) {
-    *r_boundary_verts = NULL;
-    *r_num_boundary_verts = 0;
-    return;
-  }
-
-  /* Allocate and populate returning flat array of boundary vertices. */
-  double *boundary_verts = (double *)MEM_mallocN(sizeof(double) * num_boundary_vert * 2, __func__);
-  polyclip::PointList::iterator it = outer_boundary.begin();
-  for (uint i = 0; i < num_boundary_vert; i++, it++) {
-    double2 vert = *it;
-    copy_v2_v2_db(&boundary_verts[i * 2], vert);
-  }
-
-  *r_boundary_verts = boundary_verts;
-  *r_num_boundary_verts = num_boundary_vert;
+  flat_array_from_point_list(outer_boundary, r_boundary_verts, r_num_boundary_verts);
 }
 
-void BLI_polyline_isect_self(const double *verts,
-                             uint num_verts,
-                             CLIP_METHOD method,
-                             double **r_isect_verts,
-                             uint *r_num_isect_verts)
+void BLI_polyline_intersections(const double *verts,
+                                uint num_verts,
+                                CLIP_METHOD method,
+                                double **r_isect_verts,
+                                uint *r_num_isect_verts)
 {
-  polyclip::PointList pline;
+  /* Convert flat array to point list. */
+  polyclip::PointList pline = point_list_from_flat_array(verts, num_verts);
 
-  /* Fill pline with data from verts. */
-  for (uint i = 0; i < num_verts; i++) {
-    double2 co = double2(verts[i * 2], verts[i * 2 + 1]);
-    pline.push_back(co);
-  }
+  /* Connect ends so we find intersections at the last edge. */
+  pline.push_back(*pline.begin());
+  polyclip::ClipPath clip_path = polyclip::find_intersections(pline, method);
+  clip_path.remove(*clip_path.end());
 
-  polyclip::ClipPath clip_path;
-  switch (method) {
-    case BRUTE_FORCE: {
-      clip_path = polyclip::point_list_find_intersections_brute_force(pline);
-      break;
-    }
-    case BRUTE_FORCE_AABB:
-      break;
-    case BENTLEY_OTTMANN: {
-      polyclip::PolyclipBentleyOttmann bo;
-      clip_path = bo.find_intersections(pline);
-      break;
-    }
-    default:
-      break;
-  }
-
-  uint num_isect_vert = clip_path.size();
-  if (num_isect_vert == 0) {
-    *r_isect_verts = NULL;
-    *r_num_isect_verts = 0;
-    return;
-  }
-
-  /* Allocate and populate returning flat array of isect vertices. */
-  double *isect_verts = (double *)MEM_mallocN(sizeof(double) * num_isect_vert * 2, __func__);
-  auto it = clip_path.begin();
-  for (uint i = 0; i < num_isect_vert; i++, it++) {
-    double2 vert = (*it)->data;
-    copy_v2_v2_db(&isect_verts[i * 2], vert);
-  }
-
-  *r_isect_verts = isect_verts;
-  *r_num_isect_verts = num_isect_vert;
+  flat_array_from_clip_path(clip_path, r_isect_verts, r_num_isect_verts);
 }
 
 void BLI_polyline_offset(const double *verts,
