@@ -380,7 +380,8 @@ class PolyclipBentleyOttmann {
 
     friend bool operator==(const Edge &e1, const Edge &e2)
     {
-      return e1.first->data == e2.first->data && e1.second->data == e2.second->data;
+      return double2::compare_limit(e1.first->data, e2.first->data, FLT_EPSILON) &&
+             double2::compare_limit(e1.second->data, e2.second->data, FLT_EPSILON);
     }
 
     friend std::ostream &operator<<(std::ostream &stream, const Edge &e)
@@ -393,7 +394,9 @@ class PolyclipBentleyOttmann {
   };
 
   struct Event {
-    enum Type { EMPTY = 0, START, END, INTERSECTION };
+    /* Order is important here since it dictates in what Order Events with the same coordinates
+     * get handled. */
+    enum Type { EMPTY = 0, START = 1, END = 2, INTERSECTION = 3 };
 
     Event()
     {
@@ -417,13 +420,13 @@ class PolyclipBentleyOttmann {
 
     friend bool operator==(const Event &a, const Event &b)
     {
-      return a.pt == b.pt && a.type == b.type;
+      return double2::compare_limit(a.pt, b.pt, FLT_EPSILON) && a.type == b.type;
     }
 
     friend bool operator>(const Event &e1, const Event &e2)
     {
-      if (e1.pt.x == e2.pt.x) {
-        if (e1.pt.y == e2.pt.y) {
+      if (IS_EQ(e1.pt.x, e2.pt.x)) {
+        if (IS_EQ(e1.pt.y, e2.pt.y)) {
           return e1.type < e2.type;
         }
         return e1.pt.y > e2.pt.y;
@@ -439,12 +442,6 @@ class PolyclipBentleyOttmann {
       }
       return stream << "Event(" << type_name[e.type] << ") at " << e.pt << ", " << e.edge << " x "
                     << e.isect_edge.value();
-    }
-
-    /* Returns true if events differ by a value less than limit. */
-    static bool compare_limit(const Event &e1, const Event &e2, double limit)
-    {
-      return double2::compare_limit(e1.pt, e2.pt, limit) && e1.type == e2.type;
     }
   };
 

@@ -373,18 +373,31 @@ double PolyclipBentleyOttmann::Edge::y_intercept(const Edge &edge, const double 
   double start_y = edge_start.y;
   double end_x = edge_end.x;
   double end_y = edge_end.y;
-  if (x <= start_x) {
+
+  if (x < start_x) {
     return start_y;
   }
-  if (x >= end_x) {
+  if (x > end_x) {
     return end_y;
   }
 
   double x_dist = end_x - start_x;
   if (IS_EQ(x_dist, 0.0)) {
-    /* edge is vertical, return smallest y */
-    return start_y < end_y ? start_y : end_y;
+    double sweep_y = edge.sweep_pt->first.y;
+    if (end_y < start_y) {
+      SWAP(double, end_y, start_y);
+    }
+    CLAMP(sweep_y, start_y, end_y);
+    return sweep_y;
   }
+
+  if (IS_EQ(x, start_x)) {
+    return start_y;
+  }
+  if (IS_EQ(x, end_x)) {
+    return end_y;
+  }
+
   double dx0 = x - start_x;
   double dx1 = end_x - x;
 
@@ -455,7 +468,7 @@ bool operator<(const PolyclipBentleyOttmann::Edge &e1, const PolyclipBentleyOttm
   }
 
   /* If the slopes are also equal, compare start and end points. */
-  if (is_before && e1_start != e2_start) {
+  if (is_before && !double2::compare_limit(e1_start, e2_start, FLT_EPSILON)) {
     return double2::compare_less(e1_start, e2_start);
   }
   return double2::compare_less(e1_end, e2_end);
@@ -468,11 +481,12 @@ PolyclipBentleyOttmann::Event PolyclipBentleyOttmann::check_edge_edge_isect(
       e1.first->data, e1.second->data, e2.first->data, e2.second->data);
   if (result.kind == double2::isect_result::LINE_LINE_CROSS) {
     double2 isect_pt = double2::interpolate(e1.first->data, e1.second->data, result.lambda);
-    return Event(isect_pt, e1, e2);
+    if (!double2::compare_limit(isect_pt, e1.first->data, FLT_EPSILON) &&
+        !double2::compare_limit(isect_pt, e1.second->data, FLT_EPSILON)) {
+      return Event(isect_pt, e1, e2);
+    }
   }
-  else {
-    return Event();
-  }
+  return Event();
 }
 
 ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
@@ -506,7 +520,7 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
     sweep_pt.first = event.pt;
 
     // auto print = [](const Edge &e) {
-    //   // std::cout << "\n"
+    //   std::cout << "\n"
     //             << e << " (" << PolyclipBentleyOttmann::Edge::y_intercept(e,
     //             e.sweep_pt->first.x)
     //             << ")";
@@ -517,7 +531,7 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
 
     if (event.type == Event::INTERSECTION) {
       /* Pop duplicates from the event queue. */
-      while (Event::compare_limit(event, event_queue.top(), FLT_EPSILON)) {
+      while (event == event_queue.top()) {
         event_queue.pop();
       }
 
@@ -531,11 +545,30 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
       auto itA = sweep_line_edges.extract(event.edge);
       auto itB = sweep_line_edges.extract(event_isect_edge);
 
+      /* Fall back to a linear search. */
       if (itA.empty() || itB.empty()) {
+        bool found_A = !itA.empty(), found_B = !itB.empty();
+        for (auto e = sweep_line_edges.begin(); e != sweep_line_edges.end(); ++e) {
+          if (!found_A && *e == event.edge) {
+            itA = sweep_line_edges.extract(e);
+            found_A = true;
+          }
+          if (!found_B && *e == event_isect_edge) {
+            itB = sweep_line_edges.extract(e);
+            found_B = true;
+          }
+          if (found_A && found_B) {
+            break;
+          }
+        }
+      }
+
+      if (itA.empty() || itB.empty()) {
+        continue;
         // std::cout << "Error: could not extract intersecting edges!";
       }
 
-      BLI_assert(!itA.empty() && !itB.empty());
+      // BLI_assert(!itA.empty() && !itB.empty());
 
       ClipPath::Node *isect_nodeA, *isect_nodeB;
       if (event.edge.x_dir) {
@@ -633,7 +666,7 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
       }
       else {
         // std::cout << "Error: Event edge " << event.edge << " was not inserted!" << std::endl;
-        BLI_assert(false);
+        BLI_assert(it.second == true);
       }
     }
     else if (event.type == Event::END) {
@@ -641,6 +674,16 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
       sweep_pt.second = true;
       /* Find the edge and remove it from the sweep line set. */
       auto it = sweep_line_edges.find(event.edge);
+
+      /* Fall back to linear search if nessesary. */
+      if (it == sweep_line_edges.end()) {
+        for (auto e = sweep_line_edges.begin(); e != sweep_line_edges.end(); ++e) {
+          if (*e == event.edge) {
+            it = e;
+            break;
+          }
+        }
+      }
 
       if (it != sweep_line_edges.end()) {
         auto next = std::next(it);
@@ -661,8 +704,8 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
       }
       else {
         // std::cout << "Error: Event edge " << event.edge << " could not be deleted!" <<
-        // std::endl;
-        BLI_assert(false);
+        // std::endl; BLI_assert(it != sweep_line_edges.end());
+        continue;
       }
     }
 
@@ -1004,6 +1047,7 @@ void BLI_polyline_outer_boundary(const double *verts,
     double2 co = double2(verts[i * 2], verts[i * 2 + 1]);
     pline.push_back(co);
   }
+  pline.push_back(*pline.begin());
 
   polyclip::ClipPath clip_path;
   switch (method) {
@@ -1021,6 +1065,7 @@ void BLI_polyline_outer_boundary(const double *verts,
     default:
       break;
   }
+  clip_path.remove(*clip_path.end());
 
   polyclip::PointList outer_boundary = polyclip::clip_path_get_outer_boundary(clip_path);
   uint num_boundary_vert = outer_boundary.size();

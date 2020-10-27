@@ -423,6 +423,36 @@ TEST(polyclip2d, clip_path_intersect_bentley_ottman07)
   }
 }
 
+TEST(polyclip2d, clip_path_intersect_bentley_ottman08)
+{
+  PolyclipBentleyOttmann bo;
+  PointList plist = {{0, 0}, {2, 1}, {0, 1}, {2, 2}, {0, 2}, {2, 3}, {1, 3}, {1, 0}};
+  PointList plist_expected = {{0, 0},
+                              {1, 0.5},
+                              {2, 1},
+                              {1, 1},
+                              {0, 1},
+                              {1, 1.5},
+                              {2, 2},
+                              {1, 2},
+                              {0, 2},
+                              {1, 2.5},
+                              {2, 3},
+                              {1, 3},
+                              {1, 2.5},
+                              {1, 2},
+                              {1, 1.5},
+                              {1, 1},
+                              {1, 0.5},
+                              {1, 0}};
+  ClipPath result = bo.find_intersections(plist);
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
 TEST(polyclip2d, offset_polyline_simple01)
 {
   VertList verts = {{0, 0, 1.0}, {1, 0, 1.0}};
