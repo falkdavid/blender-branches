@@ -268,6 +268,7 @@ template class LinkedChain<double2>;
 
 PointList clip_path_get_outer_boundary(ClipPath &path)
 {
+  BLI_assert(path.size() > 1);
   PointList outer;
 
   /* Find the left-most point (x minimum). Break ties with the y minimum. */
@@ -329,6 +330,7 @@ PointList clip_path_get_outer_boundary(ClipPath &path)
 /* -------------------------------------------------------------------- */
 /** \name Polyline clipping
  * \{ */
+/* Brute force algorithm */
 
 ClipPath PolyclipBruteForce::find_intersections(const PointList &list)
 {
@@ -371,6 +373,9 @@ ClipPath PolyclipBruteForce::find_intersections(const PointList &list)
 
   return path;
 }
+
+/* -------------------------------------------------------------------- */
+/* Bentley-Ottmann algorithm */
 
 double PolyclipBentleyOttmann::Edge::y_intercept(const Edge &edge, const double x)
 {
@@ -724,6 +729,116 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
   return clip_path;
 }
 
+/* -------------------------------------------------------------------- */
+/* Park & Shin (2001) algorithm */
+
+void PolyclipParkShin::add_monotone_chains_from_point_list(const PointList &list)
+{
+  clip_path = ClipPath(list);
+  auto min_elem = std::min_element(
+      clip_path.begin(), clip_path.end(), [](const ClipPath::Node *a, const ClipPath::Node *b) {
+        return (a->data.x == b->data.x) ? a->data.y < b->data.y : a->data.x < b->data.x;
+      });
+  clip_path.link_ends();
+
+  bool x_dir = true;
+  ClipPath::Node *start_node = *min_elem;
+  ClipPath::Node *end_node = *min_elem;
+  for (auto pair_it = ClipPath::PairIterator(*min_elem, (*min_elem)->next);
+       (*pair_it).second != *min_elem;
+       ++pair_it) {
+    auto pair = *pair_it;
+    double2 current = pair.first->data;
+    double2 next = pair.second->data;
+    if (double2::compare_less(current, next) == x_dir || IS_EQ(current.x, next.x)) {
+      if (x_dir) {
+        end_node = pair.second;
+      }
+      else {
+        start_node = pair.second;
+      }
+    }
+    else {
+      mono_chains.push_back(
+          MonotoneChain(x_dir ? start_node : end_node, x_dir ? end_node : start_node, x_dir));
+      // active_chain_queue.push(MonotoneChain(current_path, x_dir));
+      // std::cout << current_path << std::endl;
+
+      x_dir = !x_dir;
+      start_node = pair.first;
+      end_node = pair.second;
+    }
+  }
+  mono_chains.push_back(
+      MonotoneChain(x_dir ? start_node : end_node, x_dir ? end_node : start_node, x_dir));
+
+  for (auto m : mono_chains) {
+    std::cout << m << std::endl;
+  }
+}
+
+bool operator<(const PolyclipParkShin::MonotoneChain &m1,
+               const PolyclipParkShin::MonotoneChain &m2)
+{
+  double2 current_m1 = m1.current->data;
+  double2 current_m2 = m2.current->data;
+
+  if (!IS_EQ(current_m1.y, current_m2.y)) {
+    return current_m1.y > current_m2.y;
+  }
+
+  double2 e1_start = m1.x_dir ? m1.current->prev->data : m1.current->next->data;
+  double2 e1_end = m1.current->data;
+  double2 e2_start = m2.x_dir ? m2.current->prev->data : m2.current->next->data;
+  double2 e2_end = m2.current->data;
+
+  double e1_slope = double2::slope(e1_start, e1_end);
+  double e2_slope = double2::slope(e2_start, e2_end);
+
+  if (!IS_EQ(e1_slope, e2_slope)) {
+    return e2_slope > e1_slope;
+  }
+
+  return current_m1.x < current_m2.x;
+}
+
+ClipPath PolyclipParkShin::find_intersections()
+{
+  /* Add all monotone chains to the active chain queue. */
+  for (auto chain : mono_chains) {
+    active_chain_queue.emplace(chain);
+  }
+
+  /* Loop while there are active chains. */
+  while (!active_chain_queue.empty()) {
+    MonotoneChain chain = active_chain_queue.top();
+    ClipPath::Node *current_node = chain.current;
+
+    chain.advance_current();
+    active_chain_queue.pop();
+    active_chain_queue.push(chain);
+
+    if (current_node == chain.begin) {
+      /* Insert chain into sweep_line_chains. Check if it intersects with prev or next. */
+    }
+    else if (current_node == chain.end) {
+      /* Remove chain from sweep_line_chains. Check if prev or next intersect each other. */
+    }
+    else if (current_node->link != nullptr) {
+      /* Get intersecting chain. Advance its current node. Swap chains in sweep_line_chains. Check
+       * if prev or next are intersecting. */
+      /* TODO: how can we efficiently reinsert the intersecting chain into the prioity queue? */
+    }
+    else {
+      /* Check if chain intersects with prev or next. */
+    }
+  }
+
+  return clip_path;
+}
+
+/* -------------------------------------------------------------------- */
+
 /**
  * Calculate and insert intersection points of a polyline.
  * \param list: The input polyline.
@@ -731,7 +846,7 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
  * \returns a clip path with the original polyline and intersection points inserted at the right
  * places.
  */
-ClipPath find_intersections(const PointList &list, CLIP_METHOD method)
+ClipPath find_intersections(const PointList &list, uint method)
 {
   ClipPath clip_path;
   switch (method) {
@@ -746,6 +861,11 @@ ClipPath find_intersections(const PointList &list, CLIP_METHOD method)
       polyclip::PolyclipBentleyOttmann bo;
       clip_path = bo.find_intersections(list);
       break;
+    }
+    case PARK_SHIN: {
+      polyclip::PolyclipParkShin ps;
+      ps.add_monotone_chains_from_point_list(list);
+      clip_path = ps.find_intersections();
     }
     default:
       break;

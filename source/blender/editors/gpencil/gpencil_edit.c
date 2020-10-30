@@ -5007,6 +5007,7 @@ typedef enum e_IntersectionAlgorithms {
   BRUTE_FORCE = 0,
   BRUTE_FORCE_AABB,
   BENTLEY_OTTMANN,
+  PARK_SHIN,
 } e_IntersectionAlgorithms;
 
 static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
@@ -5042,6 +5043,7 @@ void GPENCIL_OT_stroke_outer_boundary(wmOperatorType *ot)
       {BRUTE_FORCE, "BRUTE_FORCE", 0, "Brute force", ""},
       {BRUTE_FORCE_AABB, "BRUTE_FORCE_AABB", 0, "Brute force with boudning box checking", ""},
       {BENTLEY_OTTMANN, "BENTLEY_OTTMANN", 0, "Bentley Ottmann algorithm", ""},
+      {PARK_SHIN, "PARK_SHIN", 0, "Park & Shin (2001) algorithm", ""},
       {0, NULL, 0, NULL, NULL},
   };
 

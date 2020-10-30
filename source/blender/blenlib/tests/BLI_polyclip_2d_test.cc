@@ -454,6 +454,14 @@ TEST(polyclip2d, clip_path_intersect_bentley_ottman08)
   }
 }
 
+TEST(polyclip2d, clip_path_intersect_park_shin01)
+{
+  PointList plist = {{0, 0}, {1, 0}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {2, 2}};
+
+  PolyclipParkShin ps;
+  ps.add_monotone_chains_from_point_list(plist);
+}
+
 TEST(polyclip2d, offset_polyline_simple01)
 {
   VertList verts = {{0, 0, 1.0}, {1, 0, 1.0}};

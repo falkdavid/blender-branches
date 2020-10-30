@@ -23,6 +23,7 @@
 #include <list>
 #include <queue>
 #include <set>
+#include <boost/heap/priority_queue.hpp>
 
 #include "BLI_double2.hh"
 #include "BLI_double3.hh"
@@ -168,6 +169,11 @@ template<typename T> class LinkedChain {
       pair_.first++;
       pair_.second++;
       return *this;
+    }
+
+    bool operator==(const PairIterator &it) const
+    {
+      return pair_.first == it.pair_.first && pair_.second == it.pair_.second;
     }
 
     bool operator!=(const PairIterator &it) const
@@ -358,6 +364,15 @@ class PolyclipBentleyOttmann {
   }
 
   struct Edge {
+    ClipPath::Node *first;
+    ClipPath::Node *second;
+    /* Pointer to node after which the next intersection should be inserted. */
+    ClipPath::Node *sweep_node;
+    /* Pointer to the sweep pt, shared between Edge instances. */
+    const std::pair<double2, bool> *sweep_pt;
+    /* True = +X; False = -X*/
+    bool x_dir;
+
     Edge() = default;
     Edge(ClipPath::Node *first,
          ClipPath::Node *second,
@@ -375,15 +390,6 @@ class PolyclipBentleyOttmann {
     {
       sweep_node = x_dir ? first : second;
     }
-
-    ClipPath::Node *first;
-    ClipPath::Node *second;
-    /* Pointer to node after which the next intersection should be inserted. */
-    ClipPath::Node *sweep_node;
-    /* Pointer to the sweep pt, shared between Edge instances. */
-    const std::pair<double2, bool> *sweep_pt;
-    /* True = +X; False = -X*/
-    bool x_dir;
 
     static double y_intercept(const Edge &edge, const double x);
     friend bool operator<(const Edge &e1, const Edge &e2);
@@ -404,9 +410,13 @@ class PolyclipBentleyOttmann {
   };
 
   struct Event {
-    /* Order is important here since it dictates in what Order Events with the same coordinates
+    /* Order is important here since it dictates in what order events with the same coordinates
      * get handled. */
     enum Type { EMPTY = 0, START = 1, END = 2, INTERSECTION = 3 };
+    double2 pt;
+    Edge edge;
+    std::optional<Edge> isect_edge;
+    Type type;
 
     Event()
     {
@@ -422,11 +432,6 @@ class PolyclipBentleyOttmann {
     {
       type = INTERSECTION;
     }
-
-    double2 pt;
-    Edge edge;
-    std::optional<Edge> isect_edge;
-    Type type;
 
     friend bool operator==(const Event &a, const Event &b)
     {
@@ -464,6 +469,66 @@ class PolyclipBentleyOttmann {
   std::pair<double2, bool> sweep_pt;
 
   Event check_edge_edge_isect(const Edge &e1, const Edge &e2);
+};
+
+class PolyclipParkShin {
+ public:
+  PolyclipParkShin()
+  {
+  }
+
+  struct MonotoneChain {
+    ClipPath::Node *begin;
+    ClipPath::Node *end;
+    ClipPath::Node *current;
+    bool x_dir;
+
+    MonotoneChain(ClipPath::Node *begin, ClipPath::Node *end, bool x_dir)
+        : begin(begin), end(end), x_dir(x_dir)
+    {
+      current = begin;
+    }
+
+    ~MonotoneChain() = default;
+
+    void advance_current()
+    {
+      current = x_dir ? current->next : current->prev;
+    }
+
+    friend bool operator>(const MonotoneChain &m1, const MonotoneChain &m2)
+    {
+      double2 fm1 = m1.current->data;
+      double2 fm2 = m2.current->data;
+      return IS_EQ(fm1.x, fm2.x) ? fm1.y > fm2.y : fm1.x > fm2.x;
+    }
+
+    friend bool operator<(const MonotoneChain &m1, const MonotoneChain &m2);
+
+    friend std::ostream &operator<<(std::ostream &stream, const MonotoneChain &m)
+    {
+      ClipPath::Node *it = m.begin;
+      stream << "[";
+      while (it != m.end) {
+        stream << it->data << " ";
+        it = m.x_dir ? it->next : it->prev;
+      }
+      stream << it->data << " ";
+      stream << "]";
+      return stream;
+    }
+  };
+
+  void add_monotone_chains_from_point_list(const PointList &list);
+  ClipPath find_intersections();
+
+ private:
+  ClipPath clip_path;
+  std::list<MonotoneChain> mono_chains;
+  boost::heap::priority_queue<MonotoneChain> queue;
+  std::priority_queue<MonotoneChain, std::deque<MonotoneChain>, std::greater<MonotoneChain>>
+      active_chain_queue;
+  std::set<MonotoneChain> sweep_line_chains;
 };
 
 ClipPath point_list_find_intersections_brute_force(const PointList &list);
