@@ -23,7 +23,6 @@
 #include <list>
 #include <queue>
 #include <set>
-#include <boost/heap/priority_queue.hpp>
 
 #include "BLI_double2.hh"
 #include "BLI_double3.hh"
@@ -480,26 +479,26 @@ class PolyclipParkShin {
   struct MonotoneChain {
     ClipPath::Node *begin;
     ClipPath::Node *end;
-    ClipPath::Node *current;
+    ClipPath::Node *front;
+    std::set<MonotoneChain>::iterator isect_chain_it;
+    std::set<MonotoneChain>::iterator sweep_it;
     bool x_dir;
 
     MonotoneChain(ClipPath::Node *begin, ClipPath::Node *end, bool x_dir)
         : begin(begin), end(end), x_dir(x_dir)
     {
-      current = begin;
+      front = begin;
     }
 
-    ~MonotoneChain() = default;
-
-    void advance_current()
+    void advance_front()
     {
-      current = x_dir ? current->next : current->prev;
+      front = x_dir ? front->next : front->prev;
     }
 
     friend bool operator>(const MonotoneChain &m1, const MonotoneChain &m2)
     {
-      double2 fm1 = m1.current->data;
-      double2 fm2 = m2.current->data;
+      double2 fm1 = m1.front->data;
+      double2 fm2 = m2.front->data;
       return IS_EQ(fm1.x, fm2.x) ? fm1.y > fm2.y : fm1.x > fm2.x;
     }
 
@@ -520,14 +519,13 @@ class PolyclipParkShin {
   };
 
   void add_monotone_chains_from_point_list(const PointList &list);
+  ClipPath::Node *find_intersection_mono_chains(const MonotoneChain &m1, const MonotoneChain &m2);
   ClipPath find_intersections();
 
  private:
   ClipPath clip_path;
   std::list<MonotoneChain> mono_chains;
-  boost::heap::priority_queue<MonotoneChain> queue;
-  std::priority_queue<MonotoneChain, std::deque<MonotoneChain>, std::greater<MonotoneChain>>
-      active_chain_queue;
+  std::set<MonotoneChain, std::greater<MonotoneChain>> active_chain_queue;
   std::set<MonotoneChain> sweep_line_chains;
 };
 
