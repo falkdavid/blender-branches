@@ -92,10 +92,30 @@ template<typename T> class LinkedChain {
       return Iterator(it.current_->prev);
     }
 
+    static Iterator next(const Iterator &it, uint i)
+    {
+      Iterator new_it = Iterator(it);
+      while (i > 0) {
+        new_it++;
+        --i;
+      }
+      return new_it;
+    }
+
+    static Iterator prev(const Iterator &it, uint i)
+    {
+      Iterator new_it = Iterator(it);
+      while (i > 0) {
+        new_it--;
+        --i;
+      }
+      return new_it;
+    }
+
     Iterator &operator++()
     {
-      BLI_assert(current_ != nullptr);
-      current_ = current_->next;
+      if (current_ != nullptr)
+        current_ = current_->next;
       return *this;
     }
 
@@ -108,8 +128,8 @@ template<typename T> class LinkedChain {
 
     Iterator &operator--()
     {
-      BLI_assert(current_ != nullptr);
-      current_ = current_->prev;
+      if (current_ != nullptr)
+        current_ = current_->prev;
       return *this;
     }
 
@@ -283,6 +303,8 @@ template<typename T> class LinkedChain {
   void remove(Node *node);
   void link_ends();
   void unlink_ends();
+  void set_head(Node *nodeA);
+  void set_head(Iterator &it);
 
  private:
   uint size_;
@@ -480,8 +502,8 @@ class PolyclipParkShin {
     ClipPath::Node *begin;
     ClipPath::Node *end;
     ClipPath::Node *front;
-    std::set<MonotoneChain>::iterator isect_chain_it;
-    std::set<MonotoneChain>::iterator sweep_it;
+    std::set<MonotoneChain>::iterator sweep_isect_chain;
+    std::set<MonotoneChain>::iterator sweep_chain;
     bool x_dir;
 
     MonotoneChain(ClipPath::Node *begin, ClipPath::Node *end, bool x_dir)
@@ -499,7 +521,12 @@ class PolyclipParkShin {
     {
       double2 fm1 = m1.front->data;
       double2 fm2 = m2.front->data;
-      return IS_EQ(fm1.x, fm2.x) ? fm1.y > fm2.y : fm1.x > fm2.x;
+      if (!double2::compare_limit(fm1, fm2, FLT_EPSILON)) {
+        return double2::compare_less(fm1, fm2);
+      }
+      double2 fm1_next = m1.x_dir ? m1.front->next->data : m1.front->prev->data;
+      double2 fm2_next = m2.x_dir ? m2.front->next->data : m2.front->prev->data;
+      return double2::compare_less(fm1_next, fm2_next);
     }
 
     friend bool operator<(const MonotoneChain &m1, const MonotoneChain &m2);
@@ -509,17 +536,50 @@ class PolyclipParkShin {
       ClipPath::Node *it = m.begin;
       stream << "[";
       while (it != m.end) {
-        stream << it->data << " ";
+        if (it == m.front) {
+          stream << "{" << it->data << "} ";
+        }
+        else {
+          stream << it->data << " ";
+        }
+
         it = m.x_dir ? it->next : it->prev;
       }
-      stream << it->data << " ";
+      if (it == m.front) {
+        stream << "{" << it->data << "} ";
+      }
+      else {
+        stream << it->data << " ";
+      }
       stream << "]";
       return stream;
     }
   };
 
+  void print_mono_chains()
+  {
+    for (auto m : mono_chains) {
+      std::cout << m << std::endl;
+    }
+  }
+
+  void print_active_queue()
+  {
+    for (auto m : active_chain_queue) {
+      std::cout << m << std::endl;
+    }
+  }
+
+  void print_sweep_chains()
+  {
+    for (auto m : sweep_line_chains) {
+      std::cout << m << std::endl;
+    }
+  }
+
   void add_monotone_chains_from_point_list(const PointList &list);
-  ClipPath::Node *find_intersection_mono_chains(const MonotoneChain &m1, const MonotoneChain &m2);
+  bool find_intersection_mono_chains(std::set<MonotoneChain>::iterator &m1_it,
+                                     std::set<MonotoneChain>::iterator &m2_it);
   ClipPath find_intersections();
 
  private:

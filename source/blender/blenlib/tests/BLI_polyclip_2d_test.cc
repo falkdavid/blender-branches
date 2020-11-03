@@ -57,6 +57,19 @@ static std::ostream &operator<<(std::ostream &stream, const PointList &plist)
   return stream;
 }
 
+TEST(polyclip2d, linked_chain_set_head)
+{
+  PointList expected = {{5, 6}, {7, 8}, {9, 0}, {1, 2}, {3, 4}};
+  ClipPath cp = ClipPath({{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 0}});
+  auto it = ClipPath::Iterator::next(cp.begin(), 2);
+  cp.set_head(it);
+  EXPECT_TRUE(compare_clip_paths(cp, expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << expected << std::endl;
+    std::cout << "Result: " << cp << std::endl;
+  }
+}
+
 TEST(polyclip2d, clip_path_insert)
 {
   ClipPath list;
@@ -460,6 +473,67 @@ TEST(polyclip2d, clip_path_intersect_park_shin01)
 
   PolyclipParkShin ps;
   ps.add_monotone_chains_from_point_list(plist);
+}
+
+TEST(polyclip2d, clip_path_intersect_park_shin02)
+{
+  PolyclipParkShin ps;
+  PointList plist = {{0, 0}, {1, 1}, {0, 1}, {1, 0}};
+  PointList plist_expected = {{0, 0}, {0.5, 0.5}, {1, 1}, {0, 1}, {0.5, 0.5}, {1, 0}};
+  ps.add_monotone_chains_from_point_list(plist);
+  ps.print_mono_chains();
+
+  ClipPath result = ps.find_intersections();
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_park_shin03)
+{
+  PolyclipParkShin ps;
+  PointList plist = {{0, 3}, {3, 0}, {6, 3}, {5, 1}, {1, 1}};
+  PointList plist_expected = {{0, 3}, {2, 1}, {3, 0}, {6, 3}, {5, 1}, {2, 1}, {1, 1}};
+  ps.add_monotone_chains_from_point_list(plist);
+  ps.print_mono_chains();
+
+  ClipPath result = ps.find_intersections();
+
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_park_shin04)
+{
+  PolyclipParkShin ps;
+  PointList plist = {{0, 0}, {3, 2}, {2, 2}, {3, 0}, {1, 2}, {1, 0}};
+  PointList plist_expected = {{0, 0},
+                              {1, 2.0 / 3.0},
+                              {1.8, 1.2},
+                              {2.25, 1.5},
+                              {3, 2},
+                              {2, 2},
+                              {2.25, 1.5},
+                              {3, 0},
+                              {1.8, 1.2},
+                              {1, 2},
+                              {1, 2.0 / 3.0},
+                              {1, 0}};
+  ps.add_monotone_chains_from_point_list(plist);
+  ps.print_mono_chains();
+
+  ClipPath result = ps.find_intersections();
+
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
 }
 
 TEST(polyclip2d, offset_polyline_simple01)
