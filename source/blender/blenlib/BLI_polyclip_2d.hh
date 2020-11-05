@@ -502,8 +502,7 @@ class PolyclipParkShin {
     ClipPath::Node *begin;
     ClipPath::Node *end;
     ClipPath::Node *front;
-    std::set<MonotoneChain>::iterator sweep_isect_chain;
-    std::set<MonotoneChain>::iterator sweep_chain;
+    std::shared_ptr<MonotoneChain> sweep_isect_chain;
     bool x_dir;
 
     MonotoneChain(ClipPath::Node *begin, ClipPath::Node *end, bool x_dir)
@@ -517,6 +516,7 @@ class PolyclipParkShin {
       front = x_dir ? front->next : front->prev;
     }
 
+    /* Greater operator used to sort chains by their front node. */
     friend bool operator>(const MonotoneChain &m1, const MonotoneChain &m2)
     {
       double2 fm1 = m1.front->data;
@@ -529,7 +529,31 @@ class PolyclipParkShin {
       return double2::compare_less(fm1_next, fm2_next);
     }
 
-    friend bool operator<(const MonotoneChain &m1, const MonotoneChain &m2);
+    /* Less operator used to sort chains by the current front y values and by the slop in case the
+     * y coodrinate is the same. */
+    friend bool operator<(const MonotoneChain &m1, const MonotoneChain &m2)
+    {
+      double2 front_m1 = m1.front->data;
+      double2 front_m2 = m2.front->data;
+
+      if (!IS_EQ(front_m1.y, front_m2.y)) {
+        return front_m1.y > front_m2.y;
+      }
+
+      double2 e1_start = m1.x_dir ? m1.front->prev->data : m1.front->next->data;
+      double2 e1_end = m1.front->data;
+      double2 e2_start = m2.x_dir ? m2.front->prev->data : m2.front->next->data;
+      double2 e2_end = m2.front->data;
+
+      double e1_slope = double2::slope(e1_start, e1_end);
+      double e2_slope = double2::slope(e2_start, e2_end);
+
+      if (!IS_EQ(e1_slope, e2_slope)) {
+        return e2_slope > e1_slope;
+      }
+
+      return front_m1.x < front_m2.x;
+    }
 
     friend std::ostream &operator<<(std::ostream &stream, const MonotoneChain &m)
     {
@@ -559,34 +583,46 @@ class PolyclipParkShin {
   void print_mono_chains()
   {
     for (auto m : mono_chains) {
-      std::cout << m << std::endl;
+      std::cout << *m.get() << std::endl;
     }
   }
 
   void print_active_queue()
   {
     for (auto m : active_chain_queue) {
-      std::cout << m << std::endl;
+      std::cout << *m.get() << std::endl;
     }
   }
 
   void print_sweep_chains()
   {
     for (auto m : sweep_line_chains) {
-      std::cout << m << std::endl;
+      std::cout << *m.get() << std::endl;
     }
   }
 
   void add_monotone_chains_from_point_list(const PointList &list);
-  bool find_intersection_mono_chains(std::set<MonotoneChain>::iterator &m1_it,
-                                     std::set<MonotoneChain>::iterator &m2_it);
+  ClipPath::Node *find_intersection_mono_chains(MonotoneChain &m1, MonotoneChain &m2);
   ClipPath find_intersections();
 
  private:
+  static bool comp_chain_greater(std::shared_ptr<MonotoneChain> m1,
+                                 std::shared_ptr<MonotoneChain> m2)
+  {
+    return *(m1.get()) > *(m2.get());
+  };
+
+  static bool comp_chain_less(std::shared_ptr<MonotoneChain> m1, std::shared_ptr<MonotoneChain> m2)
+  {
+    return *(m1.get()) < *(m2.get());
+  };
+
   ClipPath clip_path;
-  std::list<MonotoneChain> mono_chains;
-  std::set<MonotoneChain, std::greater<MonotoneChain>> active_chain_queue;
-  std::set<MonotoneChain> sweep_line_chains;
+  std::list<std::shared_ptr<MonotoneChain>> mono_chains;
+  std::set<std::shared_ptr<MonotoneChain>, decltype(&comp_chain_greater)> active_chain_queue{
+      comp_chain_greater};
+  std::set<std::shared_ptr<MonotoneChain>, decltype(&comp_chain_less)> sweep_line_chains{
+      comp_chain_less};
 };
 
 ClipPath point_list_find_intersections_brute_force(const PointList &list);

@@ -473,6 +473,7 @@ TEST(polyclip2d, clip_path_intersect_park_shin01)
 
   PolyclipParkShin ps;
   ps.add_monotone_chains_from_point_list(plist);
+  ps.print_mono_chains();
 }
 
 TEST(polyclip2d, clip_path_intersect_park_shin02)
@@ -495,7 +496,8 @@ TEST(polyclip2d, clip_path_intersect_park_shin03)
 {
   PolyclipParkShin ps;
   PointList plist = {{0, 3}, {3, 0}, {6, 3}, {5, 1}, {1, 1}};
-  PointList plist_expected = {{0, 3}, {2, 1}, {3, 0}, {6, 3}, {5, 1}, {2, 1}, {1, 1}};
+  PointList plist_expected = {
+      {0, 3}, {2, 1}, {3, 0}, {4, 1}, {6, 3}, {5, 1}, {4, 1}, {2, 1}, {1, 1}};
   ps.add_monotone_chains_from_point_list(plist);
   ps.print_mono_chains();
 
