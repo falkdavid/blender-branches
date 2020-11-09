@@ -467,6 +467,26 @@ TEST(polyclip2d, clip_path_intersect_bentley_ottman08)
   }
 }
 
+TEST(polyclip2d, mono_chain_compare_active_chain_greater)
+{
+  PolyclipParkShin ps;
+  ClipPath m1_list = PointList({{0, 0}, {1, 1}});
+  ClipPath m2_list = PointList({{0, 1}, {1, 1}});
+  ClipPath m3_list = PointList({{0, 1}, {1, 0}});
+  PolyclipParkShin::MonotoneChain m1{m1_list.front(), m1_list.back(), nullptr, true};
+  PolyclipParkShin::MonotoneChain m2{m2_list.front(), m2_list.back(), nullptr, true};
+  PolyclipParkShin::MonotoneChain m3{m3_list.front(), m3_list.back(), nullptr, true};
+
+  EXPECT_TRUE(m1 > m2);
+  EXPECT_FALSE(m2 > m1);
+
+  m1.advance_front();
+  m2.advance_front();
+
+  EXPECT_TRUE(m1 > m2);
+  EXPECT_FALSE(m2 > m1);
+}
+
 TEST(polyclip2d, clip_path_intersect_park_shin01)
 {
   PointList plist = {{0, 0}, {1, 0}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {2, 2}};
@@ -482,7 +502,6 @@ TEST(polyclip2d, clip_path_intersect_park_shin02)
   PointList plist = {{0, 0}, {1, 1}, {0, 1}, {1, 0}};
   PointList plist_expected = {{0, 0}, {0.5, 0.5}, {1, 1}, {0, 1}, {0.5, 0.5}, {1, 0}};
   ps.add_monotone_chains_from_point_list(plist);
-  ps.print_mono_chains();
 
   ClipPath result = ps.find_intersections();
   EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
@@ -499,7 +518,6 @@ TEST(polyclip2d, clip_path_intersect_park_shin03)
   PointList plist_expected = {
       {0, 3}, {2, 1}, {3, 0}, {4, 1}, {6, 3}, {5, 1}, {4, 1}, {2, 1}, {1, 1}};
   ps.add_monotone_chains_from_point_list(plist);
-  ps.print_mono_chains();
 
   ClipPath result = ps.find_intersections();
 
@@ -527,7 +545,36 @@ TEST(polyclip2d, clip_path_intersect_park_shin04)
                               {1, 2.0 / 3.0},
                               {1, 0}};
   ps.add_monotone_chains_from_point_list(plist);
-  ps.print_mono_chains();
+
+  ClipPath result = ps.find_intersections();
+
+  EXPECT_TRUE(compare_clip_paths(result, plist_expected, FLT_EPSILON));
+  if (HasFailure()) {
+    std::cout << "Expext: " << plist_expected << std::endl;
+    std::cout << "Result: " << result << std::endl;
+  }
+}
+
+TEST(polyclip2d, clip_path_intersect_park_shin05)
+{
+  PolyclipParkShin ps;
+  PointList plist = {{0, 0}, {1, 3}, {2, 4}, {3, 3}, {2, 2}, {0, 1}, {1, 4}, {3, 2}, {1, 0}};
+  PointList plist_expected = {{0, 0},
+                              {0.4, 1.2},
+                              {1, 3},
+                              {1.5, 3.5},
+                              {2, 4},
+                              {3, 3},
+                              {2.5, 2.5},
+                              {2, 2},
+                              {0.4, 1.2},
+                              {0, 1},
+                              {1, 4},
+                              {1.5, 3.5},
+                              {2.5, 2.5},
+                              {3, 2},
+                              {1, 0}};
+  ps.add_monotone_chains_from_point_list(plist);
 
   ClipPath result = ps.find_intersections();
 

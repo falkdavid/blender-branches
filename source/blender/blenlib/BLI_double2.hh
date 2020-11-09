@@ -197,19 +197,19 @@ struct double2 {
     if (a.x < b.x) {
       return true;
     }
-    else if (a.x > b.x) {
+    if (a.x > b.x) {
       return false;
     }
-    else if (a.y < b.y) {
+    if (a.y < b.y) {
       return true;
     }
     return false;
   }
 
   /**
-   * Return 1 if a, b, c are in counter-clockwise order (e.g. c lies to the left of the line a->b), -1 if
-   * the order is clockwise and 0 when they are colinear.
-   * Note: this is a nonrobust implementation.
+   * Return 1 if a, b, c are in counter-clockwise order (e.g. c lies to the left of the line a->b),
+   * -1 if the order is clockwise and 0 when they are colinear. Note: this is a nonrobust
+   * implementation.
    */
   static constexpr int orientation(const double2 &a, const double2 &b, const double2 &c)
   {
@@ -229,6 +229,46 @@ struct double2 {
       return a.y < b.y ? INFINITY : -INFINITY;
     }
     return (b.y - a.y) / (b.x - a.x);
+  }
+
+  static double y_intercept(const double2 &a, const double2 &b, const double x)
+  {
+    if (x < a.x) {
+      return a.y;
+    }
+    if (x > b.x) {
+      return b.y;
+    }
+
+    double x_dist = b.x - a.x;
+    if (IS_EQ(x_dist, 0.0)) {
+      if (b.y < a.y) {
+        return b.y;
+      }
+      return a.y;
+    }
+
+    if (IS_EQ(x, a.x)) {
+      return a.y;
+    }
+    if (IS_EQ(x, b.x)) {
+      return b.y;
+    }
+
+    double dx0 = x - a.x;
+    double dx1 = b.x - x;
+
+    double fac, ifac;
+    if (dx0 > dx1) {
+      ifac = dx0 / x_dist;
+      fac = 1.0 - ifac;
+    }
+    else {
+      fac = dx1 / x_dist;
+      ifac = 1.0 - fac;
+    }
+
+    return a.y * fac + b.y * ifac;
   }
 
   struct isect_result {
