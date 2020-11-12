@@ -58,16 +58,70 @@ template<typename T> LinkedChain<T>::LinkedChain(const std::list<T> &list)
   }
 }
 
-template<typename T> LinkedChain<T>::LinkedChain(const LinkedChain<T> &src)
+/**
+ * Copy a LinkedChain.
+ */
+template<typename T> LinkedChain<T>::LinkedChain(LinkedChain<T> &src)
 {
   this->head = nullptr;
   this->tail = nullptr;
   this->size_ = 0;
 
-  for (auto it = src.begin(); it != src.end(); ++it) {
-    auto elem = *it;
-    this->insert_back(elem->data);
+  std::unordered_map<Node *, Node *> visited_map;
+  std::queue<Node *> queue;
+
+  Node *front_src = src.front();
+  queue.push(front_src);
+
+  Node *front_dst = this->insert_front(front_src->data);
+  visited_map[front_src] = front_dst;
+
+  while (!queue.empty()) {
+    Node *src_elem = queue.front();
+    Node *dst_elem = visited_map[src_elem];
+
+    if (src_elem->prev != nullptr) {
+      auto it = visited_map.find(src_elem->prev);
+      if (it == visited_map.end()) {
+        Node *src_prev = src_elem->prev;
+        Node *dst_prev = this->insert_before(dst_elem, src_prev->data);
+        visited_map[src_prev] = dst_prev;
+        queue.push(src_prev);
+      }
+      else if (dst_elem->prev == nullptr) {
+        dst_elem->prev = it->second;
+      }
+    }
+    if (src_elem->next != nullptr) {
+      auto it = visited_map.find(src_elem->next);
+      if (it == visited_map.end()) {
+        Node *src_next = src_elem->next;
+        Node *dst_next = this->insert_after(dst_elem, src_next->data);
+        visited_map[src_next] = dst_next;
+        queue.push(src_next);
+      }
+      else if (dst_elem->next == nullptr) {
+        dst_elem->next = it->second;
+      }
+    }
+    if (src_elem->link != nullptr) {
+      auto it = visited_map.find(src_elem->link);
+      if (it == visited_map.end()) {
+        Node *src_link = src_elem->link;
+        Node *dst_link = this->insert_link(dst_elem, src_link->data);
+        visited_map[src_link] = dst_link;
+        queue.push(src_link);
+      }
+      else if (dst_elem->link == nullptr) {
+        dst_elem->link = it->second;
+      }
+    }
+
+    queue.pop();
   }
+
+  this->head = visited_map[src.front()];
+  this->tail = visited_map[src.back()];
 }
 
 template<typename T> LinkedChain<T>::~LinkedChain()
@@ -95,12 +149,31 @@ template<typename T> LinkedChain<T> &LinkedChain<T>::operator=(LinkedChain<T> sr
 template<typename T> typename LinkedChain<T>::Node *LinkedChain<T>::search(const T &data)
 {
   Node *node;
-  for (node = this->head; node != nullptr; node = node->next) {
-    if (node->data == data) {
+  for (auto it : *this) {
+    if (it->data == data) {
+      node = it;
       break;
     }
   }
 
+  return node;
+}
+
+/**
+ * Inserts data as a link node to "insert_node".
+ * \param insert_node: Pointer to the node that will be the link of the new node.
+ * \param data: The data to insert.
+ * \returns: Pointer to the inserted node.
+ */
+template<typename T>
+typename LinkedChain<T>::Node *LinkedChain<T>::insert_link(Node *insert_node, const T &data)
+{
+  BLI_assert(insert_node != nullptr);
+  Node *node = new Node(data);
+  node->link = insert_node;
+  insert_node->link = node;
+
+  this->size_++;
   return node;
 }
 
@@ -116,7 +189,7 @@ typename LinkedChain<T>::Node *LinkedChain<T>::insert_after(Node *insert_node, c
   BLI_assert(insert_node != nullptr);
   Node *node = new Node(data);
   node->prev = insert_node;
-  if (insert_node->next == nullptr) {
+  if (this->tail == insert_node || insert_node->next == nullptr) {
     this->tail = node;
   }
   else {
@@ -141,7 +214,7 @@ typename LinkedChain<T>::Node *LinkedChain<T>::insert_before(Node *insert_node, 
   BLI_assert(insert_node != nullptr);
   Node *node = new Node(data);
   node->next = insert_node;
-  if (insert_node->prev == nullptr) {
+  if (this->head == insert_node || insert_node->prev == nullptr) {
     this->head = node;
   }
   else {
@@ -213,13 +286,13 @@ template<typename T> void LinkedChain<T>::remove(Node *node)
     return;
   }
 
-  if (node->prev == nullptr) {
+  if (this->head == node || node->prev == nullptr) {
     this->head = node->next;
   }
   else {
     node->prev->next = node->next;
   }
-  if (node->next == nullptr) {
+  if (this->tail == node || node->next == nullptr) {
     this->tail = node->prev;
   }
   else {
@@ -263,7 +336,7 @@ template<typename T> void LinkedChain<T>::unlink_ends()
 /**
  * Sets the given node as the head of the LinkedChain.
  */
-template<typename T> void LinkedChain<T>::set_head(LinkedChain<T>::Node *nodeA)
+template<typename T> void LinkedChain<T>::shift_head(LinkedChain<T>::Node *nodeA)
 {
   if (this->head == nodeA) {
     return;
@@ -277,9 +350,30 @@ template<typename T> void LinkedChain<T>::set_head(LinkedChain<T>::Node *nodeA)
 /**
  * Sets the node pointed to by a given iterator as the head of the LinkedChain.
  */
-template<typename T> void LinkedChain<T>::set_head(LinkedChain<T>::Iterator &it)
+template<typename T> void LinkedChain<T>::shift_head(LinkedChain<T>::Iterator &it)
 {
-  this->set_head(*it);
+  this->shift_head(*it);
+}
+
+template<typename T> void LinkedChain<T>::set_front(LinkedChain<T>::Node *node)
+{
+  this->head = node;
+}
+
+template<typename T> void LinkedChain<T>::set_back(LinkedChain<T>::Node *node)
+{
+  this->tail = node;
+}
+
+/**
+ * Clear the visited mark for all nodes.
+ *
+ */
+template<typename T> void LinkedChain<T>::clear_visited()
+{
+  for (auto elem : *this) {
+    elem->visited = false;
+  }
 }
 
 template class LinkedChain<double2>;
@@ -754,22 +848,102 @@ ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
 /* -------------------------------------------------------------------- */
 /* Park & Shin (2001) algorithm */
 
+PolyclipParkShin::ClipPath PolyclipParkShin::clip_path_from_point_list(const PointList &list)
+{
+  PolyclipParkShin::ClipPath clip_path;
+  for (auto elem : list) {
+    clip_path.insert_back(elem);
+  }
+  return clip_path;
+}
+
+polyclip::ClipPath PolyclipParkShin::convert_clip_path()
+{
+  polyclip::ClipPath out_clip_path;
+  clip_path.clear_visited();
+
+  std::unordered_map<PolyclipParkShin::ClipPath::Node *, polyclip::ClipPath::Node *> visited_map;
+  std::queue<PolyclipParkShin::ClipPath::Node *> queue;
+
+  PolyclipParkShin::ClipPath::Node *front_src = clip_path.front();
+  queue.push(front_src);
+
+  polyclip::ClipPath::Node *front_dst = out_clip_path.insert_front(front_src->data.pt);
+  visited_map[front_src] = front_dst;
+
+  while (!queue.empty()) {
+    PolyclipParkShin::ClipPath::Node *src_elem = queue.front();
+    polyclip::ClipPath::Node *dst_elem = visited_map[src_elem];
+
+    if (src_elem->prev != nullptr) {
+      auto it = visited_map.find(src_elem->prev);
+      if (it == visited_map.end()) {
+        PolyclipParkShin::ClipPath::Node *src_prev = src_elem->prev;
+        polyclip::ClipPath::Node *dst_prev = out_clip_path.insert_before(dst_elem,
+                                                                         src_prev->data.pt);
+        visited_map[src_prev] = dst_prev;
+        queue.push(src_prev);
+      }
+      else if (dst_elem->prev == nullptr) {
+        dst_elem->prev = it->second;
+      }
+    }
+    if (src_elem->next != nullptr) {
+      auto it = visited_map.find(src_elem->next);
+      if (it == visited_map.end()) {
+        PolyclipParkShin::ClipPath::Node *src_next = src_elem->next;
+        polyclip::ClipPath::Node *dst_next = out_clip_path.insert_after(dst_elem,
+                                                                        src_next->data.pt);
+        visited_map[src_next] = dst_next;
+        queue.push(src_next);
+      }
+      else if (dst_elem->next == nullptr) {
+        dst_elem->next = it->second;
+      }
+    }
+    if (src_elem->link != nullptr) {
+      auto it = visited_map.find(src_elem->link);
+      if (it == visited_map.end()) {
+        PolyclipParkShin::ClipPath::Node *src_link = src_elem->link;
+        polyclip::ClipPath::Node *dst_link = out_clip_path.insert_link(dst_elem,
+                                                                       src_link->data.pt);
+        visited_map[src_link] = dst_link;
+        queue.push(src_link);
+      }
+      else if (dst_elem->link == nullptr) {
+        dst_elem->link = it->second;
+      }
+    }
+
+    queue.pop();
+  }
+
+  out_clip_path.set_front(visited_map[clip_path.front()]);
+  out_clip_path.set_back(visited_map[clip_path.back()]);
+
+  return out_clip_path;
+}
+
 void PolyclipParkShin::add_monotone_chains_from_point_list(const PointList &list)
 {
-  clip_path = ClipPath(list);
+  clip_path = clip_path_from_point_list(list);
   auto min_elem = std::min_element(
       clip_path.begin(), clip_path.end(), [](const ClipPath::Node *a, const ClipPath::Node *b) {
-        return (a->data.x == b->data.x) ? a->data.y < b->data.y : a->data.x < b->data.x;
+        return (a->data.pt.x == b->data.pt.x) ? a->data.pt.y < b->data.pt.y :
+                                                a->data.pt.x < b->data.pt.x;
       });
-  clip_path.set_head(min_elem);
+  clip_path.shift_head(min_elem);
+
+  // std::cout << "Min Elem: " << (*min_elem)->data.pt << std::endl;
+  // std::cout << clip_path << std::endl;
 
   bool x_dir = true;
   ClipPath::Node *start_node = *min_elem;
   ClipPath::Node *end_node = *min_elem;
   for (auto pair_it = clip_path.begin_pair(); pair_it != clip_path.end_pair(); ++pair_it) {
     auto pair = *pair_it;
-    double2 current = pair.first->data;
-    double2 next = pair.second->data;
+    double2 current = pair.first->data.pt;
+    double2 next = pair.second->data.pt;
     if (double2::compare_less(current, next) == x_dir || IS_EQ(current.x, next.x)) {
       end_node = pair.second;
     }
@@ -786,13 +960,17 @@ void PolyclipParkShin::add_monotone_chains_from_point_list(const PointList &list
       x_dir ? start_node : end_node, x_dir ? end_node : start_node, &sweep_pt, x_dir)));
 }
 
-ClipPath::Node *PolyclipParkShin::find_intersection_mono_chains(
-    PolyclipParkShin::MonotoneChain &m1, PolyclipParkShin::MonotoneChain &m2)
+PolyclipParkShin::ClipPath::Node *PolyclipParkShin::find_intersection_mono_chains(
+    const std::shared_ptr<PolyclipParkShin::MonotoneChain> &pm1,
+    const std::shared_ptr<PolyclipParkShin::MonotoneChain> &pm2)
 {
-  double2 e1_start = m1.x_dir ? m1.front->prev->data : m1.front->next->data;
-  double2 e1_end = m1.front->data;
-  double2 e2_start = m2.x_dir ? m2.front->prev->data : m2.front->next->data;
-  double2 e2_end = m2.front->data;
+  MonotoneChain m1 = *pm1.get();
+  MonotoneChain m2 = *pm2.get();
+
+  double2 e1_start = m1.x_dir ? m1.front->prev->data.pt : m1.front->next->data.pt;
+  double2 e1_end = m1.front->data.pt;
+  double2 e2_start = m2.x_dir ? m2.front->prev->data.pt : m2.front->next->data.pt;
+  double2 e2_end = m2.front->data.pt;
   if (double2::compare_limit(e1_start, e2_start, FLT_EPSILON) ||
       double2::compare_limit(e1_end, e2_end, FLT_EPSILON) ||
       double2::compare_limit(e1_start, e2_end, FLT_EPSILON) ||
@@ -812,6 +990,9 @@ ClipPath::Node *PolyclipParkShin::find_intersection_mono_chains(
                                       clip_path.insert_after(m2.front, isect_pt);
       clip_path.link(m1_isect_node, m2_isect_node);
 
+      m1_isect_node->data.isect_chains = {pm1, pm2};
+      m2_isect_node->data.isect_chains = {pm2, pm1};
+
       return m1_isect_node;
     }
   }
@@ -823,15 +1004,13 @@ bool PolyclipParkShin::isect_and_update_chains(
     std::set<std::shared_ptr<PolyclipParkShin::MonotoneChain>>::iterator &it2)
 {
   if (it1 != sweep_line_chains.end() && it2 != sweep_line_chains.end()) {
-    auto isect_node = find_intersection_mono_chains(*it1->get(), *it2->get());
+    auto isect_node = find_intersection_mono_chains(*it1, *it2);
     if (isect_node != nullptr) {
       auto node_it1 = active_chain_queue.extract(*it1);
       auto node_it2 = active_chain_queue.extract(*it2);
 
-      /* Set front node and linke mono chains via isect_chain. */
-      it2->get()->sweep_isect_chain = *it1;
+      /* Set front node. */
       it2->get()->front = isect_node->link;
-      it1->get()->sweep_isect_chain = *it2;
       it1->get()->front = isect_node;
 
       /* Update chain in active chain queue. */
@@ -843,19 +1022,17 @@ bool PolyclipParkShin::isect_and_update_chains(
   return false;
 }
 
-ClipPath PolyclipParkShin::find_intersections()
+polyclip::ClipPath PolyclipParkShin::find_intersections()
 {
   /* Add all monotone chains to the active chain queue. */
   for (auto chain : mono_chains) {
     active_chain_queue.emplace(chain);
   }
 
-  int i = 0;
-  std::cout << "Step: " << i << std::endl;
-  std::cout << "Active queue: " << std::endl;
-  print_active_queue();
-  std::cout << "Sweep chains: " << std::endl;
-  print_sweep_chains();
+  // int i = 0;
+  // std::cout << "Step: " << i << std::endl;
+  // print_active_queue();
+  // print_sweep_chains();
 
   /* Loop while there are active chains. */
   while (!active_chain_queue.empty()) {
@@ -863,15 +1040,15 @@ ClipPath PolyclipParkShin::find_intersections()
     auto current_chain = chain.value();
     ClipPath::Node *front_node = current_chain->front;
 
-    sweep_pt.first = front_node->data;
+    sweep_pt.first = front_node->data.pt;
 
-    std::cout << "Current chain: " << *chain.value().get() << std::endl;
-    current_chain->advance_front();
-    active_chain_queue.insert(std::move(chain));
+    // std::cout << "Step: " << ++i << std::endl;
+    // std::cout << "Current chain: " << *chain.value().get() << std::endl;
 
     /* Begin event */
     if (front_node == current_chain->begin) {
-      std::cout << "INSERT" << std::endl;
+      current_chain->advance_front();
+      // std::cout << "INSERT" << std::endl;
       /* Set position to after. */
       sweep_pt.second = false;
       /* Insert chain into sweep_line_chains. Check if it intersects with prev or next. */
@@ -885,10 +1062,19 @@ ClipPath PolyclipParkShin::find_intersections()
         isect_and_update_chains(current, next);
         isect_and_update_chains(current, prev);
       }
+      else {
+        // std::cout << *current_chain.get() << " could not be inserted!" << std::endl;
+        // BLI_assert(current_node.second);
+      }
+
+      active_chain_queue.insert(std::move(chain));
+
+      // print_sweep_chains();
     }
     /* End event */
     else if (front_node == current_chain->end) {
-      std::cout << "REMOVE" << std::endl;
+      current_chain->advance_front();
+      // std::cout << "REMOVE" << std::endl;
       /* Set position to before. */
       sweep_pt.second = true;
       /* Remove chain from sweep_line_chains. Check if prev or next intersect each other. */
@@ -896,7 +1082,9 @@ ClipPath PolyclipParkShin::find_intersections()
 
       /* Fall back to linear search. */
       if (current == sweep_line_chains.end()) {
-        std::cout << "Not found! Falling back to linear search!" << std::endl;
+        // std::cout << *current_chain.get() << " not found! Falling back to linear search!"
+        //           << std::endl;
+        // BLI_assert(current != sweep_line_chains.end());
         for (auto it = sweep_line_chains.begin(); it != sweep_line_chains.end(); ++it) {
           if (*it == current_chain) {
             current = it;
@@ -911,10 +1099,12 @@ ClipPath PolyclipParkShin::find_intersections()
       active_chain_queue.erase(current_chain);
 
       isect_and_update_chains(next, prev);
+
+      // print_sweep_chains();
     }
     /* Intersection event */
     else if (front_node->link != nullptr) {
-      std::cout << "INTERSECT" << std::endl;
+      // std::cout << "INTERSECT" << std::endl;
 
       /* Set position to before. */
       sweep_pt.second = true;
@@ -924,7 +1114,9 @@ ClipPath PolyclipParkShin::find_intersections()
       auto current = sweep_line_chains.find(current_chain);
       /* Fall back to linear search. */
       if (current == sweep_line_chains.end()) {
-        std::cout << "current not found! Falling back to linear search!" << std::endl;
+        // std::cout << "current(" << *current_chain.get()
+        //           << ") not found! Falling back to linear search!" << std::endl;
+        // BLI_assert(current != sweep_line_chains.end());
         for (auto it = sweep_line_chains.begin(); it != sweep_line_chains.end(); ++it) {
           if (*it == current_chain) {
             current = it;
@@ -933,30 +1125,42 @@ ClipPath PolyclipParkShin::find_intersections()
         }
       }
 
-      auto isect_it = sweep_line_chains.find(current_chain->sweep_isect_chain);
+      auto isect_chain = front_node->data.isect_chains.second;
+      auto isect_it = sweep_line_chains.find(isect_chain);
       /* Fall back to linear search. */
       if (isect_it == sweep_line_chains.end()) {
-        std::cout << "isect_it not found! Falling back to linear search!" << std::endl;
+        // std::cout << "isect_it(" << *isect_chain << ") not found! Falling back to linear
+        // search!"
+        //           << std::endl;
+        // BLI_assert(isect_it != sweep_line_chains.end());
         for (auto it = sweep_line_chains.begin(); it != sweep_line_chains.end(); ++it) {
-          if (*it == current->get()->sweep_isect_chain) {
+          if (*it == isect_chain) {
             isect_it = it;
             break;
           }
         }
       }
 
-      /* Set position to after. */
-      sweep_pt.second = false;
-
       /* Extract current node from sweep chains to swap position with isect chain. */
       auto chain_node = sweep_line_chains.extract(current);
       auto isect_chain_node = sweep_line_chains.extract(isect_it);
+
+      // print_sweep_chains();
+
+      /* Set position to after. */
+      sweep_pt.second = false;
+
       current = sweep_line_chains.insert(std::move(chain_node)).position;
       isect_it = sweep_line_chains.insert(std::move(isect_chain_node)).position;
 
-      auto isect_chain = active_chain_queue.extract(*isect_it);
-      isect_chain.value().get()->advance_front();
-      active_chain_queue.insert(std::move(isect_chain));
+      // print_sweep_chains();
+
+      current_chain->advance_front();
+
+      auto active_isect_chain = active_chain_queue.extract(*isect_it);
+      active_isect_chain.value().get()->advance_front();
+      active_chain_queue.insert(std::move(active_isect_chain));
+      active_chain_queue.insert(std::move(chain));
 
       if (current == std::prev(isect_it)) {
         auto next = std::next(isect_it);
@@ -973,17 +1177,25 @@ ClipPath PolyclipParkShin::find_intersections()
         isect_and_update_chains(isect_it, prev);
       }
       else {
-        std::cout << "Intersecting chains are not neigbours!" << std::endl;
+        // std::cout << "Intersecting chains (" << *current_chain.get() << ", " << *isect_chain
+        //           << ") are not neigbours!" << std::endl;
+        // BLI_assert(false);
       }
     }
     /* Inner event */
     else {
-      std::cout << "INNER" << std::endl;
+      current_chain->advance_front();
+      // std::cout << "INNER" << std::endl;
+      /* Set position to after. */
+      sweep_pt.second = false;
+
       auto current = sweep_line_chains.find(current_chain);
 
       /* Fall back to linear search. */
       if (current == sweep_line_chains.end()) {
-        std::cout << "Not found! Falling back to linear search!" << std::endl;
+        // std::cout << *current_chain.get() << " not found! Falling back to linear search!"
+        //           << std::endl;
+        // BLI_assert(current != sweep_line_chains.end());
         for (auto it = sweep_line_chains.begin(); it != sweep_line_chains.end(); ++it) {
           if (*it == current_chain) {
             current = it;
@@ -995,18 +1207,16 @@ ClipPath PolyclipParkShin::find_intersections()
 
       isect_and_update_chains(current, next);
       isect_and_update_chains(current, prev);
+
+      active_chain_queue.insert(std::move(chain));
     }
 
-    i++;
-    std::cout << "Step: " << i << std::endl;
-    std::cout << "Active queue: " << std::endl;
-    print_active_queue();
-    std::cout << "Sweep chains: " << std::endl;
-    print_sweep_chains();
-    std::cout << std::endl;
+    // std::cout << std::endl;
   }
 
-  return ClipPath(clip_path);
+  // std::cout << "result " << clip_path << std::endl;
+
+  return convert_clip_path();
 }
 
 /* -------------------------------------------------------------------- */
@@ -1038,6 +1248,7 @@ ClipPath find_intersections(const PointList &list, uint method)
       polyclip::PolyclipParkShin ps;
       ps.add_monotone_chains_from_point_list(list);
       clip_path = ps.find_intersections();
+      break;
     }
     default:
       break;
