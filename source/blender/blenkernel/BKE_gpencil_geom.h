@@ -131,7 +131,9 @@ void BKE_gpencil_stroke_isect_self(struct bGPDstroke *gps);
 struct bGPDstroke *BKE_gpencil_stroke_offset(struct bGPdata *gpd,
                                              struct bGPDlayer *gpl,
                                              struct bGPDstroke *gps,
-                                             uint subdivisions);
+                                             uint subdivisions,
+                                             float factor,
+                                             uint method);
 
 #ifdef __cplusplus
 }

@@ -33,6 +33,10 @@ typedef enum CLIP_METHOD {
   BENTLEY_OTTMANN,
 
   PARK_SHIN,
+
+#ifdef WITH_CLIPPER
+  CLIPPER,
+#endif
 } CLIP_METHOD;
 
 /**
@@ -70,6 +74,7 @@ void BLI_polyline_intersections(const double *verts,
  * \param verts: The input vertices. Expected to be a flat 3d array with x,y and the radius.
  * \param num_verts: The number of vertices.
  * \param radius: The radius of the polyline. Every vertex radius is a factor of this radius.
+ * \param factor: A factor to scale the radius.
  * \param subdivisions: The number of subdivisions along the end caps and corners (n / 180deg).
  * \param r_offset_verts: Returning array of offset points. This will be a flat 2d array with x and
  * y or NULL if an error occured.
@@ -78,6 +83,7 @@ void BLI_polyline_intersections(const double *verts,
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
                          const double radius,
+                         const double factor,
                          const uint subdivisions,
                          uint start_cap_t,
                          uint end_cap_t,

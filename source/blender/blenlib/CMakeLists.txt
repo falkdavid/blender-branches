@@ -345,9 +345,9 @@ if(WITH_CLIPPER)
     "/data/delta/workspaces/clipper/build_linux/include/polyclipping/"
   )
 
-  # list(APPEND LIB
-  #   "/data/delta/workspaces/clipper/build_linux/lib/libpolyclipping.so"
-  # )
+  list(APPEND LIB
+    "/data/delta/workspaces/clipper/build_linux/lib/libpolyclipping.a"
+  )
 endif()
 
 if(WIN32)

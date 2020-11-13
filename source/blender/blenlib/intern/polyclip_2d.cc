@@ -27,7 +27,10 @@
 
 #include "BLI_polyclip_2d.hh"
 
+// #define WITH_CLIPPER true
+
 #ifdef WITH_CLIPPER
+// #  include "../../../../../../clipper/build_linux/include/polyclipping/clipper.hpp"
 #  include "clipper.hpp"
 #endif
 
@@ -1219,6 +1222,42 @@ polyclip::ClipPath PolyclipParkShin::find_intersections()
   return convert_clip_path();
 }
 
+#ifdef WITH_CLIPPER
+/* -------------------------------------------------------------------- */
+/* Clipper library */
+
+#  define CONVERSION_SCALE 1e12
+
+static ClipperLib::IntPoint double2_to_int2(const double2 &pt)
+{
+  return ClipperLib::IntPoint((ClipperLib::cInt)std::round(pt.x * CONVERSION_SCALE),
+                              (ClipperLib::cInt)std::round(pt.y * CONVERSION_SCALE));
+}
+
+static double2 int2_to_double2(const ClipperLib::IntPoint &pt)
+{
+  return double2((double)pt.X / (double)CONVERSION_SCALE, (double)pt.Y / (double)CONVERSION_SCALE);
+}
+
+static ClipperLib::Path point_list_to_clipper_path(const PointList &list)
+{
+  ClipperLib::Path path;
+  for (auto pt : list) {
+    path.push_back(double2_to_int2(pt));
+  }
+  return path;
+}
+
+static PointList clipper_path_to_point_list(ClipperLib::Path &path)
+{
+  PointList list;
+  for (auto pt : path) {
+    list.push_back(int2_to_double2(pt));
+  }
+  return list;
+}
+
+#endif
 /* -------------------------------------------------------------------- */
 
 /**
@@ -1358,12 +1397,14 @@ static void generate_end_cap(VertList &list,
 /**
  * Calculate the offset (outline) of a polyline as new polyline.
  * \param subdivisions: Number of subdivions for the start and end caps
+ * \param factor: A factor to scale the radius.
  * \param pline_radius: polyline radius. Every vertex has an additional radius that is a factor of
  * this radius.
  * \return: offset polyline.
  */
 Polyline polyline_offset(Polyline &pline,
                          const uint subdivisions,
+                         const double factor,
                          const double pline_radius,
                          CapType start_cap_t,
                          CapType end_cap_t)
@@ -1378,8 +1419,10 @@ Polyline polyline_offset(Polyline &pline,
   Vert first = pline.verts.front();
   Vert last = pline.verts.back();
 
-  double first_radius = pline_radius * first.radius;
-  double last_radius = pline_radius * last.radius;
+  double radius = factor * pline_radius;
+
+  double first_radius = radius * first.radius;
+  double last_radius = radius * last.radius;
 
   Vert first_next;
   Vert last_prev;
@@ -1413,7 +1456,7 @@ Polyline polyline_offset(Polyline &pline,
     Vert curr = *it;
     Vert prev = *std::prev(it);
     Vert next = *std::next(it);
-    double r = pline_radius * curr.radius;
+    double r = radius * curr.radius;
 
     double2 curr_pt = double2(curr.co);
     double2 next_pt = double2(next.co);
@@ -1561,14 +1604,6 @@ Polyline polyline_offset(Polyline &pline,
 
 } /* namespace blender::polyclip */
 
-#ifdef WITH_CLIPPER
-// void test()
-// {
-//   ClipperLib::Clipper c;
-//   ClipperLib::Paths paths;
-// }
-#endif
-
 /* Wrapper for C. */
 extern "C" {
 
@@ -1635,7 +1670,16 @@ void BLI_polyline_outer_boundary(const double *verts,
 {
   /* Convert flat array to point list. */
   polyclip::PointList pline = point_list_from_flat_array(verts, num_verts);
-
+#ifdef WITH_CLIPPER
+  if (method == CLIPPER) {
+    ClipperLib::Path in_poly = polyclip::point_list_to_clipper_path(pline);
+    ClipperLib::Paths out_polys;
+    ClipperLib::SimplifyPolygon(in_poly, out_polys, ClipperLib::pftNonZero);
+    polyclip::PointList outer_boundary = polyclip::clipper_path_to_point_list(out_polys[0]);
+    flat_array_from_point_list(outer_boundary, r_boundary_verts, r_num_boundary_verts);
+    return;
+  }
+#endif
   /* Connect ends so we find intersections at the last edge. */
   pline.push_back(*pline.begin());
   polyclip::ClipPath clip_path = polyclip::find_intersections(pline, method);
@@ -1666,6 +1710,7 @@ void BLI_polyline_intersections(const double *verts,
 void BLI_polyline_offset(const double *verts,
                          uint num_verts,
                          const double radius,
+                         const double factor,
                          const uint subdivisions,
                          uint start_cap_t,
                          uint end_cap_t,
@@ -1683,6 +1728,7 @@ void BLI_polyline_offset(const double *verts,
 
   polyclip::Polyline offset_pline = polyline_offset(pline,
                                                     subdivisions,
+                                                    factor,
                                                     radius,
                                                     static_cast<polyclip::CapType>(start_cap_t),
                                                     static_cast<polyclip::CapType>(end_cap_t));

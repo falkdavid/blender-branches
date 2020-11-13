@@ -2732,7 +2732,9 @@ void BKE_gpencil_stroke_isect_self(bGPDstroke *gps)
 bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
                                       bGPDlayer *gpl,
                                       bGPDstroke *gps,
-                                      uint subdivisions)
+                                      uint subdivisions,
+                                      float factor,
+                                      uint method)
 {
 #define POINT_DIM 3
   if (gps->totpoints < 1) {
@@ -2755,6 +2757,7 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
   BLI_polyline_offset(stroke_points,
                       num_points,
                       stroke_radius,
+                      factor,
                       subdivisions,
                       (uint)gps->caps[0],
                       (uint)gps->caps[1],

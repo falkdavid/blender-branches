@@ -5091,7 +5091,13 @@ typedef enum e_IntersectionAlgorithms {
   BRUTE_FORCE_AABB,
   BENTLEY_OTTMANN,
   PARK_SHIN,
+  CLIPPER,
 } e_IntersectionAlgorithms;
+
+typedef enum e_OffsetAlgorithms {
+  INTERNAL = 0,
+  CLIPPER_OFFSET,
+} e_OffsetAlgorithms;
 
 static int gpencil_stroke_outer_boundary_exec(bContext *C, wmOperator *op)
 {
@@ -5127,6 +5133,7 @@ void GPENCIL_OT_stroke_outer_boundary(wmOperatorType *ot)
       {BRUTE_FORCE_AABB, "BRUTE_FORCE_AABB", 0, "Brute force with boudning box checking", ""},
       {BENTLEY_OTTMANN, "BENTLEY_OTTMANN", 0, "Bentley Ottmann algorithm", ""},
       {PARK_SHIN, "PARK_SHIN", 0, "Park & Shin (2001) algorithm", ""},
+      {CLIPPER, "CLIPPER", 0, "Clipper library", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -5161,6 +5168,8 @@ static int gpencil_stroke_offset_exec(bContext *C, wmOperator *op)
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd = (bGPdata *)ob->data;
   const int subdivisions = RNA_int_get(op->ptr, "subdivisions");
+  const float factor = RNA_float_get(op->ptr, "factor");
+  e_OffsetAlgorithms algorithm = RNA_enum_get(op->ptr, "algorithm");
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
   /* sanity checks */
@@ -5182,7 +5191,7 @@ static int gpencil_stroke_offset_exec(bContext *C, wmOperator *op)
         /* Loop backwards so we can add new strokes to the end */
         LISTBASE_FOREACH_BACKWARD_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
           if (gps->flag & GP_STROKE_SELECT) {
-            bGPDstroke *offset_stroke = BKE_gpencil_stroke_offset(gpd, gpl, gps, subdivisions);
+            bGPDstroke *offset_stroke = BKE_gpencil_stroke_offset(gpd, gpl, gps, subdivisions, factor, algorithm);
 
             if (offset_stroke == NULL) {
               continue;
@@ -5211,6 +5220,12 @@ void GPENCIL_OT_stroke_offset(wmOperatorType *ot)
 {
   PropertyRNA *prop;
 
+  static const EnumPropertyItem algorithm[] = {
+      {INTERNAL, "INTERNAL", 0, "Internal", ""},
+      {CLIPPER_OFFSET, "CLIPPER_OFFSET", 0, "Clipper offset library", ""},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   /* identifiers */
   ot->name = "Offset stroke";
   ot->idname = "GPENCIL_OT_stroke_offset";
@@ -5225,6 +5240,9 @@ void GPENCIL_OT_stroke_offset(wmOperatorType *ot)
 
   /* properties */
   prop = RNA_def_int(ot->srna, "subdivisions", 4, 0, 100, "Subdivisions", "", 0, 50);
+  prop = RNA_def_float(ot->srna, "factor", 1.0, 0.0, 100.0, "Factor", "", 0.0, 2.0);
+  prop = RNA_def_enum(
+      ot->srna, "algorithm", algorithm, INTERNAL, "Algorithm", "The offsetting algorithm to use");
 }
 
 /** \} */

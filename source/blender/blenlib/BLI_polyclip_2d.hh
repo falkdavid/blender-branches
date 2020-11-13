@@ -831,6 +831,7 @@ ClipPath find_intersections(const PointList &list, uint method);
 
 Polyline polyline_offset(Polyline &pline,
                          const uint subdivisions,
+                         const double factor,
                          const double pline_radius,
                          CapType start_cap_t,
                          CapType end_cap_t);
