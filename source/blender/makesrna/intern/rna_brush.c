@@ -1852,6 +1852,12 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
       prop, "Use Post-Process Settings", "Additional post processing options for new strokes");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
+  prop = RNA_def_property(srna, "use_bezier_smoothing", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_SMOOTH_BEZIER);
+  RNA_def_property_ui_text(
+      prop, "Use bezier smoothing", "Uses bezier curve fitting as a smoothing step.");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
   prop = RNA_def_property(srna, "use_settings_random", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_GROUP_RANDOM);
   RNA_def_property_ui_text(prop, "Random Settings", "Random brush settings");

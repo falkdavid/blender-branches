@@ -54,6 +54,7 @@
 #include "BKE_deform.h"
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
+#include "BKE_gpencil_curve.h"
 #include "BKE_gpencil_geom.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
@@ -1203,13 +1204,25 @@ static void gpencil_stroke_newfrombuffer(tGPsdata *p)
      * without changing too much the original stroke. */
     if ((brush->gpencil_settings->flag & GP_BRUSH_GROUP_SETTINGS) &&
         (brush->gpencil_settings->draw_smoothfac > 0.0f)) {
-      float reduce = 0.0f;
-      for (int r = 0; r < brush->gpencil_settings->draw_smoothlvl; r++) {
-        for (i = 0; i < gps->totpoints - 1; i++) {
-          BKE_gpencil_stroke_smooth(gps, i, brush->gpencil_settings->draw_smoothfac - reduce);
-          BKE_gpencil_stroke_smooth_strength(gps, i, brush->gpencil_settings->draw_smoothfac);
+      if (brush->gpencil_settings->flag & GP_BRUSH_SMOOTH_BEZIER) {
+        BKE_gpencil_stroke_boundingbox_calc(gps);
+        float defaultpixsize = 1000.0f / gpd->pixfactor;
+        float stroke_radius = ((gps->thickness + gpl->line_change) / defaultpixsize) / 2.0f;
+        bGPDcurve *editcurve = BKE_gpencil_stroke_editcurve_generate(
+            gps, brush->gpencil_settings->draw_smoothfac, DEG2RAD(90), stroke_radius);
+        gps->editcurve = editcurve;
+        BKE_gpencil_stroke_update_geometry_from_editcurve(gps, gpd->curve_edit_resolution, false);
+        BKE_gpencil_free_stroke_editcurve(gps);
+      }
+      else {
+        float reduce = 0.0f;
+        for (int r = 0; r < brush->gpencil_settings->draw_smoothlvl; r++) {
+          for (i = 0; i < gps->totpoints - 1; i++) {
+            BKE_gpencil_stroke_smooth(gps, i, brush->gpencil_settings->draw_smoothfac - reduce);
+            BKE_gpencil_stroke_smooth_strength(gps, i, brush->gpencil_settings->draw_smoothfac);
+          }
+          reduce += 0.25f; /* reduce the factor */
         }
-        reduce += 0.25f; /* reduce the factor */
       }
     }
     /* If reproject the stroke using Stroke mode, need to apply a smooth because

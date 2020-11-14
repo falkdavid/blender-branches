@@ -1551,6 +1551,8 @@ class VIEW3D_PT_tools_grease_pencil_brush_post_processing(View3DPanel, Panel):
 
         col1 = col.column(align=True)
         col1.prop(gp_settings, "use_trim")
+        col1 = col.column(align=True)
+        col1.prop(gp_settings, "use_bezier_smoothing")
 
 
 class VIEW3D_PT_tools_grease_pencil_brush_random(View3DPanel, Panel):

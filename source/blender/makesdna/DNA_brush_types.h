@@ -213,6 +213,8 @@ typedef enum eGPDbrush_Flag {
   GP_BRUSH_OCCLUDE_ERASER = (1 << 15),
   /* Post process trim stroke */
   GP_BRUSH_TRIM_STROKE = (1 << 16),
+  /* Use bezier curv efitting to smooth stroke. */
+  GP_BRUSH_SMOOTH_BEZIER = (1 << 17),
 } eGPDbrush_Flag;
 
 typedef enum eGPDbrush_Flag2 {
