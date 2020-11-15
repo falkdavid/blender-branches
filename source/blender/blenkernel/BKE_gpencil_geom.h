@@ -139,8 +139,8 @@ bool BKE_gpencil_convert_mesh(struct Main *bmain,
                               const bool use_seams,
                               const bool use_faces);
 
-void BKE_gpencil_stroke_outer_boundary(struct bGPDstroke *gps, uint method);
-void BKE_gpencil_stroke_isect_self(struct bGPDstroke *gps);
+void BKE_gpencil_stroke_outer_boundary(struct bGPdata *gpd, struct bGPDstroke *gps, uint method);
+void BKE_gpencil_stroke_isect_self(struct bGPdata *gpd, struct bGPDstroke *gps);
 struct bGPDstroke *BKE_gpencil_stroke_offset(struct bGPdata *gpd,
                                              struct bGPDlayer *gpl,
                                              struct bGPDstroke *gps,

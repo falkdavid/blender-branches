@@ -2647,7 +2647,7 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
 /**
  * Calculates the outer boundary of the stroke.
  */
-void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps, CLIP_METHOD method)
+void BKE_gpencil_stroke_outer_boundary(bGPdata *gpd, bGPDstroke *gps, CLIP_METHOD method)
 {
 #define POINT_DIM 2
   if (gps->totpoints < 1) {
@@ -2693,14 +2693,14 @@ void BKE_gpencil_stroke_outer_boundary(bGPDstroke *gps, CLIP_METHOD method)
 
   /* TODO: Project stroke to (view) plane. */
 
-  BKE_gpencil_stroke_geometry_update(gps);
+  BKE_gpencil_stroke_geometry_update(gpd, gps);
 
   MEM_SAFE_FREE(stroke_points);
   MEM_SAFE_FREE(r_boundary_stroke_points);
 #undef POINT_DIM
 }
 
-void BKE_gpencil_stroke_isect_self(bGPDstroke *gps)
+void BKE_gpencil_stroke_isect_self(bGPdata *gpd, bGPDstroke *gps)
 {
 #define POINT_DIM 2
   if (gps->totpoints < 1) {
@@ -2748,7 +2748,7 @@ void BKE_gpencil_stroke_isect_self(bGPDstroke *gps)
 
   /* TODO: Project stroke to (view) plane. */
 
-  BKE_gpencil_stroke_geometry_update(gps);
+  BKE_gpencil_stroke_geometry_update(gpd, gps);
 
   MEM_SAFE_FREE(stroke_points);
   MEM_SAFE_FREE(r_isect_stroke_points);
@@ -2816,7 +2816,7 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
 
   /* TODO: Project stroke to (view) plane. */
 
-  BKE_gpencil_stroke_geometry_update(offset_stroke);
+  BKE_gpencil_stroke_geometry_update(gpd, offset_stroke);
 
   MEM_SAFE_FREE(stroke_points);
   MEM_SAFE_FREE(r_offset_stroke_points);
