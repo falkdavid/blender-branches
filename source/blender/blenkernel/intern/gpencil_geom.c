@@ -2663,10 +2663,15 @@ void BKE_gpencil_stroke_outer_boundary(bGPdata *gpd, bGPDstroke *gps, CLIP_METHO
 
   double *r_boundary_stroke_points;
   uint r_num_boundary_stroke_points;
-  TIMEIT_START(outer_boundary);
+
+  double start_time = PIL_check_seconds_timer();
+
   BLI_polyline_outer_boundary(
       stroke_points, num_points, method, &r_boundary_stroke_points, &r_num_boundary_stroke_points);
-  TIMEIT_END(outer_boundary);
+  
+  double total_time = PIL_check_seconds_timer() - start_time;
+  gps->inittime = total_time;
+
   if (r_boundary_stroke_points == NULL) {
     MEM_freeN(stroke_points);
     return;
@@ -2759,12 +2764,8 @@ void BKE_gpencil_stroke_isect_self(bGPdata *gpd, bGPDstroke *gps)
  * Returns the outline of a stroke as a new stroke by calculating the polyline offset for each
  * point taking the radius into account. The returned stroke is cyclic.
  */
-bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
-                                      bGPDlayer *gpl,
-                                      bGPDstroke *gps,
-                                      uint subdivisions,
-                                      float factor,
-                                      uint method)
+bGPDstroke *BKE_gpencil_stroke_offset(
+    bGPdata *gpd, bGPDlayer *gpl, bGPDstroke *gps, uint subdivisions, float factor, uint method)
 {
 #define POINT_DIM 3
   if (gps->totpoints < 1) {
@@ -2791,6 +2792,7 @@ bGPDstroke *BKE_gpencil_stroke_offset(bGPdata *gpd,
                       subdivisions,
                       (uint)gps->caps[0],
                       (uint)gps->caps[1],
+                      method,
                       &r_offset_stroke_points,
                       &r_num_offset_stroke_points);
 

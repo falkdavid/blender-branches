@@ -600,7 +600,7 @@ TEST(polyclip2d, offset_polyline_simple01)
   VertList expected_verts = {{1, 1}, {2, 0}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}, {0.00999999, 1}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 1, 1.0, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
+  Polyline out = polyline_offset(pline, 1, 1.0, 1.0, 0, CapType::CAP_ROUND, CapType::CAP_ROUND);
   // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
@@ -613,7 +613,7 @@ TEST(polyclip2d, offset_polyline_simple02)
   VertList expected_verts = {{1, 1}, {1, -1}, {0, -1}, {0, 1}, {0.00999999, 1}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 0, 1.0, 1.0, CapType::CAP_FLAT, CapType::CAP_FLAT);
+  Polyline out = polyline_offset(pline, 0, 1.0, 1.0, 0, CapType::CAP_FLAT, CapType::CAP_FLAT);
   // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
@@ -627,7 +627,7 @@ TEST(polyclip2d, offset_polyline_simple03)
       {1, 1}, {2, 1}, {3, 0}, {2, -1}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}, {0.00999999, 1}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 1, 1.0, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
+  Polyline out = polyline_offset(pline, 1, 1.0, 1.0, 0, CapType::CAP_ROUND, CapType::CAP_ROUND);
   // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), expected_verts.size());
@@ -639,7 +639,7 @@ TEST(polyclip2d, offset_polyline_simple04)
   VertList verts = {{0, 0, 1.0}, {2, 0, 1.0}, {2, 2, 1.0}};
   Polyline pline = Polyline(verts);
 
-  Polyline out = polyline_offset(pline, 1, 1.0, 1.0, CapType::CAP_ROUND, CapType::CAP_ROUND);
+  Polyline out = polyline_offset(pline, 1, 1.0, 1.0, 0, CapType::CAP_ROUND, CapType::CAP_ROUND);
   // std::cout << out << "\n";
 
   EXPECT_EQ(out.verts.size(), 11);

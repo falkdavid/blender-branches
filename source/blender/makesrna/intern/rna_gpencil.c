@@ -1643,6 +1643,13 @@ static void rna_def_gpencil_stroke(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Vertex Fill Color", "Color used to mix with fill color to get final color");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_GPencil_update");
+
+  /* DELTE ME, THIS IS JUST TEMPORARY */
+  prop = RNA_def_property(srna, "time", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "inittime");
+  RNA_def_property_range(prop, 0.0, FLT_MAX);
+  RNA_def_property_float_default(prop, 0.0);
+  RNA_def_property_ui_text(prop, "Time", "");
 }
 
 static void rna_def_gpencil_strokes_api(BlenderRNA *brna, PropertyRNA *cprop)

@@ -829,10 +829,18 @@ PointList clip_path_get_outer_boundary(ClipPath &path);
 
 ClipPath find_intersections(const PointList &list, uint method);
 
+Polyline polyline_offset_default(Polyline &pline,
+                                 const uint subdivisions,
+                                 const double factor,
+                                 const double pline_radius,
+                                 CapType start_cap_t,
+                                 CapType end_cap_t);
+
 Polyline polyline_offset(Polyline &pline,
                          const uint subdivisions,
                          const double factor,
                          const double pline_radius,
+                         uint method,
                          CapType start_cap_t,
                          CapType end_cap_t);
 
