@@ -5771,7 +5771,7 @@ typedef enum e_IntersectionAlgorithms {
 } e_IntersectionAlgorithms;
 
 typedef enum e_OffsetAlgorithms {
-  INTERNAL = 0,
+  INTERNAL_OFFSET = 0,
   CLIPPER_OFFSET,
 } e_OffsetAlgorithms;
 
@@ -5897,7 +5897,7 @@ void GPENCIL_OT_stroke_offset(wmOperatorType *ot)
   PropertyRNA *prop;
 
   static const EnumPropertyItem algorithm[] = {
-      {INTERNAL, "INTERNAL", 0, "Internal", ""},
+      {INTERNAL_OFFSET, "INTERNAL_OFFSET", 0, "Internal", ""},
       {CLIPPER_OFFSET, "CLIPPER_OFFSET", 0, "Clipper offset library", ""},
       {0, NULL, 0, NULL, NULL},
   };
@@ -5918,7 +5918,7 @@ void GPENCIL_OT_stroke_offset(wmOperatorType *ot)
   prop = RNA_def_int(ot->srna, "subdivisions", 4, 0, 100, "Subdivisions", "", 0, 50);
   prop = RNA_def_float(ot->srna, "factor", 1.0, 0.0, 100.0, "Factor", "", 0.0, 2.0);
   prop = RNA_def_enum(
-      ot->srna, "algorithm", algorithm, INTERNAL, "Algorithm", "The offsetting algorithm to use");
+      ot->srna, "algorithm", algorithm, INTERNAL_OFFSET, "Algorithm", "The offsetting algorithm to use");
 }
 
 /** \} */

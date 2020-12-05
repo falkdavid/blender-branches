@@ -2644,6 +2644,31 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
   }
 }
 
+static void reset_peak()
+{
+  FILE *fp = fopen("/proc/self/clear_refs", "w");
+  if (fp == NULL)
+    return;
+  fprintf(fp, "%d", 5);  // reset VmHWM
+}
+
+static unsigned long peak_memory()
+{
+  unsigned long peaksize = 0;
+  char buf[1024];
+  FILE *fp = fopen("/proc/self/status", "r");
+  if (fp == NULL)
+    return -1;
+  while (fgets(buf, sizeof(buf) - 1, fp) != NULL) {
+    if (sscanf(buf, "VmHWM:%lu", &peaksize) > 0) {
+      break;
+    }
+  }
+  fclose(fp);
+
+  return peaksize;
+}
+
 /**
  * Calculates the outer boundary of the stroke.
  */
@@ -2664,13 +2689,16 @@ void BKE_gpencil_stroke_outer_boundary(bGPdata *gpd, bGPDstroke *gps, CLIP_METHO
   double *r_boundary_stroke_points;
   uint r_num_boundary_stroke_points;
 
+  unsigned long start_peak = peak_memory();
+  reset_peak();
   double start_time = PIL_check_seconds_timer();
 
   BLI_polyline_outer_boundary(
       stroke_points, num_points, method, &r_boundary_stroke_points, &r_num_boundary_stroke_points);
-  
+
   double total_time = PIL_check_seconds_timer() - start_time;
   gps->inittime = total_time;
+  printf("Peak mem: %lu\n", peak_memory() - start_peak);
 
   if (r_boundary_stroke_points == NULL) {
     MEM_freeN(stroke_points);
@@ -2783,6 +2811,10 @@ bGPDstroke *BKE_gpencil_stroke_offset(
     stroke_points[i * POINT_DIM + (POINT_DIM - 1)] = (double)pt->pressure;
   }
 
+  double start_time = PIL_check_seconds_timer();
+  unsigned long start_peak = peak_memory();
+  reset_peak();
+
   double *r_offset_stroke_points;
   uint r_num_offset_stroke_points;
   BLI_polyline_offset(stroke_points,
@@ -2796,12 +2828,16 @@ bGPDstroke *BKE_gpencil_stroke_offset(
                       &r_offset_stroke_points,
                       &r_num_offset_stroke_points);
 
+  double total_time = PIL_check_seconds_timer() - start_time;
+  printf("Peak mem: %lu\n", peak_memory() - start_peak);
+
   if (r_offset_stroke_points == NULL) {
     MEM_freeN(stroke_points);
     return NULL;
   }
 
   bGPDstroke *offset_stroke = BKE_gpencil_stroke_new(gps->mat_nr, r_num_offset_stroke_points, 1);
+  offset_stroke->inittime = total_time;
 
   for (uint i = 0; i < r_num_offset_stroke_points; i++) {
     bGPDspoint *pt = &offset_stroke->points[i];

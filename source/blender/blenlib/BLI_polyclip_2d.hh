@@ -667,7 +667,7 @@ class PolyclipParkShin {
         }
       }
 
-      if (is_before) {
+      if (is_before && !double2::compare_limit(e1_start, e2_start, FLT_EPSILON)) {
         return double2::compare_less(e1_start, e2_start);
       }
       return double2::compare_less(e1_end, e2_end);

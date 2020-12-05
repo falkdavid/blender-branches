@@ -27,10 +27,7 @@
 
 #include "BLI_polyclip_2d.hh"
 
-// #define WITH_CLIPPER true
-
 #ifdef WITH_CLIPPER
-// #  include "../../../../../../clipper/build_linux/include/polyclipping/clipper.hpp"
 #  include "clipper.hpp"
 #endif
 
@@ -415,7 +412,7 @@ PointList clip_path_get_outer_boundary(ClipPath &path)
   outer.push_back(current_pt);
   auto it = (forward == true) ? ClipPath::Iterator::next(min_elem) :
                                 ClipPath::Iterator::prev(min_elem);
-  while (it != min_elem && !(*it)->visited) {
+  while (it != min_elem && (!(*it)->visited || (*it)->link != nullptr)) {
     auto vert = *it;
     outer.push_back(vert->data);
     vert->visited = true;
@@ -614,10 +611,10 @@ PolyclipBentleyOttmann::Event PolyclipBentleyOttmann::check_edge_edge_isect(
     double2 isect_pt = double2::interpolate(e1.first->data, e1.second->data, result.lambda);
     if (!double2::compare_limit(isect_pt, e1.first->data, FLT_EPSILON) &&
         !double2::compare_limit(isect_pt, e1.second->data, FLT_EPSILON)) {
-      return Event(isect_pt, e1, e2);
+      return PolyclipBentleyOttmann::Event(isect_pt, e1, e2);
     }
   }
-  return Event();
+  return PolyclipBentleyOttmann::Event();
 }
 
 ClipPath PolyclipBentleyOttmann::find_intersections(const PointList &list)
@@ -1132,8 +1129,8 @@ polyclip::ClipPath PolyclipParkShin::find_intersections()
       auto isect_it = sweep_line_chains.find(isect_chain);
       /* Fall back to linear search. */
       if (isect_it == sweep_line_chains.end()) {
-        // std::cout << "isect_it(" << *isect_chain << ") not found! Falling back to linear
-        // search!"
+        // std::cout << "isect_it(" << *isect_chain << ") not found! Falling back to linear search
+        // !"
         //           << std::endl;
         // BLI_assert(isect_it != sweep_line_chains.end());
         for (auto it = sweep_line_chains.begin(); it != sweep_line_chains.end(); ++it) {
@@ -1228,13 +1225,13 @@ polyclip::ClipPath PolyclipParkShin::find_intersections()
 
 #  define CONVERSION_SCALE 1e9
 
-static ClipperLib::IntPoint double2_to_int2(const double2 &pt)
+static const ClipperLib::IntPoint double2_to_int2(const double2 &pt)
 {
   return ClipperLib::IntPoint((ClipperLib::cInt)std::round(pt.x * CONVERSION_SCALE),
                               (ClipperLib::cInt)std::round(pt.y * CONVERSION_SCALE));
 }
 
-static double2 int2_to_double2(const ClipperLib::IntPoint &pt)
+static const double2 int2_to_double2(const ClipperLib::IntPoint &pt)
 {
   return double2((double)pt.X / (double)CONVERSION_SCALE, (double)pt.Y / (double)CONVERSION_SCALE);
 }
@@ -1635,11 +1632,11 @@ Polyline polyline_offset(Polyline &pline,
 #ifdef WITH_CLIPPER
     case 1: {
       ClipperLib::ClipperOffset co = ClipperLib::ClipperOffset(2 * CONVERSION_SCALE,
-                                                               0.25 * CONVERSION_SCALE);
+                                                               0.001 * CONVERSION_SCALE);
       ClipperLib::Path subj = poly_line_to_clipper_path(pline);
-      ClipperLib::Paths solution;
       co.AddPath(subj, ClipperLib::jtRound, ClipperLib::etOpenRound);
-      co.Execute(solution, pline_radius * factor);
+      co.DoOffset(pline_radius * factor * CONVERSION_SCALE);
+      ClipperLib::Paths solution = co.GetDestPolys();
       if (!solution.empty())
         result = clipper_path_to_poly_line(solution[0]);
       break;
