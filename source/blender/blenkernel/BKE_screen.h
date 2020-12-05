@@ -234,6 +234,8 @@ typedef struct PanelType {
   char category[BKE_ST_MAXNAME];  /* for category tabs */
   char owner_id[BKE_ST_MAXNAME];  /* for work-spaces to selectively show. */
   char parent_id[BKE_ST_MAXNAME]; /* parent idname for sub-panels */
+  /** Boolean property identifier of the panel custom data. Used to draw a highlighted border. */
+  char active_property[BKE_ST_MAXNAME];
   short space_type;
   short region_type;
   /* For popovers, 0 for default. */
@@ -289,6 +291,8 @@ enum {
   PANEL_TYPE_INSTANCED = (1 << 4),
   /** Draw panel like a box widget. */
   PANEL_TYPE_DRAW_BOX = (1 << 6),
+  /** Don't search panels with this type during property search. */
+  PANEL_TYPE_NO_SEARCH = (1 << 7),
 };
 
 /* uilist types */

@@ -1160,8 +1160,8 @@ PropertySubType RNA_property_subtype(PropertyRNA *prop)
   if (prop->magic != RNA_MAGIC) {
     IDProperty *idprop = (IDProperty *)prop;
 
-    /* Restrict to arrays only for now for performance reasons. */
-    if (idprop->type == IDP_ARRAY && ELEM(idprop->subtype, IDP_INT, IDP_FLOAT, IDP_DOUBLE)) {
+    if (ELEM(idprop->type, IDP_INT, IDP_FLOAT, IDP_DOUBLE) ||
+        ((idprop->type == IDP_ARRAY) && ELEM(idprop->subtype, IDP_INT, IDP_FLOAT, IDP_DOUBLE))) {
       const IDProperty *idp_ui = rna_idproperty_ui(prop);
 
       if (idp_ui) {
@@ -3723,9 +3723,11 @@ void RNA_property_pointer_set(PointerRNA *ptr,
     }
   }
   /* RNA property. */
-  else if (pprop->set && !((prop->flag & PROP_NEVER_NULL) && ptr_value.data == NULL) &&
-           !((prop->flag & PROP_ID_SELF_CHECK) && ptr->owner_id == ptr_value.owner_id)) {
-    pprop->set(ptr, ptr_value, reports);
+  else if (pprop->set) {
+    if (!((prop->flag & PROP_NEVER_NULL) && ptr_value.data == NULL) &&
+        !((prop->flag & PROP_ID_SELF_CHECK) && ptr->owner_id == ptr_value.owner_id)) {
+      pprop->set(ptr, ptr_value, reports);
+    }
   }
   /* IDProperty desguised as RNA property (and not yet defined in ptr). */
   else if (prop->flag & PROP_EDITABLE) {
