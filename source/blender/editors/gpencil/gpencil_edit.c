@@ -5255,7 +5255,6 @@ void GPENCIL_OT_stroke_outer_boundary(wmOperatorType *ot)
 
   static const EnumPropertyItem algorithm[] = {
       {BRUTE_FORCE, "BRUTE_FORCE", 0, "Brute force", ""},
-      {BRUTE_FORCE_AABB, "BRUTE_FORCE_AABB", 0, "Brute force with boudning box checking", ""},
       {BENTLEY_OTTMANN, "BENTLEY_OTTMANN", 0, "Bentley Ottmann algorithm", ""},
       {PARK_SHIN, "PARK_SHIN", 0, "Park & Shin (2001) algorithm", ""},
       {CLIPPER, "CLIPPER", 0, "Clipper library", ""},
