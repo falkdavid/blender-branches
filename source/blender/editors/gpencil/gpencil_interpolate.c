@@ -213,7 +213,7 @@ static void gpencil_interpolate_update_strokes(bContext *C, tGPDinterpolate *tgp
       if ((gps_from) && (gps_to)) {
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, factor);
         if (new_stroke->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
-          bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
+          bool is_adaptive = (gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION) != 0;
           BKE_gpencil_stroke_update_geometry_from_editcurve(
               new_stroke, gpd->curve_edit_resolution, is_adaptive);
           new_stroke->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
@@ -380,7 +380,7 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
         /* update points position */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, tgpil->factor);
         if (new_stroke->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
-          bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
+          bool is_adaptive = (gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION) != 0;
           BKE_gpencil_stroke_update_geometry_from_editcurve(
               new_stroke, gpd->curve_edit_resolution, is_adaptive);
           new_stroke->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
