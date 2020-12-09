@@ -50,6 +50,7 @@
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_gpencil.h"
+#include "BKE_gpencil_curve.h"
 #include "BKE_gpencil_geom.h"
 #include "BKE_report.h"
 
@@ -105,17 +106,47 @@ static void gpencil_interpolate_update_points(const bGPDstroke *gps_from,
                                               bGPDstroke *new_stroke,
                                               float factor)
 {
-  /* update points */
-  for (int i = 0; i < new_stroke->totpoints; i++) {
-    const bGPDspoint *prev = &gps_from->points[i];
-    const bGPDspoint *next = &gps_to->points[i];
-    bGPDspoint *pt = &new_stroke->points[i];
+  if (gps_from->editcurve != NULL && !(gps_from->editcurve->flag & GP_CURVE_NEEDS_STROKE_UPDATE) &&
+      gps_to->editcurve != NULL && !(gps_to->editcurve->flag & GP_CURVE_NEEDS_STROKE_UPDATE)) {
+    /* Interpolate curve points. */
 
-    /* Interpolate all values */
-    interp_v3_v3v3(&pt->x, &prev->x, &next->x, factor);
-    pt->pressure = interpf(prev->pressure, next->pressure, 1.0f - factor);
-    pt->strength = interpf(prev->strength, next->strength, 1.0f - factor);
-    CLAMP(pt->strength, GPENCIL_STRENGTH_MIN, 1.0f);
+    const bGPDcurve *gpc_from = gps_from->editcurve;
+    const bGPDcurve *gpc_to = gps_to->editcurve;
+    bGPDcurve *new_curve = new_stroke->editcurve;
+
+    for (uint i = 0; i < new_curve->tot_curve_points; ++i) {
+      const bGPDcurve_point *prev = &gpc_from->curve_points[i];
+      const bGPDcurve_point *next = &gpc_to->curve_points[i];
+      bGPDcurve_point *pt = &new_curve->curve_points[i];
+
+      /* Interpolate handle */
+      for (uint j = 0; j < 3; j++) {
+        interp_v3_v3v3(&(pt->bezt.vec[j]), &(prev->bezt.vec[j]), &(next->bezt.vec[j]), factor);
+      }
+
+      /* Interpolate pressure and strength */
+      pt->pressure = interpf(prev->pressure, next->pressure, 1.0f - factor);
+      pt->strength = interpf(prev->strength, next->strength, 1.0f - factor);
+      CLAMP(pt->strength, GPENCIL_STRENGTH_MIN, 1.0f);
+
+      /* TODO? (falk): interpolate vertex color */
+    }
+
+    new_stroke->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
+  }
+  else {
+    /* update points */
+    for (int i = 0; i < new_stroke->totpoints; i++) {
+      const bGPDspoint *prev = &gps_from->points[i];
+      const bGPDspoint *next = &gps_to->points[i];
+      bGPDspoint *pt = &new_stroke->points[i];
+
+      /* Interpolate all values */
+      interp_v3_v3v3(&pt->x, &prev->x, &next->x, factor);
+      pt->pressure = interpf(prev->pressure, next->pressure, 1.0f - factor);
+      pt->strength = interpf(prev->strength, next->strength, 1.0f - factor);
+      CLAMP(pt->strength, GPENCIL_STRENGTH_MIN, 1.0f);
+    }
   }
 }
 
@@ -181,6 +212,12 @@ static void gpencil_interpolate_update_strokes(bContext *C, tGPDinterpolate *tgp
       /* update points position */
       if ((gps_from) && (gps_to)) {
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, factor);
+        if (new_stroke->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
+          bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
+          BKE_gpencil_stroke_update_geometry_from_editcurve(
+              new_stroke, gpd->curve_edit_resolution, is_adaptive);
+          new_stroke->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
+        }
 
         /* Add temp strokes. */
         if (gpf) {
@@ -342,6 +379,12 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
         }
         /* update points position */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, tgpil->factor);
+        if (new_stroke->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
+          bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
+          BKE_gpencil_stroke_update_geometry_from_editcurve(
+              new_stroke, gpd->curve_edit_resolution, is_adaptive);
+          new_stroke->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
+        }
       }
       else {
         /* need an empty stroke to keep index correct for lookup, but resize to smallest size */
