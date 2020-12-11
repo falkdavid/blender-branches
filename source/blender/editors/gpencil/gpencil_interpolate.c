@@ -147,6 +147,10 @@ static void gpencil_interpolate_update_points(const bGPDstroke *gps_from,
       pt->strength = interpf(prev->strength, next->strength, 1.0f - factor);
       CLAMP(pt->strength, GPENCIL_STRENGTH_MIN, 1.0f);
     }
+
+    if (new_stroke->editcurve != NULL) {
+      new_stroke->editcurve->flag |= GP_CURVE_NEEDS_STROKE_UPDATE;
+    }
   }
 }
 
@@ -212,12 +216,14 @@ static void gpencil_interpolate_update_strokes(bContext *C, tGPDinterpolate *tgp
       /* update points position */
       if ((gps_from) && (gps_to)) {
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, factor);
-        if (new_stroke->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
-          bool is_adaptive = (gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION) != 0;
-          BKE_gpencil_stroke_update_geometry_from_editcurve(
-              new_stroke, gpd->curve_edit_resolution, is_adaptive);
-          new_stroke->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
+        if (new_stroke->editcurve != NULL && new_stroke->editcurve->flag &
+            GP_CURVE_NEEDS_STROKE_UPDATE) {
+          BKE_gpencil_stroke_editcurve_update(gpd, tgpil->gpl, new_stroke);
+          /* Update the selection from the stroke to the curve. */
+          BKE_gpencil_editcurve_stroke_sync_selection(new_stroke, new_stroke->editcurve);
+          new_stroke->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
         }
+        BKE_gpencil_stroke_geometry_update(gpd, new_stroke);
 
         /* Add temp strokes. */
         if (gpf) {
@@ -379,11 +385,12 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
         }
         /* update points position */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, tgpil->factor);
-        if (new_stroke->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
-          bool is_adaptive = (gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION) != 0;
-          BKE_gpencil_stroke_update_geometry_from_editcurve(
-              new_stroke, gpd->curve_edit_resolution, is_adaptive);
-          new_stroke->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
+        if (new_stroke->editcurve != NULL && new_stroke->editcurve->flag &
+            GP_CURVE_NEEDS_STROKE_UPDATE) {
+          BKE_gpencil_stroke_editcurve_update(gpd, gpl, new_stroke);
+          /* Update the selection from the stroke to the curve. */
+          BKE_gpencil_editcurve_stroke_sync_selection(new_stroke, new_stroke->editcurve);
+          new_stroke->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
         }
       }
       else {
@@ -1116,6 +1123,13 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
 
         /* update points position */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, factor);
+        if (new_stroke->editcurve != NULL && new_stroke->editcurve->flag &
+            GP_CURVE_NEEDS_STROKE_UPDATE) {
+          BKE_gpencil_stroke_editcurve_update(gpd, gpl, new_stroke);
+          /* Update the selection from the stroke to the curve. */
+          BKE_gpencil_editcurve_stroke_sync_selection(new_stroke, new_stroke->editcurve);
+          new_stroke->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
+        }
 
         /* Calc geometry data. */
         BKE_gpencil_stroke_geometry_update(gpd, new_stroke);
