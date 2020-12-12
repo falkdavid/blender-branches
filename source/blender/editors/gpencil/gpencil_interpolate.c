@@ -326,20 +326,18 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
         valid = false;
       }
 
-      /* create new stroke */
-      new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true, true);
-
       if (valid) {
         /* if destination stroke is smaller, resize new_stroke to size of gps_to stroke */
         if (gps_from->totpoints > gps_to->totpoints) {
-          new_stroke->points = MEM_recallocN(new_stroke->points,
-                                             sizeof(*new_stroke->points) * gps_to->totpoints);
-          if (new_stroke->dvert != NULL) {
-            new_stroke->dvert = MEM_recallocN(new_stroke->dvert,
-                                              sizeof(*new_stroke->dvert) * gps_to->totpoints);
-          }
-          new_stroke->totpoints = gps_to->totpoints;
+          BKE_gpencil_stroke_uniform_subdivide(gpd, gps_to, gps_from->totpoints, true);
         }
+        if (gps_to->totpoints > gps_from->totpoints) {
+          BKE_gpencil_stroke_uniform_subdivide(gpd, gps_from, gps_to->totpoints, true);
+        }
+
+        /* create new stroke */
+        new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true, true);
+
         /* update points position */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, tgpil->factor);
       }
