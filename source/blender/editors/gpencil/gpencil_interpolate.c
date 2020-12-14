@@ -335,10 +335,10 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
           BKE_gpencil_stroke_uniform_subdivide(gpd, gps_from, gps_to->totpoints, true);
         }
 
-        /* create new stroke */
+        /* Create new stroke. */
         new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true, true);
 
-        /* update points position */
+        /* Update points position. */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, tgpil->factor);
       }
       else {
