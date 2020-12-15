@@ -444,13 +444,13 @@ static void gpencil_interpolate_exit(bContext *C, wmOperator *op)
       BKE_gpencil_free_strokes(tgpil->prevFrame);
       BKE_gpencil_free_strokes(tgpil->nextFrame);
       BKE_gpencil_free_strokes(tgpil->interFrame);
-      MEM_freeN(tgpil->prevFrame);
-      MEM_freeN(tgpil->nextFrame);
-      MEM_freeN(tgpil->interFrame);
+      MEM_SAFE_FREE(tgpil->prevFrame);
+      MEM_SAFE_FREE(tgpil->nextFrame);
+      MEM_SAFE_FREE(tgpil->interFrame);
     }
 
     BLI_freelistN(&tgpi->ilayers);
-    MEM_freeN(tgpi);
+    MEM_SAFE_FREE(tgpi);
   }
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, NULL);
@@ -1075,8 +1075,8 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
 
     BKE_gpencil_free_strokes(prevFrame);
     BKE_gpencil_free_strokes(nextFrame);
-    MEM_freeN(prevFrame);
-    MEM_freeN(nextFrame);
+    MEM_SAFE_FREE(prevFrame);
+    MEM_SAFE_FREE(nextFrame);
   }
 
   /* notifiers */
