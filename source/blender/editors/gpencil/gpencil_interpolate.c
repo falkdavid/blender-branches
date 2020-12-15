@@ -342,6 +342,9 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, tgpil->factor);
       }
       else {
+        /* Create new stroke. */
+        new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true, true);
+
         /* need an empty stroke to keep index correct for lookup, but resize to smallest size */
         new_stroke->totpoints = 0;
         new_stroke->points = MEM_recallocN(new_stroke->points, sizeof(*new_stroke->points));
@@ -1051,9 +1054,6 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
           interFrame->key_type = BEZT_KEYTYPE_BREAKDOWN;
         }
 
-        /* create new stroke */
-        bGPDstroke *new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true, true);
-
         /* if destination stroke is smaller, resize new_stroke to size of gps_to stroke */
         if (gps_from->totpoints > gps_to->totpoints) {
           BKE_gpencil_stroke_uniform_subdivide(gpd, gps_to, gps_from->totpoints, true);
@@ -1061,6 +1061,9 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
         if (gps_to->totpoints > gps_from->totpoints) {
           BKE_gpencil_stroke_uniform_subdivide(gpd, gps_from, gps_to->totpoints, true);
         }
+
+        /* create new stroke */
+        bGPDstroke *new_stroke = BKE_gpencil_stroke_duplicate(gps_from, true, true);
 
         /* update points position */
         gpencil_interpolate_update_points(gps_from, gps_to, new_stroke, factor);
