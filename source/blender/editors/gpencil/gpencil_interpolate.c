@@ -283,8 +283,8 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
     tgpil = MEM_callocN(sizeof(tGPDinterpolate_layer), "GPencil Interpolate Layer");
 
     tgpil->gpl = gpl;
-    tgpil->prevFrame = gpl->actframe;
-    tgpil->nextFrame = gpl->actframe->next;
+    tgpil->prevFrame = BKE_gpencil_frame_duplicate(gpl->actframe);
+    tgpil->nextFrame = BKE_gpencil_frame_duplicate(gpl->actframe->next);
 
     BLI_addtail(&tgpi->ilayers, tgpil);
 
@@ -441,7 +441,11 @@ static void gpencil_interpolate_exit(bContext *C, wmOperator *op)
 
     /* finally, free memory used by temp data */
     LISTBASE_FOREACH (tGPDinterpolate_layer *, tgpil, &tgpi->ilayers) {
+      BKE_gpencil_free_strokes(tgpil->prevFrame);
+      BKE_gpencil_free_strokes(tgpil->nextFrame);
       BKE_gpencil_free_strokes(tgpil->interFrame);
+      MEM_freeN(tgpil->prevFrame);
+      MEM_freeN(tgpil->nextFrame);
       MEM_freeN(tgpil->interFrame);
     }
 
@@ -990,8 +994,8 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
     }
 
     /* store extremes */
-    prevFrame = gpl->actframe;
-    nextFrame = gpl->actframe->next;
+    prevFrame = BKE_gpencil_frame_duplicate(gpl->actframe);
+    nextFrame = BKE_gpencil_frame_duplicate(gpl->actframe->next);
 
     /* Loop over intermediary frames and create the interpolation */
     for (cframe = prevFrame->framenum + step; cframe < nextFrame->framenum; cframe += step) {
@@ -1052,21 +1056,10 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
 
         /* if destination stroke is smaller, resize new_stroke to size of gps_to stroke */
         if (gps_from->totpoints > gps_to->totpoints) {
-          /* free weights of removed points */
-          if (new_stroke->dvert != NULL) {
-            BKE_defvert_array_free_elems(new_stroke->dvert + gps_to->totpoints,
-                                         gps_from->totpoints - gps_to->totpoints);
-          }
-
-          new_stroke->points = MEM_recallocN(new_stroke->points,
-                                             sizeof(*new_stroke->points) * gps_to->totpoints);
-
-          if (new_stroke->dvert != NULL) {
-            new_stroke->dvert = MEM_recallocN(new_stroke->dvert,
-                                              sizeof(*new_stroke->dvert) * gps_to->totpoints);
-          }
-
-          new_stroke->totpoints = gps_to->totpoints;
+          BKE_gpencil_stroke_uniform_subdivide(gpd, gps_to, gps_from->totpoints, true);
+        }
+        if (gps_to->totpoints > gps_from->totpoints) {
+          BKE_gpencil_stroke_uniform_subdivide(gpd, gps_from, gps_to->totpoints, true);
         }
 
         /* update points position */
@@ -1079,6 +1072,11 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
         BLI_addtail(&interFrame->strokes, new_stroke);
       }
     }
+
+    BKE_gpencil_free_strokes(prevFrame);
+    BKE_gpencil_free_strokes(nextFrame);
+    MEM_freeN(prevFrame);
+    MEM_freeN(nextFrame);
   }
 
   /* notifiers */
