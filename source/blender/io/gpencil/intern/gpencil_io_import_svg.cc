@@ -175,16 +175,19 @@ void GpencilImporterSVG::create_stroke(bGPdata *gpd,
 {
   const bool is_stroke = (bool)shape->stroke.type;
   const bool is_fill = (bool)shape->fill.type;
+  const bool is_closed = (bool)path->closed == '1';
 
-  const int edges = params_.resolution;
-  const float step = 1.0f / (float)(edges - 1);
-
-  int totpoints = (path->npts / 3) * params_.resolution;
+  uint num_bezier_segments = (is_closed) ? path->npts / 3 : (path->npts - 1) / 3;
+  uint num_handles = (is_closed) ? num_bezier_segments : num_bezier_segments + 1;
+  uint totpoints = num_bezier_segments * params_.resolution;
 
   bGPDstroke *gps = BKE_gpencil_stroke_new(mat_index, totpoints, 1.0f);
   BLI_addtail(&gpf->strokes, gps);
 
-  if (path->closed == '1') {
+  gps->editcurve = BKE_gpencil_stroke_editcurve_new(num_handles);
+  bGPDcurve *gpc = gps->editcurve;
+
+  if (is_closed) {
     gps->flag |= GP_STROKE_CYCLIC;
   }
   if (is_stroke) {
@@ -232,7 +235,7 @@ void GpencilImporterSVG::create_stroke(bGPdata *gpd,
   }
 
   /* Cleanup and recalculate geometry. */
-  BKE_gpencil_stroke_merge_distance(gpd, gpf, gps, 0.001f, true);
+  gps->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
   BKE_gpencil_stroke_geometry_update(gpd, gps);
 }
 
