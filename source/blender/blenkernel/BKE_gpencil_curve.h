@@ -60,6 +60,11 @@ void BKE_gpencil_stroke_update_geometry_from_editcurve(struct bGPDstroke *gps,
 void BKE_gpencil_editcurve_recalculate_handles(struct bGPDstroke *gps);
 void BKE_gpencil_editcurve_subdivide(struct bGPDstroke *gps, const int cuts);
 
+void BKE_gpencil_editcurve_refit_curve_segment_single(struct bGPDstroke *gps,
+                                                      struct bGPDcurve_point *start,
+                                                      struct bGPDcurve_point *end);
+void BKE_gpencil_editcurve_dissolve(struct bGPDstroke *gps);
+
 #ifdef __cplusplus
 }
 #endif

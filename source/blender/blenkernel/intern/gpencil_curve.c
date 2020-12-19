@@ -1346,6 +1346,170 @@ void BKE_gpencil_editcurve_subdivide(bGPDstroke *gps, const int cuts)
   }
 }
 
+/**
+ * Recalculate the handle poistions for curve segment based on the points in the stroke.
+ *
+ */
+void BKE_gpencil_editcurve_refit_curve_segment_single(bGPDstroke *gps,
+                                                      bGPDcurve_point *start,
+                                                      bGPDcurve_point *end)
+{
+#define POINT_DIM 3
+  bGPDcurve *gpc = gps->editcurve;
+  if (gpc == NULL || gpc->tot_curve_points < 2 || start == end) {
+    return;
+  }
+
+  const bool is_cyclic = gps->flag & GP_STROKE_CYCLIC;
+  const int start_idx = start->point_index;
+  const int end_idx = (end->point_index + 1) % gps->totpoints;
+  if (!is_cyclic && end_idx < start_idx) {
+    return;
+  }
+
+  /* Calculate the number of stroke points between the curve points and copy positions into flat
+   * float array. */
+  const uint32_t num_points = mod_i(end_idx - start_idx, gps->totpoints);
+  float *points = MEM_callocN(sizeof(float) * num_points * POINT_DIM, __func__);
+  // const float diag_length = len_v3v3(gps->boundbox_min, gps->boundbox_max);
+  // float tmp_vec[3];
+  for (uint32_t i = start_idx, j = 0; i != end_idx; i = (i + 1) % gps->totpoints, j++) {
+    bGPDspoint *pt = &gps->points[i];
+    // sub_v3_v3v3(tmp_vec, &pt->x, gps->boundbox_min);
+    // mul_v3_v3fl(&points[j * POINT_DIM], tmp_vec, 1.0f / diag_length);
+    copy_v3_v3(&points[j * POINT_DIM], &pt->x);
+  }
+
+  BezTriple *bezt_start = (end_idx > start_idx) ? &start->bezt : &end->bezt;
+  BezTriple *bezt_end = (end_idx > start_idx) ? &end->bezt : &start->bezt;
+  float tan_l[3], tan_r[3], error_sq_dummy;
+  uint32_t error_index_dummy;
+
+  sub_v3_v3v3(tan_l, bezt_start->vec[1], bezt_start->vec[2]);
+  normalize_v3(tan_l);
+  sub_v3_v3v3(tan_r, bezt_end->vec[0], bezt_end->vec[1]);
+  normalize_v3(tan_r);
+
+  curve_fit_cubic_to_points_single_fl(points,
+                                      num_points,
+                                      NULL,
+                                      POINT_DIM,
+                                      FLT_EPSILON,
+                                      tan_l,
+                                      tan_r,
+                                      bezt_start->vec[2],
+                                      bezt_end->vec[0],
+                                      &error_sq_dummy,
+                                      &error_index_dummy);
+
+  // print_vn("points", points, num_points * POINT_DIM);
+  // printf("Error: %f\n", error_sq_dummy);
+  // madd_v3_v3v3fl(bezt_start->vec[2], gps->boundbox_min, bezt_start->vec[2], diag_length);
+  // madd_v3_v3v3fl(bezt_end->vec[0], gps->boundbox_min, bezt_end->vec[0], diag_length);
+
+  if (!ELEM(bezt_start->h2, HD_FREE, HD_ALIGN)) {
+    bezt_start->h2 = (bezt_start->h2 == HD_VECT) ? HD_FREE : HD_ALIGN;
+  }
+  if (!ELEM(bezt_end->h1, HD_FREE, HD_ALIGN)) {
+    bezt_end->h1 = (bezt_end->h1 == HD_VECT) ? HD_FREE : HD_ALIGN;
+  }
+
+  MEM_freeN(points);
+#undef POINT_DIM
+}
+
+/**
+ * Dissolve the tagged (GP_CURVE_POINT_TAG) curve points in the curve.
+ * The curve will be refitted to match the previous shape as closly as possible.
+ * Expect there to be at least one untagged point.
+ */
+void BKE_gpencil_editcurve_dissolve(bGPDstroke *gps)
+{
+  bGPDcurve *gpc = gps->editcurve;
+  if (gpc == NULL || gpc->tot_curve_points < 2) {
+    return;
+  }
+  const bool is_cyclic = gps->flag & GP_STROKE_CYCLIC;
+
+  int old_num_curve_points = gpc->tot_curve_points;
+  int num_tag_curve_points = 0;
+  int start_idx = -1;
+  for (uint32_t i = 0; i < old_num_curve_points; i++) {
+    bGPDcurve_point *gpc_pt = &gpc->curve_points[i];
+    if (gpc_pt->flag & GP_CURVE_POINT_TAG) {
+      num_tag_curve_points++;
+    }
+    else {
+      if (start_idx == -1) {
+        start_idx = i;
+      }
+    }
+  }
+
+  int new_num_curve_points = old_num_curve_points - num_tag_curve_points;
+  if (new_num_curve_points < 2) {
+    return;
+  }
+
+  bGPDcurve_point *temp_curve_points = (bGPDcurve_point *)MEM_callocN(
+      sizeof(bGPDcurve_point) * new_num_curve_points, __func__);
+
+  bGPDcurve_point *start_cpt = NULL;
+  bGPDcurve_point *end_cpt = NULL;
+  for (uint32_t i = start_idx, idx = 0; (i + 1) % old_num_curve_points != start_idx;
+       i = (i + 1) % old_num_curve_points) {
+    bGPDcurve_point *cpt = &gpc->curve_points[i];
+    bGPDcurve_point *cpt_prev = &gpc->curve_points[mod_i(i - 1, old_num_curve_points)];
+    bGPDcurve_point *cpt_next = &gpc->curve_points[mod_i(i + 1, old_num_curve_points)];
+    bGPDcurve_point *new_cpt = &temp_curve_points[idx];
+
+    /* Copy control point. */
+    if ((cpt->flag & GP_CURVE_POINT_TAG) == 0) {
+      *new_cpt = *cpt;
+      idx++;
+    }
+
+    /* Start point. */
+    if (!(cpt->flag & GP_CURVE_POINT_TAG) && (cpt_next->flag & GP_CURVE_POINT_TAG)) {
+      start_cpt = new_cpt;
+    }
+
+    /* End point. */
+    if ((cpt_prev->flag & GP_CURVE_POINT_TAG) && !(cpt->flag & GP_CURVE_POINT_TAG)) {
+      end_cpt = new_cpt;
+      if (start_cpt && end_cpt) {
+        BKE_gpencil_editcurve_refit_curve_segment_single(gps, start_cpt, end_cpt);
+      }
+    }
+  }
+
+  // bGPDcurve_point *first_cpt = &gpc->curve_points[0];
+  // bGPDcurve_point *last_cpt = &gpc->curve_points[gpc->tot_curve_points - 1];
+  // if (!(first_cpt->flag & GP_CURVE_POINT_TAG)) {
+  //   start_cpt = &temp_curve_points[0];
+  //   *start_cpt = *first_cpt;
+  // }
+  // if (!(last_cpt->flag & GP_CURVE_POINT_TAG)) {
+  //   end_cpt = &temp_curve_points[new_num_curve_points - 1];
+  //   *end_cpt = *last_cpt;
+  // }
+
+  // if (is_cyclic &&
+  //     ((first_cpt->flag & GP_CURVE_POINT_TAG) || (last_cpt->flag & GP_CURVE_POINT_TAG))) {
+  //   start_cpt = &temp_curve_points[0];
+  //   end_cpt = &temp_curve_points[new_num_curve_points - 1];
+  //   BKE_gpencil_editcurve_refit_curve_segment_single(gps, start_cpt, end_cpt);
+  // }
+
+  MEM_SAFE_FREE(gpc->curve_points);
+
+  gpc->curve_points = temp_curve_points;
+  gpc->tot_curve_points = new_num_curve_points;
+
+  // BKE_gpencil_editcurve_recalculate_handles(gps);
+  gps->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
+}
+
 void BKE_gpencil_strokes_selected_update_editcurve(bGPdata *gpd)
 {
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
