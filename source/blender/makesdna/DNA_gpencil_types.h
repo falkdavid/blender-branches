@@ -354,6 +354,8 @@ typedef enum eGPDstroke_Caps {
   GP_STROKE_CAP_MAX,
 } GPDstroke_Caps;
 
+#define GPENCIL_STROKE_IS_CURVE(gps) ((gps) != NULL && (gps)->editcurve != NULL)
+
 /* Arrows ----------------------- */
 
 /* bGPDataRuntime.arrowstyle */

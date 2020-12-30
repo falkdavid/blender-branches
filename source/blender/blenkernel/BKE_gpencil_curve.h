@@ -49,7 +49,9 @@ struct bGPDcurve *BKE_gpencil_stroke_editcurve_generate(struct bGPDstroke *gps,
                                                         const float stroke_radius);
 void BKE_gpencil_stroke_editcurve_update(struct bGPdata *gpd,
                                          struct bGPDlayer *gpl,
-                                         struct bGPDstroke *gps);
+                                         struct bGPDstroke *gps,
+                                         const float threshold,
+                                         const float corner_angle);
 void BKE_gpencil_editcurve_stroke_sync_selection(struct bGPDstroke *gps, struct bGPDcurve *gpc);
 void BKE_gpencil_stroke_editcurve_sync_selection(struct bGPDstroke *gps, struct bGPDcurve *gpc);
 void BKE_gpencil_strokes_selected_update_editcurve(struct bGPdata *gpd);

@@ -756,7 +756,8 @@ bGPDcurve *BKE_gpencil_stroke_editcurve_generate(bGPDstroke *gps,
 /**
  * Updates the editcurve for a stroke. Frees the old curve if one exists and generates a new one.
  */
-void BKE_gpencil_stroke_editcurve_update(bGPdata *gpd, bGPDlayer *gpl, bGPDstroke *gps)
+void BKE_gpencil_stroke_editcurve_update(
+    bGPdata *gpd, bGPDlayer *gpl, bGPDstroke *gps, const float threshold, const float corner_angle)
 {
   if (gps == NULL || gps->totpoints < 0) {
     return;
@@ -770,7 +771,7 @@ void BKE_gpencil_stroke_editcurve_update(bGPdata *gpd, bGPDlayer *gpl, bGPDstrok
   float stroke_radius = ((gps->thickness + gpl->line_change) / defaultpixsize) / 2.0f;
 
   bGPDcurve *editcurve = BKE_gpencil_stroke_editcurve_generate(
-      gps, gpd->curve_edit_threshold, gpd->curve_edit_corner_angle, stroke_radius);
+      gps, threshold, corner_angle, stroke_radius);
   if (editcurve == NULL) {
     return;
   }
@@ -1365,14 +1366,14 @@ void BKE_gpencil_strokes_selected_update_editcurve(bGPdata *gpd)
 
           /* Generate the curve if there is none or the stroke was changed */
           if (gps->editcurve == NULL) {
-            BKE_gpencil_stroke_editcurve_update(gpd, gpl, gps);
+            // BKE_gpencil_stroke_editcurve_update(gpd, gpl, gps);
             /* Continue if curve could not be generated. */
             if (gps->editcurve == NULL) {
               continue;
             }
           }
           else if (gps->editcurve->flag & GP_CURVE_NEEDS_STROKE_UPDATE) {
-            BKE_gpencil_stroke_editcurve_update(gpd, gpl, gps);
+            // BKE_gpencil_stroke_editcurve_update(gpd, gpl, gps);
           }
           /* Update the selection from the stroke to the curve. */
           BKE_gpencil_editcurve_stroke_sync_selection(gps, gps->editcurve);

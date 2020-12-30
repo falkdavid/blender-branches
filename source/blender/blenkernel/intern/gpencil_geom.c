@@ -1290,19 +1290,14 @@ void BKE_gpencil_stroke_geometry_update(bGPdata *gpd, bGPDstroke *gps)
     return;
   }
 
-  if (gps->editcurve != NULL) {
-    if (GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd)) {
-      /* curve geometry was updated: stroke needs recalculation */
-      if (gps->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
-        bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
-        BKE_gpencil_stroke_update_geometry_from_editcurve(
-            gps, gpd->curve_edit_resolution, is_adaptive);
-        gps->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
-      }
-    }
-    else {
-      /* stroke geometry was updated: editcurve needs recalculation */
-      gps->editcurve->flag |= GP_CURVE_NEEDS_STROKE_UPDATE;
+  /* If the stroke is a curve, update stroke points first. */
+  if (GPENCIL_STROKE_IS_CURVE(gps)) {
+    if (gps->flag & GP_STROKE_NEEDS_CURVE_UPDATE) {
+      /* Curve geometry was updated: stroke needs recalculation. */
+      bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
+      BKE_gpencil_stroke_update_geometry_from_editcurve(
+          gps, gpd->curve_edit_resolution, is_adaptive);
+      gps->flag &= ~GP_STROKE_NEEDS_CURVE_UPDATE;
     }
   }
 
