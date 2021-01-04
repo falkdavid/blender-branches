@@ -125,7 +125,7 @@ layout(std140) uniform globalsBlock
 #define sizeViewportInv (sizeViewport.zw)
 
 /* See: 'draw_cache_impl.h' for matching includes. */
-
+#define VERT_GPENCIL_BEZT_HANDLE (1 << 30)
 /* data[0] (1st byte flags) */
 #define FACE_ACTIVE (1 << 0)
 #define FACE_SELECTED (1 << 1)
@@ -144,4 +144,3 @@ layout(std140) uniform globalsBlock
 #define EDGE_SEAM (1 << 5)
 #define EDGE_SHARP (1 << 6)
 #define EDGE_FREESTYLE (1 << 7)
-#define VERT_GPENCIL_BEZT_HANDLE (1 << 30)
