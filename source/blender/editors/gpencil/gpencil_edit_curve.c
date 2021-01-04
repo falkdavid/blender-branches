@@ -159,10 +159,10 @@ static int gpencil_stroke_make_curve_exec(bContext *C, wmOperator *op)
           /* Select all curve points. */
           for (uint32_t i = 0; i < gpc->tot_curve_points; i++) {
             bGPDcurve_point *pt = &gpc->curve_points[i];
-            pt->flag &= ~GP_CURVE_POINT_SELECT;
+            pt->flag |= GP_CURVE_POINT_SELECT;
             BEZT_SEL_ALL(&pt->bezt);
           }
-          gpc->flag &= ~GP_CURVE_SELECT;
+          gpc->flag |= GP_CURVE_SELECT;
 
           /* Deselect stroke points. */
           for (uint32_t i = 0; i < gps->totpoints; i++) {
@@ -239,15 +239,24 @@ static int gpencil_stroke_clear_curve_exec(bContext *C, wmOperator *op)
   }
 
   bool changed = false;
-  GP_EDITABLE_CURVES_BEGIN(gps_iter, C, gpl, gps, gpc)
-  {
-    if (gpc->flag & GP_CURVE_SELECT) {
-      BKE_gpencil_stroke_editcurve_sync_selection(gps, gpc);
-      BKE_gpencil_free_stroke_editcurve(gps);
+  GP_EDITABLE_STROKES_BEGIN (gps_iter, C, gpl, gps) {
+    bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
+    if (GPENCIL_STROKE_IS_CURVE(gps_active) && gps_active->editcurve->flag & GP_CURVE_SELECT) {
+      /* Delete the editcurve data. */
+      BKE_gpencil_free_stroke_editcurve(gps_active);
+
+      /* Select stroke points. */
+      for (uint32_t i = 0; i < gps_active->totpoints; i++) {
+        bGPDspoint *pt = &gps_active->points[i];
+        pt->flag |= GP_SPOINT_SELECT;
+      }
+      gps_active->flag |= GP_STROKE_SELECT;
+
+      BKE_gpencil_stroke_geometry_update(gpd, gps_active);
       changed = true;
     }
   }
-  GP_EDITABLE_CURVES_END(gps_iter);
+  GP_EDITABLE_STROKES_END(gps_iter);
 
   if (changed) {
     /* notifiers */
