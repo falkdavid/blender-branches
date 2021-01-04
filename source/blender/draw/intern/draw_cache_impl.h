@@ -226,7 +226,8 @@ enum {
   VFLAG_EDGE_SEAM = 1 << 5,
   VFLAG_EDGE_SHARP = 1 << 6,
   VFLAG_EDGE_FREESTYLE = 1 << 7,
-  /* Beware to not go over 1 << 7 (it's a byte flag). */
+  /* Special flag to mark a gpencil curve handle. */
+  VFLAG_VERT_GPENCIL_BEZT_HANDLE = 1 << 30,
 };
 
 enum {
