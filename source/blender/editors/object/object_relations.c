@@ -1571,7 +1571,7 @@ static bool allow_make_links_data(const int type, Object *ob_src, Object *ob_dst
           /* T84420: Linking non-grease-pencil materials to a grease-pencil object causes issues.
            * We make sure that if one of the objects is a grease-pencil object, the other must be
            * as well. */
-          !((ob_src->type == OB_GPENCIL) ^ (ob_dst->type == OB_GPENCIL))) {
+          ((ob_src->type == OB_GPENCIL) == (ob_dst->type == OB_GPENCIL))) {
         return true;
       }
       break;
