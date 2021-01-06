@@ -125,10 +125,10 @@ void createTransCurveVerts(TransInfo *t)
               }
               countsel_pt++;
             }
-            if (is_prop_edit) {
-              count += 3;
-              count_pt++;
-            }
+          }
+          if (is_prop_edit) {
+            count += 3;
+            count_pt++;
           }
         }
       }
@@ -352,8 +352,8 @@ void createTransCurveVerts(TransInfo *t)
           }
           else if (is_prop_edit && head != tail) {
             tail->flag |= TD_NOTCONNECTED;
-            td++;
-            tail++;
+            td += 3;
+            tail += 3;
           }
         }
         if (is_prop_edit && head != tail) {
