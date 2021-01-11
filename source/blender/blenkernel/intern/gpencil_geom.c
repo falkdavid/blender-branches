@@ -1292,6 +1292,9 @@ void BKE_gpencil_stroke_geometry_update(bGPdata *gpd, bGPDstroke *gps)
 
   /* If the stroke is a curve, update stroke points first. */
   if (GPENCIL_STROKE_IS_CURVE(gps)) {
+    // if (gps->editcurve->flag & GP_CURVE_NEEDS_STROKE_UPDATE) {
+    //   BKE_gpencil_stroke_editcurve_update(gpd, )
+    // }
     /* Curve geometry was updated: stroke needs recalculation. */
     bool is_adaptive = gpd->flag & GP_DATA_CURVE_ADAPTIVE_RESOLUTION;
     BKE_gpencil_stroke_update_geometry_from_editcurve(

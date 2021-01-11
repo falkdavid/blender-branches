@@ -861,6 +861,7 @@ class VIEW3D_MT_editor_menus(Menu):
             elif obj and obj.mode == 'EDIT_GPENCIL':
                 layout.menu("VIEW3D_MT_edit_gpencil")
                 layout.menu("VIEW3D_MT_edit_gpencil_stroke")
+                layout.menu("VIEW3D_MT_edit_gpencil_curve")
                 layout.menu("VIEW3D_MT_edit_gpencil_point")
             elif obj and obj.mode == 'WEIGHT_GPENCIL':
                 layout.menu("VIEW3D_MT_weight_gpencil")
@@ -4995,6 +4996,14 @@ class VIEW3D_MT_edit_gpencil_stroke(Menu):
         layout.separator()
         layout.operator("gpencil.reset_transform_fill", text="Reset Fill Transform")
 
+        layout.operator("gpencil.stroke_make_curve", text="To Curve")
+
+class VIEW3D_MT_edit_gpencil_curve(Menu):
+    bl_label = "Curve"
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("gpencil.stroke_clear_curve",text="To Stroke")
+
 
 class VIEW3D_MT_edit_gpencil_point(Menu):
     bl_label = "Point"
@@ -7562,6 +7571,7 @@ classes = (
     VIEW3D_MT_assign_material,
     VIEW3D_MT_edit_gpencil,
     VIEW3D_MT_edit_gpencil_stroke,
+    VIEW3D_MT_edit_gpencil_curve,
     VIEW3D_MT_edit_gpencil_point,
     VIEW3D_MT_edit_gpencil_delete,
     VIEW3D_MT_edit_gpencil_showhide,
