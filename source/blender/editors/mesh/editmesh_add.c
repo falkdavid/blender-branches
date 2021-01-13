@@ -75,6 +75,10 @@ static Object *make_prim_init(bContext *C,
     r_creation_data->was_editmode = true;
   }
 
+  /* Note: this is ONLY needed to not break current python scripts. Remove for version 3.0 */
+  if (scale != NULL && !equals_v3v3(scale, (const float[3]){1.0f, 1.0f, 1.0f})) {
+    mul_v3_fl(scale, 0.5f);
+  }
   ED_object_new_primitive_matrix(C, obedit, loc, rot, scale, r_creation_data->mat);
 
   return obedit;

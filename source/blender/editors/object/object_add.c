@@ -440,16 +440,20 @@ void ED_object_add_generic_props(wmOperatorType *ot, bool do_editmode)
                                 DEG2RADF(360.0f));
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  prop = RNA_def_float_vector_xyz(ot->srna,
-                                  "scale",
-                                  3,
-                                  NULL,
-                                  -OBJECT_ADD_SIZE_MAXF,
-                                  OBJECT_ADD_SIZE_MAXF,
-                                  "Scale",
-                                  "Scale for the newly added object",
-                                  -1000.0f,
-                                  1000.0f);
+  prop = RNA_def_float_vector_xyz(
+      ot->srna,
+      "scale",
+      3,
+      NULL,
+      -OBJECT_ADD_SIZE_MAXF,
+      OBJECT_ADD_SIZE_MAXF,
+      "Scale",
+      "Scale for the newly added object. Hint: If the object has a radius and the scale should be "
+      "different from (1,1,1), the scale needs to be doubled to get the expected behavior. "
+      "Example: a sphere with a radius of 2 scaled along the z-axis by 2 can be created with the "
+      "parameters radius=2,scale=(2,2,4)",
+      -1000.0f,
+      1000.0f);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
