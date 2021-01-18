@@ -2009,6 +2009,21 @@ class _defs_gpencil_paint:
             draw_settings=draw_settings,
         )
 
+    @ToolDef.from_fn
+    def curve_pen():
+        def draw_settings(context, layout, tool):
+            pass
+
+        return dict(
+            idname="builtin.curve_pen",
+            label="Curve Pen",
+            icon="",
+            cursor='DOT',
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
 
 class _defs_gpencil_edit:
     def is_segment(context):
@@ -2843,6 +2858,8 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             _defs_gpencil_paint.cutter,
             None,
             _defs_gpencil_paint.eyedropper,
+            None,
+            _defs_gpencil_paint.curve_pen,
             None,
             _defs_gpencil_paint.line,
             _defs_gpencil_paint.polyline,
