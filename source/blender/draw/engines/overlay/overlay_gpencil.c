@@ -138,7 +138,7 @@ void OVERLAY_edit_gpencil_cache_init(OVERLAY_Data *vedata)
   }
 
   /* Handles and curve point for Curve Edit submode. */
-  if (GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd)) {
+  if (GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd) || GPENCIL_PAINT_MODE(gpd)) {
     DRWState state = DRW_STATE_WRITE_COLOR;
     DRW_PASS_CREATE(psl->edit_gpencil_curve_ps, state | pd->clipping_state);
 
