@@ -669,7 +669,8 @@ struct GP_EditableStrokes_Iter {
       bGPDframe *init_gpf_ = (is_multiedit_) ? gpl->frames.first : gpl->actframe; \
       for (bGPDframe *gpf_ = init_gpf_; gpf_; gpf_ = gpf_->next) { \
         if ((gpf_ == gpl->actframe) || ((gpf_->flag & GP_FRAME_SELECT) && is_multiedit_)) { \
-          BKE_gpencil_parent_matrix_get(depsgraph_, obact_, gpl, gpstroke_iter.diff_mat); \
+          BKE_gpencil_layer_transform_matrix_get( \
+              depsgraph_, obact_, gpl, gpstroke_iter.diff_mat); \
           invert_m4_m4(gpstroke_iter.inverse_diff_mat, gpstroke_iter.diff_mat); \
           /* loop over strokes */ \
           bGPDstroke *gpsn_; \
@@ -680,7 +681,7 @@ struct GP_EditableStrokes_Iter {
               continue; \
             } \
             /* check if the color is editable */ \
-            if (ED_gpencil_stroke_color_use(obact_, gpl, gps) == false) { \
+            if (ED_gpencil_stroke_material_editable(obact_, gpl, gps) == false) { \
               continue; \
             } \
     /* ... Do Stuff With Strokes ...  */
@@ -720,7 +721,8 @@ struct GP_EditableStrokes_Iter {
       bGPDframe *init_gpf_ = (is_multiedit_) ? gpl->frames.first : gpl->actframe; \
       for (bGPDframe *gpf_ = init_gpf_; gpf_; gpf_ = gpf_->next) { \
         if ((gpf_ == gpl->actframe) || ((gpf_->flag & GP_FRAME_SELECT) && is_multiedit_)) { \
-          BKE_gpencil_parent_matrix_get(depsgraph_, obact_, gpl, gpstroke_iter.diff_mat); \
+          BKE_gpencil_layer_transform_matrix_get( \
+              depsgraph_, obact_, gpl, gpstroke_iter.diff_mat); \
           invert_m4_m4(gpstroke_iter.inverse_diff_mat, gpstroke_iter.diff_mat); \
           /* loop over strokes */ \
           bGPDstroke *gpsn_; \
@@ -769,8 +771,10 @@ struct GP_EditableStrokes_Iter {
         bGPDframe *init_gpf_ = (is_multiedit_) ? gpl->frames.first : gpl->actframe; \
         for (bGPDframe *gpf_ = init_gpf_; gpf_; gpf_ = gpf_->next) { \
           if ((gpf_ == gpl->actframe) || ((gpf_->flag & GP_FRAME_SELECT) && is_multiedit_)) { \
-            BKE_gpencil_parent_matrix_get(depsgraph_, obact_, gpl, gpstroke_iter.diff_mat); \
-            invert_m4_m4(gpstroke_iter.inverse_diff_mat, gpstroke_iter.diff_mat); \
+            BKE_gpencil_layer_transform_matrix_get( \
+                depsgraph_, obact_, gpl, gpstroke_iter.diff_mat); \
+            /* Undo layer transform. */ \
+            mul_m4_m4m4(gpstroke_iter.diff_mat, gpstroke_iter.diff_mat, gpl->layer_invmat); \
             /* loop over strokes */ \
             LISTBASE_FOREACH (bGPDstroke *, gps, &gpf_->strokes) { \
               /* skip strokes that are invalid for current view */ \
@@ -778,7 +782,7 @@ struct GP_EditableStrokes_Iter {
                 continue; \
               } \
               /* check if the color is editable */ \
-              if (ED_gpencil_stroke_color_use(obact_, gpl, gps) == false) { \
+              if (ED_gpencil_stroke_material_editable(obact_, gpl, gps) == false) { \
                 continue; \
               } \
     /* ... Do Stuff With Strokes ...  */
