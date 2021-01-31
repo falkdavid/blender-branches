@@ -475,7 +475,7 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
         LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
           bGPDframe *gpf = gpl->frames.first;
           if (gpf && gpf->framenum > scene->r.sfra) {
-            bGPDframe *gpf_dup = BKE_gpencil_frame_duplicate(gpf);
+            bGPDframe *gpf_dup = BKE_gpencil_frame_duplicate(gpf, true);
             gpf_dup->framenum = scene->r.sfra;
             BLI_addhead(&gpl->frames, gpf_dup);
           }
@@ -499,7 +499,7 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
     /**
      * Make sure Emission Alpha fcurve and drivers is properly mapped after the Emission Strength
      * got introduced.
-     * */
+     */
 
     /**
      * Effectively we are replacing the (animation of) node socket input 18 with 19.
@@ -510,7 +510,7 @@ void do_versions_after_linking_290(Main *bmain, ReportList *UNUSED(reports))
      *
      * The for loop for the input ids is at the top level otherwise we lose the animation
      * keyframe data.
-     * */
+     */
     for (int input_id = 21; input_id >= 18; input_id--) {
       FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
         if (ntree->type == NTREE_SHADER) {
@@ -1504,7 +1504,7 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
   if (!MAIN_VERSION_ATLEAST(bmain, 292, 10)) {
     if (!DNA_struct_find(fd->filesdna, "NodeSetAlpha")) {
-      LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
         if (ntree->type != NTREE_COMPOSIT) {
           continue;
         }
@@ -1517,6 +1517,7 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
           node->storage = storage;
         }
       }
+      FOREACH_NODETREE_END;
     }
 
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
@@ -1547,7 +1548,7 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 292, 13)) {
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 1)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       if (ntree->type == NTREE_GEOMETRY) {
         version_node_socket_name(ntree, GEO_NODE_BOOLEAN, "Geometry A", "Geometry 1");
@@ -1572,7 +1573,8 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 292, 14)) {
+  if ((!MAIN_VERSION_ATLEAST(bmain, 292, 14)) ||
+      ((bmain->versionfile == 293) && (!MAIN_VERSION_ATLEAST(bmain, 293, 1)))) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       if (ntree->type != NTREE_GEOMETRY) {
         continue;
@@ -1583,6 +1585,75 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
               sizeof(NodeGeometryObjectInfo), __func__);
           data->transform_space = GEO_NODE_TRANSFORM_SPACE_RELATIVE;
           node->storage = data;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 1)) {
+    /* Grease pencil layer transform matrix. */
+    if (!DNA_struct_elem_find(fd->filesdna, "bGPDlayer", "float", "location[0]")) {
+      LISTBASE_FOREACH (bGPdata *, gpd, &bmain->gpencils) {
+        LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+          zero_v3(gpl->location);
+          zero_v3(gpl->rotation);
+          copy_v3_fl(gpl->scale, 1.0f);
+          loc_eul_size_to_mat4(gpl->layer_mat, gpl->location, gpl->rotation, gpl->scale);
+          invert_m4_m4(gpl->layer_invmat, gpl->layer_mat);
+        }
+      }
+    }
+    /* Fix Fill factor for grease pencil fill brushes. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      if ((brush->gpencil_settings) && (brush->gpencil_settings->fill_factor == 0.0f)) {
+        brush->gpencil_settings->fill_factor = 1.0f;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 3)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_GEOMETRY) {
+        continue;
+      }
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == GEO_NODE_POINT_INSTANCE && node->storage == NULL) {
+          NodeGeometryPointInstance *data = (NodeGeometryPointInstance *)MEM_callocN(
+              sizeof(NodeGeometryPointInstance), __func__);
+          data->instance_type = node->custom1;
+          data->flag = (node->custom2 ? 0 : GEO_NODE_POINT_INSTANCE_WHOLE_COLLECTION);
+          node->storage = data;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 4)) {
+    /* Add support for all operations to the "Attribute Math" node. */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_GEOMETRY) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+          if (node->type == GEO_NODE_ATTRIBUTE_MATH) {
+            NodeAttributeMath *data = (NodeAttributeMath *)node->storage;
+            data->input_type_c = GEO_NODE_ATTRIBUTE_INPUT_ATTRIBUTE;
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 5)) {
+    /* Change Nishita sky model Altitude unit. */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_SHADER) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+          if (node->type == SH_NODE_TEX_SKY && node->storage) {
+            NodeTexSky *tex = (NodeTexSky *)node->storage;
+            tex->altitude *= 1000.0f;
+          }
         }
       }
     }
