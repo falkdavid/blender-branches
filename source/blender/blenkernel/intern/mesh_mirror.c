@@ -51,7 +51,7 @@ Mesh *BKE_mesh_mirror_bisect_on_mirror_plane_for_modifier(MirrorModifierData *mm
                               (axis == 1 && mmd->flag & MOD_MIR_BISECT_FLIP_AXIS_Y) ||
                               (axis == 2 && mmd->flag & MOD_MIR_BISECT_FLIP_AXIS_Z));
 
-  const float bisect_distance = 1e-7;
+  const float bisect_distance = mmd->bisect_distance;
 
   Mesh *result;
   BMesh *bm;
