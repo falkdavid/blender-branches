@@ -165,6 +165,10 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetActive(sub, RNA_boolean_get(ptr, "use_mirror_merge"));
   uiItemR(sub, ptr, "merge_threshold", 0, "", ICON_NONE);
 
+  row = uiLayoutRowWithHeading(col, true, IFACE_("Bisect Threshold"));
+  sub = uiLayoutRow(row, true);
+  uiItemR(sub, ptr, "bisect_distance", 0, "", ICON_NONE);
+
   modifier_panel_end(layout, ptr);
 }
 

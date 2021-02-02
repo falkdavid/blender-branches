@@ -428,7 +428,7 @@
   { \
     .flag = MOD_MIR_AXIS_X | MOD_MIR_VGROUP, \
     .tolerance = 0.001f, \
-    .bisect_distance = 1e-7; \
+    .bisect_distance = 1e-7, \
     .uv_offset = {0.0f, 0.0f}, \
     .uv_offset_copy = {0.0f, 0.0f}, \
     .mirror_ob = NULL, \
