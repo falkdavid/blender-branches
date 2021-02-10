@@ -1646,6 +1646,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
       RNA_property_is_set(op->ptr, prop)) {
     if (RNA_property_boolean_get(op->ptr, prop)) {
       options |= CTX_CURSOR;
+      RNA_boolean_set(op->ptr, "use_proportional_edit", false);
     }
   }
 
