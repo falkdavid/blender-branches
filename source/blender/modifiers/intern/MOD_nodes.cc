@@ -1029,20 +1029,17 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
   Map<const DOutputSocket *, GMutablePointer> group_inputs;
 
   if (group_input_sockets.size() > 0) {
-    Span<const DOutputSocket *> remaining_input_sockets = group_input_sockets;
-
-    /* If the group expects a geometry as first input, use the geometry that has been passed to
-     * modifier. */
-    const DOutputSocket *first_input_socket = group_input_sockets[0];
-    if (first_input_socket->bsocket()->type == SOCK_GEOMETRY) {
-      GeometrySet *geometry_set_in = allocator.construct<GeometrySet>(
+    bool found_geometry_socket = false;
+    /* Initialize group inputs. */
+    for (const DOutputSocket *socket : group_input_sockets) {
+      /* For the first occurence of a geometry socket, use the geometry passed to the modifier. */
+      if (socket->bsocket()->type == SOCK_GEOMETRY && !found_geometry_socket) {
+        GeometrySet *geometry_set_in = allocator.construct<GeometrySet>(
           std::move(input_geometry_set));
-      group_inputs.add_new(first_input_socket, geometry_set_in);
-      remaining_input_sockets = remaining_input_sockets.drop_front(1);
-    }
-
-    /* Initialize remaining group inputs. */
-    for (const DOutputSocket *socket : remaining_input_sockets) {
+        group_inputs.add_new(socket, geometry_set_in);
+        found_geometry_socket = true;
+        continue;
+      }
       const CPPType &cpp_type = *blender::nodes::socket_cpp_type_get(*socket->typeinfo());
       void *value_in = allocator.allocate(cpp_type.size(), cpp_type.alignment());
       initialize_group_input(*nmd, handle_map, *socket->bsocket(), cpp_type, value_in);
@@ -1077,17 +1074,15 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
 {
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
 
-  int i = 0;
-  LISTBASE_FOREACH_INDEX (const bNodeSocket *, socket, &nmd->node_group->inputs, i) {
-    /* The first socket is the special geometry socket for the modifier object. */
-    if (i == 0 && socket->type == SOCK_GEOMETRY) {
-      continue;
-    }
-
+  int geometry_input_count = 0;
+  LISTBASE_FOREACH (const bNodeSocket *, socket, &nmd->node_group->inputs) {
     IDProperty *property = IDP_GetPropertyFromGroup(nmd->settings.properties, socket->identifier);
     if (property == nullptr) {
       if (socket->type == SOCK_GEOMETRY) {
-        BKE_modifier_set_error(ob, md, "Node group can only have one geometry input");
+        if (geometry_input_count > 1) {
+          BKE_modifier_set_error(ob, md, "Node group can only have one geometry input");
+        } 
+        geometry_input_count++;
       }
       else {
         BKE_modifier_set_error(ob, md, "Missing property for input socket \"%s\"", socket->name);
