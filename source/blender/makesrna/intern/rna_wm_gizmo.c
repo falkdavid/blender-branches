@@ -260,7 +260,7 @@ static wmGizmo *rna_GizmoProperties_find_operator(PointerRNA *ptr)
   wmWindowManager *wm = (wmWindowManager *)ptr->owner_id;
 #  endif
 
-  /* We could try workaruond this lookup, but not trivial. */
+  /* We could try workaround this lookup, but not trivial. */
   for (bScreen *screen = G_MAIN->screens.first; screen; screen = screen->id.next) {
     IDProperty *properties = ptr->data;
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
@@ -607,7 +607,7 @@ static wmGizmo *rna_GizmoGroup_gizmo_new(wmGizmoGroup *gzgroup,
       BKE_reportf(reports,
                   RPT_ERROR,
                   "GizmoType '%s' is for a 3D gizmo-group. "
-                  "The 'draw_select' callback is set where only 'test_select' will be used.",
+                  "The 'draw_select' callback is set where only 'test_select' will be used",
                   idname);
       return NULL;
     }
@@ -1089,7 +1089,7 @@ static void rna_def_gizmo(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   parm = RNA_def_pointer(func, "event", "Event", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-  /* TODO, shuold be a enum-flag */
+  /* TODO, should be a enum-flag */
   parm = RNA_def_enum_flag(func, "tweak", tweak_actions, 0, "Tweak", "");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
   parm = RNA_def_enum_flag(
@@ -1238,20 +1238,20 @@ static void rna_def_gizmo(BlenderRNA *brna, PropertyRNA *cprop)
   prop = RNA_def_property(srna, "use_draw_hover", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
       prop, "rna_Gizmo_flag_use_draw_hover_get", "rna_Gizmo_flag_use_draw_hover_set");
-  RNA_def_property_ui_text(prop, "Draw Hover", "");
+  RNA_def_property_ui_text(prop, "Show Hover", "");
   RNA_def_property_update(prop, 0, "rna_Gizmo_update_redraw");
   /* WM_GIZMO_DRAW_MODAL */
   prop = RNA_def_property(srna, "use_draw_modal", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
       prop, "rna_Gizmo_flag_use_draw_modal_get", "rna_Gizmo_flag_use_draw_modal_set");
-  RNA_def_property_ui_text(prop, "Draw Active", "Draw while dragging");
+  RNA_def_property_ui_text(prop, "Show Active", "Show while dragging");
   RNA_def_property_update(prop, 0, "rna_Gizmo_update_redraw");
   /* WM_GIZMO_DRAW_VALUE */
   prop = RNA_def_property(srna, "use_draw_value", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
       prop, "rna_Gizmo_flag_use_draw_value_get", "rna_Gizmo_flag_use_draw_value_set");
   RNA_def_property_ui_text(
-      prop, "Draw Value", "Show an indicator for the current value while dragging");
+      prop, "Show Value", "Show an indicator for the current value while dragging");
   RNA_def_property_update(prop, 0, "rna_Gizmo_update_redraw");
   /* WM_GIZMO_DRAW_OFFSET_SCALE */
   prop = RNA_def_property(srna, "use_draw_offset_scale", PROP_BOOLEAN, PROP_NONE);
@@ -1391,7 +1391,7 @@ static void rna_def_gizmogroup(BlenderRNA *brna)
        "SCALE",
        0,
        "Scale",
-       "Scale to respect zoom (otherwise zoom independent draw size)"},
+       "Scale to respect zoom (otherwise zoom independent display size)"},
       {WM_GIZMOGROUPTYPE_DEPTH_3D,
        "DEPTH_3D",
        0,

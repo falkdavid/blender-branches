@@ -910,14 +910,14 @@ static const EnumPropertyItem *rna_EnumProperty_default_itemf(bContext *C,
     return DummyRNA_NULL_items;
   }
 
-  if ((eprop->itemf == NULL) || (eprop->itemf == rna_EnumProperty_default_itemf) ||
+  if ((eprop->item_fn == NULL) || (eprop->item_fn == rna_EnumProperty_default_itemf) ||
       (ptr->type == &RNA_EnumProperty) || (C == NULL)) {
     if (eprop->item) {
       return eprop->item;
     }
   }
 
-  return eprop->itemf(C, ptr, prop, r_free);
+  return eprop->item_fn(C, ptr, prop, r_free);
 }
 
 /* XXX - not sure this is needed? */
@@ -1471,8 +1471,8 @@ static int rna_property_override_diff_propptr(Main *bmain,
     }
   }
   else {
-    /* We could also use is_diff_pointer, but then we potentially lose the gt/lt info -
-     * and don't think performances are critical here for now anyway... */
+    /* We could also use is_diff_pointer, but then we potentially lose the greater-than/less-than
+     * info - and don't think performances are critical here for now anyway. */
     return !RNA_struct_equals(bmain, propptr_a, propptr_b, mode);
   }
 }

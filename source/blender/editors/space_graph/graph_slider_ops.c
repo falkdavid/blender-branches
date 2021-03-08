@@ -187,11 +187,11 @@ static void decimate_draw_status_header(wmOperator *op, tDecimateGraphOp *dgo)
   strcpy(mode_str, TIP_("Decimate Keyframes"));
 
   if (hasNumInput(&dgo->num)) {
-    char str_offs[NUM_STR_REP_LEN];
+    char str_ofs[NUM_STR_REP_LEN];
 
-    outputNumInput(&dgo->num, str_offs, &dgo->scene->unit);
+    outputNumInput(&dgo->num, str_ofs, &dgo->scene->unit);
 
-    BLI_snprintf(status_str, sizeof(status_str), "%s: %s", mode_str, str_offs);
+    BLI_snprintf(status_str, sizeof(status_str), "%s: %s", mode_str, str_ofs);
   }
   else {
     float percentage = RNA_property_float_get(op->ptr, dgo->percentage_prop);
@@ -380,7 +380,7 @@ static int graphkeys_decimate_modal(bContext *C, wmOperator *op, const wmEvent *
         break;
       }
 
-      /* Unhandled event - maybe it was some view manip? */
+      /* Unhandled event - maybe it was some view manipulation? */
       /* Allow to pass through. */
       return OPERATOR_RUNNING_MODAL | OPERATOR_PASS_THROUGH;
     }

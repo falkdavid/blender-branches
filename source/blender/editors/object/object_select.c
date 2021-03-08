@@ -317,7 +317,7 @@ bool ED_object_jump_to_object(bContext *C, Object *ob, const bool UNUSED(reveal_
 /**
  * Select and make the target object and bone active.
  * Switches to Pose mode if in Object mode so the selection is visible.
- * Unhides the target bone and bone layer if necessary.
+ * Un-hides the target bone and bone layer if necessary.
  *
  * \returns false if object not in layer, bone not found, or other error
  */
@@ -1311,7 +1311,8 @@ void OBJECT_OT_select_mirror(wmOperatorType *ot)
 
   /* identifiers */
   ot->name = "Select Mirror";
-  ot->description = "Select the Mirror objects of the selected object eg. L.sword -> R.sword";
+  ot->description =
+      "Select the mirror objects of the selected object e.g. \"L.sword\" and \"R.sword\"";
   ot->idname = "OBJECT_OT_select_mirror";
 
   /* api callbacks */

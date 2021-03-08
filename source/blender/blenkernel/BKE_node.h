@@ -301,11 +301,11 @@ typedef struct bNodeType {
   void (*free_self)(struct bNodeType *ntype);
 
   /* **** execution callbacks **** */
-  NodeInitExecFunction initexecfunc;
-  NodeFreeExecFunction freeexecfunc;
-  NodeExecFunction execfunc;
+  NodeInitExecFunction init_exec_fn;
+  NodeFreeExecFunction free_exec_fn;
+  NodeExecFunction exec_fn;
   /* gpu */
-  NodeGPUExecFunction gpufunc;
+  NodeGPUExecFunction gpu_fn;
 
   /* Expands the bNode into nodes in a multi-function network, which will be evaluated later on. */
   NodeExpandInMFNetworkFunction expand_in_mf_network;
@@ -419,7 +419,7 @@ struct GHashIterator *ntreeTypeGetIterator(void);
     GHashIterator *__node_tree_type_iter__ = ntreeTypeGetIterator(); \
     for (; !BLI_ghashIterator_done(__node_tree_type_iter__); \
          BLI_ghashIterator_step(__node_tree_type_iter__)) { \
-      bNodeTreeType *ntype = BLI_ghashIterator_getValue(__node_tree_type_iter__);
+      bNodeTreeType *ntype = (bNodeTreeType *)BLI_ghashIterator_getValue(__node_tree_type_iter__);
 
 #define NODE_TREE_TYPES_END \
   } \
@@ -442,7 +442,6 @@ struct bNodeTree *ntreeCopyTree(struct Main *bmain, const struct bNodeTree *ntre
 
 struct bNodeTree **BKE_ntree_ptr_from_id(struct ID *id);
 struct bNodeTree *ntreeFromID(struct ID *id);
-struct ID *BKE_node_tree_find_owner_ID(struct Main *bmain, struct bNodeTree *ntree);
 
 void ntreeFreeLocalNode(struct bNodeTree *ntree, struct bNode *node);
 void ntreeFreeLocalTree(struct bNodeTree *ntree);
@@ -453,7 +452,9 @@ void ntreeUpdateTree(struct Main *main, struct bNodeTree *ntree);
 void ntreeUpdateAllNew(struct Main *main);
 void ntreeUpdateAllUsers(struct Main *main, struct ID *id);
 
-void ntreeGetDependencyList(struct bNodeTree *ntree, struct bNode ***deplist, int *totnodes);
+void ntreeGetDependencyList(struct bNodeTree *ntree,
+                            struct bNode ***r_deplist,
+                            int *r_deplist_len);
 
 /* XXX old trees handle output flags automatically based on special output
  * node types and last active selection.
@@ -523,7 +524,7 @@ struct GHashIterator *nodeTypeGetIterator(void);
     GHashIterator *__node_type_iter__ = nodeTypeGetIterator(); \
     for (; !BLI_ghashIterator_done(__node_type_iter__); \
          BLI_ghashIterator_step(__node_type_iter__)) { \
-      bNodeType *ntype = BLI_ghashIterator_getValue(__node_type_iter__);
+      bNodeType *ntype = (bNodeType *)BLI_ghashIterator_getValue(__node_type_iter__);
 
 #define NODE_TYPES_END \
   } \
@@ -545,7 +546,8 @@ const char *nodeStaticSocketInterfaceType(int type, int subtype);
     GHashIterator *__node_socket_type_iter__ = nodeSocketTypeGetIterator(); \
     for (; !BLI_ghashIterator_done(__node_socket_type_iter__); \
          BLI_ghashIterator_step(__node_socket_type_iter__)) { \
-      bNodeSocketType *stype = BLI_ghashIterator_getValue(__node_socket_type_iter__);
+      bNodeSocketType *stype = (bNodeSocketType *)BLI_ghashIterator_getValue( \
+          __node_socket_type_iter__);
 
 #define NODE_SOCKET_TYPES_END \
   } \
@@ -775,7 +777,7 @@ void BKE_node_preview_free(struct bNodePreview *preview);
 void BKE_node_preview_init_tree(struct bNodeTree *ntree,
                                 int xsize,
                                 int ysize,
-                                int create_previews);
+                                bool create_previews);
 void BKE_node_preview_free_tree(struct bNodeTree *ntree);
 void BKE_node_preview_remove_unused(struct bNodeTree *ntree);
 void BKE_node_preview_clear(struct bNodePreview *preview);
@@ -827,10 +829,10 @@ void node_type_group_update(struct bNodeType *ntype,
                                                       struct bNode *node));
 
 void node_type_exec(struct bNodeType *ntype,
-                    NodeInitExecFunction initexecfunc,
-                    NodeFreeExecFunction freeexecfunc,
-                    NodeExecFunction execfunc);
-void node_type_gpu(struct bNodeType *ntype, NodeGPUExecFunction gpufunc);
+                    NodeInitExecFunction init_exec_fn,
+                    NodeFreeExecFunction free_exec_fn,
+                    NodeExecFunction exec_fn);
+void node_type_gpu(struct bNodeType *ntype, NodeGPUExecFunction gpu_fn);
 void node_type_internal_links(struct bNodeType *ntype,
                               void (*update_internal_links)(struct bNodeTree *, struct bNode *));
 
@@ -1363,6 +1365,13 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 #define GEO_NODE_POINT_SCALE 1020
 #define GEO_NODE_ATTRIBUTE_SAMPLE_TEXTURE 1021
 #define GEO_NODE_POINTS_TO_VOLUME 1022
+#define GEO_NODE_COLLECTION_INFO 1023
+#define GEO_NODE_IS_VIEWPORT 1024
+#define GEO_NODE_ATTRIBUTE_PROXIMITY 1025
+#define GEO_NODE_VOLUME_TO_MESH 1026
+#define GEO_NODE_ATTRIBUTE_COMBINE_XYZ 1027
+#define GEO_NODE_ATTRIBUTE_SEPARATE_XYZ 1028
+#define GEO_NODE_SUBDIVISION_SURFACE_SIMPLE 1029
 
 /** \} */
 
@@ -1378,6 +1387,7 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 #define FN_NODE_OBJECT_TRANSFORMS 1205
 #define FN_NODE_RANDOM_FLOAT 1206
 #define FN_NODE_INPUT_VECTOR 1207
+#define FN_NODE_INPUT_STRING 1208
 
 /** \} */
 

@@ -161,7 +161,7 @@ void OVERLAY_edit_uv_init(OVERLAY_Data *vedata)
   pd->edit_uv.do_tiled_image_border_overlay = is_image_type && is_tiled_image;
   pd->edit_uv.dash_length = 4.0f * UI_DPI_FAC;
   pd->edit_uv.line_style = edit_uv_line_style_from_space_image(sima);
-  pd->edit_uv.do_smooth_wire = ((U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE) > 0);
+  pd->edit_uv.do_smooth_wire = ((U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE) != 0);
   pd->edit_uv.do_stencil_overlay = show_overlays && do_stencil_overlay;
 
   pd->edit_uv.draw_type = sima->dt_uvstretch;
@@ -401,10 +401,11 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
   /* HACK: When editing objects that share the same mesh we should only draw the
    * first one in the order that is used during uv editing. We can only trust that the first object
    * has the correct batches with the correct selection state. See T83187. */
-  if (pd->edit_uv.do_uv_overlay || pd->edit_uv.do_uv_shadow_overlay) {
+  if ((pd->edit_uv.do_uv_overlay || pd->edit_uv.do_uv_shadow_overlay) &&
+      draw_ctx->obact->type == OB_MESH) {
     uint objects_len = 0;
-    Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-        draw_ctx->view_layer, NULL, &objects_len);
+    Object **objects = BKE_view_layer_array_from_objects_in_mode_unique_data(
+        draw_ctx->view_layer, NULL, &objects_len, draw_ctx->object_mode);
     for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
       Object *object_eval = DEG_get_evaluated_object(draw_ctx->depsgraph, objects[ob_index]);
       DRW_mesh_batch_cache_validate((Mesh *)object_eval->data);
@@ -574,4 +575,4 @@ void OVERLAY_edit_uv_draw(OVERLAY_Data *vedata)
   OVERLAY_edit_uv_draw_finish(vedata);
 }
 
-/* \} */
+/** \} */

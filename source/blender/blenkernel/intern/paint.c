@@ -127,7 +127,7 @@ static void palette_blend_read_data(BlendDataReader *reader, ID *id)
 
 static void palette_undo_preserve(BlendLibReader *UNUSED(reader), ID *id_new, ID *id_old)
 {
-  /* Whole Palette is preserved accross undo's, and it has no extra pointer, simple. */
+  /* Whole Palette is preserved across undo-steps, and it has no extra pointer, simple. */
   /* Note: We do not care about potential internal references to self here, Palette has none. */
   /* Note: We do not swap IDProperties, as dealing with potential ID pointers in those would be
    *       fairly delicate. */
@@ -151,6 +151,7 @@ IDTypeInfo IDType_ID_PAL = {
     .make_local = NULL,
     .foreach_id = NULL,
     .foreach_cache = NULL,
+    .owner_get = NULL,
 
     .blend_write = palette_blend_write,
     .blend_read_data = palette_blend_read_data,
@@ -216,6 +217,7 @@ IDTypeInfo IDType_ID_PC = {
     .make_local = NULL,
     .foreach_id = NULL,
     .foreach_cache = NULL,
+    .owner_get = NULL,
 
     .blend_write = paint_curve_blend_write,
     .blend_read_data = paint_curve_blend_read_data,
@@ -1420,6 +1422,12 @@ static void sculptsession_free_pbvh(Object *object)
   MEM_SAFE_FREE(ss->pmap);
   MEM_SAFE_FREE(ss->pmap_mem);
 
+  MEM_SAFE_FREE(ss->epmap);
+  MEM_SAFE_FREE(ss->epmap_mem);
+
+  MEM_SAFE_FREE(ss->vemap);
+  MEM_SAFE_FREE(ss->vemap_mem);
+
   MEM_SAFE_FREE(ss->persistent_base);
 
   MEM_SAFE_FREE(ss->preview_vert_index_list);
@@ -1469,6 +1477,13 @@ void BKE_sculptsession_free(Object *ob)
 
     MEM_SAFE_FREE(ss->pmap);
     MEM_SAFE_FREE(ss->pmap_mem);
+
+    MEM_SAFE_FREE(ss->epmap);
+    MEM_SAFE_FREE(ss->epmap_mem);
+
+    MEM_SAFE_FREE(ss->vemap);
+    MEM_SAFE_FREE(ss->vemap_mem);
+
     if (ss->bm_log) {
       BM_log_free(ss->bm_log);
     }
@@ -1489,6 +1504,14 @@ void BKE_sculptsession_free(Object *ob)
       }
       MEM_SAFE_FREE(ss->pose_ik_chain_preview->segments);
       MEM_SAFE_FREE(ss->pose_ik_chain_preview);
+    }
+
+    if (ss->boundary_preview) {
+      MEM_SAFE_FREE(ss->boundary_preview->vertices);
+      MEM_SAFE_FREE(ss->boundary_preview->edges);
+      MEM_SAFE_FREE(ss->boundary_preview->distance);
+      MEM_SAFE_FREE(ss->boundary_preview->edit_info);
+      MEM_SAFE_FREE(ss->boundary_preview);
     }
 
     BKE_sculptsession_free_vwpaint_data(ob->sculpt);

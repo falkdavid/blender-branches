@@ -333,37 +333,37 @@ void graph_draw(const std::string &label,
   }
 
   f << "<div>" << label << "</div>\n<div>\n"
-    << "<svg version=\"1.1\" "
-       "xmlns=\"http://www.w3.org/2000/svg\" "
-       "xmlns:xlink=\"http://www.w3.org/1999/xlink\" "
-       "xml:space=\"preserve\"\n"
-    << "width=\"" << view_width << "\" height=\"" << view_height << "\">n";
+    << R"(<svg version="1.1" )"
+       R"(xmlns="http://www.w3.org/2000/svg" )"
+       R"(xmlns:xlink="http://www.w3.org/1999/xlink" )"
+       R"(xml:space="preserve"\n)"
+    << R"(width=")" << view_width << R"(" height=")" << view_height << R"(">n)";
 
   for (const std::pair<int, int> &e : edges) {
     const vec2<T> &uco = verts[e.first];
     const vec2<T> &vco = verts[e.second];
     int strokew = thin_line;
-    f << "<line fill=\"none\" stroke=\"black\" stroke-width=\"" << strokew << "\" x1=\""
-      << SX(uco[0]) << "\" y1=\"" << SY(uco[1]) << "\" x2=\"" << SX(vco[0]) << "\" y2=\""
-      << SY(vco[1]) << "\">\n";
+    f << R"(<line fill="none" stroke="black" stroke-width=")" << strokew << R"(" x1=")"
+      << SX(uco[0]) << R"(" y1=")" << SY(uco[1]) << R"(" x2=")" << SX(vco[0]) << R"(" y2=")"
+      << SY(vco[1]) << R"(">\n)";
     f << "  <title>[" << e.first << "][" << e.second << "]</title>\n";
     f << "</line>\n";
     if (draw_edge_labels) {
-      f << "<text x=\"" << SX(0.5 * (uco[0] + vco[0])) << "\" y=\"" << SY(0.5 * (uco[1] + vco[1]))
-        << "\" font-size=\"small\">";
+      f << R"(<text x=")" << SX(0.5 * (uco[0] + vco[0])) << R"(" y=")"
+        << SY(0.5 * (uco[1] + vco[1])) << R"(" font-size="small">)";
       f << "[" << e.first << "][" << e.second << "]</text>\n";
     }
   }
 
   int i = 0;
   for (const vec2<T> &vco : verts) {
-    f << "<circle fill=\"black\" cx=\"" << SX(vco[0]) << "\" cy=\"" << SY(vco[1]) << "\" r=\""
-      << vert_radius << "\">\n";
+    f << R"(<circle fill="black" cx=")" << SX(vco[0]) << R"(" cy=")" << SY(vco[1]) << R"(" r=")"
+      << vert_radius << R"(">\n)";
     f << "  <title>[" << i << "]" << vco << "</title>\n";
     f << "</circle>\n";
     if (draw_vert_labels) {
-      f << "<text x=\"" << SX(vco[0]) + vert_radius << "\" y=\"" << SY(vco[1]) - vert_radius
-        << "\" font-size=\"small\">[" << i << "]</text>\n";
+      f << R"(<text x=")" << SX(vco[0]) + vert_radius << R"(" y=")" << SY(vco[1]) - vert_radius
+        << R"(" font-size="small">[)" << i << "]</text>\n";
     }
     ++i;
   }
@@ -1661,10 +1661,10 @@ void rand_delaunay_test(int test_kind,
             }
           }
           for (int i = 0; i < size; ++i) {
-            /* Horizontal edges: connect p(i,0) to p(i,size-1). */
+            /* Horizontal edges: connect `p(i,0)` to `p(i,size-1)`. */
             in.edge[i].first = i * size;
             in.edge[i].second = i * size + size - 1;
-            /* Vertical edges: conntect p(0,i) to p(size-1,i). */
+            /* Vertical edges: connect `p(0,i)` to `p(size-1,i)`. */
             in.edge[size + i].first = i;
             in.edge[size + i].second = (size - 1) * size + i;
           }
@@ -1695,7 +1695,7 @@ void rand_delaunay_test(int test_kind,
             in.vert[ib][1] = T(sin(angle2));
             in.vert[ic][0] = T((param * cos(angle3)));
             in.vert[ic][1] = T((param * sin(angle3)));
-            /* Put the coordinates in ccw order. */
+            /* Put the coordinates in CCW order. */
             in.face[i].append(ia);
             int orient = orient2d(in.vert[ia], in.vert[ib], in.vert[ic]);
             if (orient >= 0) {

@@ -272,6 +272,19 @@ void ED_region_draw_cb_draw(const bContext *C, ARegion *region, int type)
   }
 }
 
+void ED_region_draw_cb_remove_by_type(ARegionType *art, void *draw_fn, void (*free)(void *))
+{
+  LISTBASE_FOREACH_MUTABLE (RegionDrawCB *, rdc, &art->drawcalls) {
+    if (rdc->draw == draw_fn) {
+      if (free) {
+        free(rdc->customdata);
+      }
+      BLI_remlink(&art->drawcalls, rdc);
+      MEM_freeN(rdc);
+    }
+  }
+}
+
 /* ********************* space template *********************** */
 /* forward declare */
 void ED_spacetype_xxx(void);
@@ -287,7 +300,7 @@ static void xxx_free(SpaceLink *UNUSED(sl))
 {
 }
 
-/* spacetype; init callback for usage, should be redoable */
+/* spacetype; init callback for usage, should be re-doable. */
 static void xxx_init(wmWindowManager *UNUSED(wm), ScrArea *UNUSED(area))
 {
 

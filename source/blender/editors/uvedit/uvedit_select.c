@@ -3313,7 +3313,6 @@ static bool do_lasso_select_mesh_uv(bContext *C,
     uv_select_all_perform_multi(scene, objects, objects_len, SEL_DESELECT);
   }
 
-  /* don't indent to avoid diff noise! */
   for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
     Object *obedit = objects[ob_index];
 
@@ -3323,7 +3322,7 @@ static bool do_lasso_select_mesh_uv(bContext *C,
 
     const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
 
-    if (use_face_center) { /* Face Center Sel */
+    if (use_face_center) { /* Face Center Select. */
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
         BM_elem_flag_disable(efa, BM_ELEM_TAG);
         /* assume not touched */
@@ -3366,7 +3365,7 @@ static bool do_lasso_select_mesh_uv(bContext *C,
         }
       }
     }
-    else { /* Vert Sel */
+    else { /* Vert Selection. */
       BM_mesh_elem_hflag_disable_all(em->bm, BM_VERT, BM_ELEM_TAG, false);
 
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
@@ -3546,6 +3545,51 @@ struct UVOverlapData {
   float tri[3][2];
 };
 
+/**
+ * Specialized 2D triangle intersection for detecting UV overlap:
+ *
+ * \return
+ * - false when single corners or edges touch (common for UV coordinates).
+ * - true when all corners touch (an exactly overlapping triangle).
+ */
+static bool overlap_tri_tri_uv_test(const float t1[3][2],
+                                    const float t2[3][2],
+                                    const float endpoint_bias)
+{
+  float vi[2];
+
+  /* Don't use 'isect_tri_tri_v2' here
+   * because it's important to ignore overlap at end-points. */
+  if (isect_seg_seg_v2_point_ex(t1[0], t1[1], t2[0], t2[1], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[0], t1[1], t2[1], t2[2], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[0], t1[1], t2[2], t2[0], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[1], t1[2], t2[0], t2[1], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[1], t1[2], t2[1], t2[2], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[1], t1[2], t2[2], t2[0], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[2], t1[0], t2[0], t2[1], endpoint_bias, vi) == 1 ||
+      isect_seg_seg_v2_point_ex(t1[2], t1[0], t2[1], t2[2], endpoint_bias, vi) == 1) {
+    return true;
+  }
+
+  /* When none of the segments intersect, checking if either of the triangles corners
+   * is inside the others is almost always sufficient to test if the two triangles intersect.
+   *
+   * However, the `endpoint_bias` on segment intersections causes _exact_ overlapping
+   * triangles not to be detected.
+   *
+   * Resolve this problem at the small cost of calculating the triangle center, see T85508. */
+  mid_v2_v2v2v2(vi, UNPACK3(t1));
+  if (isect_point_tri_v2(vi, UNPACK3(t2)) != 0) {
+    return true;
+  }
+  mid_v2_v2v2v2(vi, UNPACK3(t2));
+  if (isect_point_tri_v2(vi, UNPACK3(t1)) != 0) {
+    return true;
+  }
+
+  return false;
+}
+
 static int uv_select_overlap(bContext *C, const bool extend)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -3689,24 +3733,7 @@ static int uv_select_overlap(bContext *C, const bool extend)
 
       /* Main tri-tri overlap test. */
       const float endpoint_bias = -1e-4f;
-      const float(*t1)[2] = o_a->tri;
-      const float(*t2)[2] = o_b->tri;
-      float vi[2];
-      bool result = (
-          /* Don't use 'isect_tri_tri_v2' here
-           * because it's important to ignore overlap at end-points. */
-          isect_seg_seg_v2_point_ex(t1[0], t1[1], t2[0], t2[1], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[0], t1[1], t2[1], t2[2], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[0], t1[1], t2[2], t2[0], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[1], t1[2], t2[0], t2[1], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[1], t1[2], t2[1], t2[2], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[1], t1[2], t2[2], t2[0], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[2], t1[0], t2[0], t2[1], endpoint_bias, vi) == 1 ||
-          isect_seg_seg_v2_point_ex(t1[2], t1[0], t2[1], t2[2], endpoint_bias, vi) == 1 ||
-          isect_point_tri_v2(t1[0], t2[0], t2[1], t2[2]) != 0 ||
-          isect_point_tri_v2(t2[0], t1[0], t1[1], t1[2]) != 0);
-
-      if (result) {
+      if (overlap_tri_tri_uv_test(o_a->tri, o_b->tri, endpoint_bias)) {
         uvedit_face_select_enable(scene, em_a, face_a, false, cd_loop_uv_offset_a);
         uvedit_face_select_enable(scene, em_b, face_b, false, cd_loop_uv_offset_b);
       }
