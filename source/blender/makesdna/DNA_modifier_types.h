@@ -368,7 +368,7 @@ typedef struct MirrorModifierData {
   short axis DNA_DEPRECATED;
   short flag;
   float tolerance;
-  float bisect_distance;
+  float bisect_threshold;
   char _pad[4];
   float uv_offset[2];
   float uv_offset_copy[2];
