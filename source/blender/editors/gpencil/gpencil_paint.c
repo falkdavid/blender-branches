@@ -3426,8 +3426,13 @@ static void gpencil_add_arc_points(tGPsdata *p, const float mval[2], int segment
     pt->y = corner[1] + (end[1] - corner[1]) * sinf(a) + (start[1] - corner[1]) * cosf(a);
 
     /* Set pressure and strength equals to previous. It will be smoothed later. */
-    pt->pressure = pt_prev->pressure;
-    pt->strength = pt_prev->strength;
+    // pt->pressure = pt_prev->pressure;
+    // pt->strength = pt_prev->strength;
+    float fac = (float)i / (float)segments;
+    fac = 3.0f * fac * fac - 2.0f * fac * fac * fac;  // smooth
+    interpf(pt->pressure, pt_prev->pressure, fac);
+    interpf(pt->strength, pt_prev->strength, fac);
+
     /* Interpolate vertex color. */
     interp_v4_v4v4(
         pt->vert_color, pt_before->vert_color, pt_prev->vert_color, stepcolor * (i + 1));
