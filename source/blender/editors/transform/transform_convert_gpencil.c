@@ -78,14 +78,12 @@ static short get_bezt_sel_triple_flag(BezTriple *bezt, const bool handles_visibl
     flag = ((bezt->f1 & SELECT) ? SEL_F1 : 0) | ((bezt->f2 & SELECT) ? SEL_F2 : 0) |
            ((bezt->f3 & SELECT) ? SEL_F3 : 0);
   }
-  else {
-    if (bezt->f2 & SELECT) {
-      flag = SEL_ALL;
-    }
+  else if (bezt->f2 & SELECT) {
+    flag = SEL_ALL;
   }
 
   /* Special case for auto & aligned handles */
-  if (flag != SEL_ALL && flag & SEL_F2) {
+  if ((flag != SEL_ALL) && (flag & SEL_F2)) {
     if (ELEM(bezt->h1, HD_AUTO, HD_ALIGN) && ELEM(bezt->h2, HD_AUTO, HD_ALIGN)) {
       flag = SEL_ALL;
     }
