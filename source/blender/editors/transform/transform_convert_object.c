@@ -284,7 +284,17 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
     copy_m3_m4(totmat, ob->obmat);
     invert_m3_m3(obinv, totmat);
     mul_m3_m3m3(td->smtx, obmtx, obinv);
-    invert_m3_m3(td->mtx, td->smtx);
+    /* If the object scale is zero on any axis, this might result in a zero matrix. 
+     * In this case, the transformation would not do anything. This makes sure that
+     * we can still perform the transformation, even if one of the axis of the scale
+     * is zero. */
+    if (is_zero_m3(td->smtx)) {
+      unit_m3(td->smtx);
+      unit_m3(td->mtx);
+    }
+    else {
+      invert_m3_m3(td->mtx, td->smtx);
+    }
   }
   else {
     /* no conversion to/from dataspace */
