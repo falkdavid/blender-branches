@@ -259,7 +259,7 @@ void bmo_extrude_vert_indiv_exec(BMesh *bm, BMOperator *op)
     BMO_vert_flag_enable(bm, dupev, EXT_KEEP);
 
     if (has_vskin) {
-      bm_extrude_disable_skin_root(bm, v);
+      bm_extrude_disable_skin_root(bm, dupev);
     }
 
     if (select_history_map) {
