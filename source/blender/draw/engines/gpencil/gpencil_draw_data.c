@@ -203,7 +203,7 @@ GPENCIL_MaterialPool *gpencil_material_pool_create(GPENCIL_PrivateData *pd, Obje
   int color_type = (pd->v3d_color_type != -1 && GPENCIL_VERTEX_MODE(gpd)) ?
                        V3D_SHADING_VERTEX_COLOR :
                        pd->v3d_color_type;
-  const char lighting_mode = pd->v3d->shading.light;
+  const char lighting_mode = (pd->v3d != NULL) ? pd->v3d->shading.light : 1;
 
   GPENCIL_MaterialPool *pool = matpool;
   for (int i = 0; i < mat_len; i++) {
