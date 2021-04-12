@@ -105,11 +105,12 @@ static void gpencil_shade_color(float color[3])
 }
 
 /* Apply all overrides from the solid viewport mode to the GPencil material. */
-static MaterialGPencilStyle *gpencil_viewport_material_overrides(GPENCIL_PrivateData *pd,
-                                                                 Object *ob,
-                                                                 int color_type,
-                                                                 MaterialGPencilStyle *gp_style,
-                                                                 const char lighting_mode)
+static MaterialGPencilStyle *gpencil_viewport_material_overrides(
+    GPENCIL_PrivateData *pd,
+    Object *ob,
+    int color_type,
+    MaterialGPencilStyle *gp_style,
+    const eV3DShadingLightingMode lighting_mode)
 {
   static MaterialGPencilStyle gp_style_tmp;
 
@@ -203,7 +204,8 @@ GPENCIL_MaterialPool *gpencil_material_pool_create(GPENCIL_PrivateData *pd, Obje
   int color_type = (pd->v3d_color_type != -1 && GPENCIL_VERTEX_MODE(gpd)) ?
                        V3D_SHADING_VERTEX_COLOR :
                        pd->v3d_color_type;
-  const char lighting_mode = (pd->v3d != NULL) ? pd->v3d->shading.light : V3D_LIGHTING_STUDIO;
+  const eV3DShadingLightingMode lighting_mode = (pd->v3d != NULL) ? pd->v3d->shading.light :
+                                                                    V3D_LIGHTING_STUDIO;
 
   GPENCIL_MaterialPool *pool = matpool;
   for (int i = 0; i < mat_len; i++) {
