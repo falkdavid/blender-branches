@@ -22,7 +22,7 @@
  * Based on utf-8 decoder stress-test (https://www.cl.cam.ac.uk/~mgk25/ucs/examples/UTF-8-test.txt)
  *     by Markus Kuhn <http://www.cl.cam.ac.uk/~mgk25/> - 2015-08-28 - CC BY 4.0
  */
-const char *utf8_invalid_tests[][3] = {
+static const char *utf8_invalid_tests[][3] = {
 /*    1  Some correct UTF-8 text. */
     {"You should see the Greek word 'kosme':       \"\xce\xba\xe1\xbd\xb9\xcf\x83\xce\xbc\xce\xb5\"                    |",
      "You should see the Greek word 'kosme':       \"\xce\xba\xe1\xbd\xb9\xcf\x83\xce\xbc\xce\xb5\"                    |", "\x00"},
@@ -92,12 +92,12 @@ const char *utf8_invalid_tests[][3] = {
                   "\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f"
                   "\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf"
                   "\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc\xbd\xbe\xbf\" |",
-     "3.1.9      \"\" |", R"(@)"},
+     "3.1.9      \"\" |", "\x40"},
 /*    3.2  Lonely start characters
  *    3.2.1  All 32 first bytes of 2-byte sequences (0xc0-0xdf), each followed by a space character: */
     {"3.2.1      \"\xc0 \xc1 \xc2 \xc3 \xc4 \xc5 \xc6 \xc7 \xc8 \xc9 \xca \xcb \xcc \xcd \xce \xcf "
                   "\xd0 \xd1 \xd2 \xd3 \xd4 \xd5 \xd6 \xd7 \xd8 \xd9 \xda \xdb \xdc \xdd \xde \xdf \" |",
-     "3.2.1      \"                                \" |", R"( )"},
+     "3.2.1      \"                                \" |", "\x20"},
 /*    3.2.2  All 16 first bytes of 3-byte sequences (0xe0-0xef), each followed by a space character: */
     {"3.2.2      \"\xe0 \xe1 \xe2 \xe3 \xe4 \xe5 \xe6 \xe7 \xe8 \xe9 \xea \xeb \xec \xed \xee \xef \"                                 |",
      "3.2.2      \"                \"                                 |", "\x10"},

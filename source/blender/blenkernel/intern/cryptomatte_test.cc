@@ -53,17 +53,17 @@ TEST(cryptomatte, layer)
   ASSERT_EQ("{}", layer.manifest());
 
   layer.add_hash("Object", 123);
-  ASSERT_EQ(R"({"Object":"0000007b"})", layer.manifest());
+  ASSERT_EQ("{\"Object\":\"0000007b\"}", layer.manifest());
 
   layer.add_hash("Object2", 123245678);
-  ASSERT_EQ(R"({"Object":"0000007b","Object2":"0758946e"})", layer.manifest());
+  ASSERT_EQ("{\"Object\":\"0000007b\",\"Object2\":\"0758946e\"}", layer.manifest());
 }
 
 TEST(cryptomatte, layer_quoted)
 {
   blender::bke::cryptomatte::CryptomatteLayer layer;
-  layer.add_hash(R"("Object")", 123);
-  ASSERT_EQ(R"({"\"Object\"":"0000007b"})", layer.manifest());
+  layer.add_hash("\"Object\"", 123);
+  ASSERT_EQ("{\"\\\"Object\\\"\":\"0000007b\"}", layer.manifest());
 }
 
 static void test_cryptomatte_manifest(std::string expected, std::string manifest)
@@ -123,7 +123,7 @@ static void validate_cryptomatte_session_from_stamp_data(void *UNUSED(data),
     EXPECT_STREQ("uint32_to_float32", propvalue);
   }
   else if (prop_name == "cryptomatte/87f095e/manifest") {
-    EXPECT_STREQ("{\"Object\":\"12345678\"}", propvalue);
+    EXPECT_STREQ(R"({"Object":"12345678"})", propvalue);
   }
 
   else if (prop_name == "cryptomatte/c42daa7/name") {
@@ -136,7 +136,7 @@ static void validate_cryptomatte_session_from_stamp_data(void *UNUSED(data),
     EXPECT_STREQ("uint32_to_float32", propvalue);
   }
   else if (prop_name == "cryptomatte/c42daa7/manifest") {
-    EXPECT_STREQ("{\"Object2\":\"87654321\"}", propvalue);
+    EXPECT_STREQ(R"({"Object2":"87654321"})", propvalue);
   }
 
   else {
@@ -155,8 +155,8 @@ TEST(cryptomatte, session_from_stamp_data)
   BKE_render_result_stamp_data(render_result, "cryptomatte/uiop/name", "layer2");
   BKE_render_result_stamp_data(
       render_result, "cryptomatte/uiop/manifest", R"({"Object2":"87654321"})");
-  CryptomatteSession *session = BKE_cryptomatte_init_from_render_result(render_result);
-  EXPECT_NE(session, nullptr);
+  CryptomatteSessionPtr session(BKE_cryptomatte_init_from_render_result(render_result));
+  EXPECT_NE(session.get(), nullptr);
   RE_FreeRenderResult(render_result);
 
   /* Create StampData from CryptomatteSession. */
@@ -164,14 +164,23 @@ TEST(cryptomatte, session_from_stamp_data)
   BLI_strncpy(view_layer.name, "viewlayername", sizeof(view_layer.name));
   RenderResult *render_result2 = static_cast<RenderResult *>(
       MEM_callocN(sizeof(RenderResult), __func__));
-  BKE_cryptomatte_store_metadata(session, render_result2, &view_layer);
+  BKE_cryptomatte_store_metadata(session.get(), render_result2, &view_layer);
 
   /* Validate StampData. */
   BKE_stamp_info_callback(
       nullptr, render_result2->stamp_data, validate_cryptomatte_session_from_stamp_data, false);
 
   RE_FreeRenderResult(render_result2);
-  BKE_cryptomatte_free(session);
 }
 
+/**
+ * Test method that contains known malformed manifests and makes sure that these can be parsed as
+ * best as possible. */
+TEST(cryptomatte, parsing_malformed_manifests)
+{
+  /* Manifest from multilayer.exr in the cryptomatte git-repository. */
+  test_cryptomatte_manifest(
+      R"({"/obj/instance1:instances:0":"0d54c6cc","/obj/instance1:instances:1":"293d9340","/obj/instance1:instances:110":"ccb9e1f2","/obj/instance1:instances:111":"f8dd3a48","/obj/instance1:instances:112":"a99e07a8","/obj/instance1:instances:113":"e75599a4","/obj/instance1:instances:114":"794200f3","/obj/instance1:instances:115":"2a3a1728","/obj/instance1:instances:116":"478544a1","/obj/instance1:instances:117":"b2bd969a","/obj/instance1:instances:10":"3a0c8681","/obj/instance1:instances:11":"01e5970d","/obj/box:polygons:1":"9d416418","/obj/instance1:instances:100":"2dcd2966","/obj/instance1:instances:101":"9331cd82","/obj/instance1:instances:102":"df50fccb","/obj/instance1:instances:103":"97f8590d","/obj/instance1:instances:104":"bbcd220d","/obj/instance1:instances:105":"4ae06139","/obj/instance1:instances:106":"8873d5ea","/obj/instance1:instances:107":"39d8af8d","/obj/instance1:instances:108":"bb11bd4e","/obj/instance1:instances:109":"a32bba35"})",
+      R"({"\/obj\/box:polygons:1":"9d416418","\/obj\/instance1:instances:0":"0d54c6cc","\/obj\/instance1:instances:1":"293d9340","\/obj\/instance1:instances:10":"3a0c8681","\/obj\/instance1:instances:100":"2dcd2966","\/obj\/instance1:instances:101":"9331cd82","\/obj\/instance1:instances:102":"df50fccb","\/obj\/instance1:instances:103":"97f8590d","\/obj\/instance1:instances:104":"bbcd220d","\/obj\/instance1:instances:105":"4ae06139","\/obj\/instance1:instances:106":"8873d5ea","\/obj\/instance1:instances:107":"39d8af8d","\/obj\/instance1:instances:108":"bb11bd4e","\/obj\/instance1:instances:109":"a32bba35","\/obj\/instance1:instances:11":"01e5970d","\/obj\/instance1:instances:110":"ccb9e1f2","\/obj\/instance1:instances:111":"f8dd3a48","\/obj\/instance1:instances:112":"a99e07a8","\/obj\/instance1:instances:113":"e75599a4","\/obj\/instance1:instances:114":"794200f3","\/obj\/instance1:instances:115":"2a3a1728","\/obj\/instance1:instances:116":"478544a1","\/obj\/instance1:instances:117":"b2bd969a","\/obj\/instance1:instance)");
+}
 }  // namespace blender::bke::cryptomatte::tests
