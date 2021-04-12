@@ -2007,6 +2007,17 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
         cu->flag |= CU_3D;
       }
     }
+
+    /* Set default value for the new bisect_threshold parameter in the mirror modifier. */
+    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+        if (md->type == eModifierType_Mirror) {
+          MirrorModifierData *mmd = (MirrorModifierData *)md;
+          /* This was the previous hardcoded value. */
+          mmd->bisect_threshold = 0.001f;
+        }
+      }
+    }
   }
 
   /**
