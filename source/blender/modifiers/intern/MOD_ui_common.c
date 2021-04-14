@@ -255,16 +255,26 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
             eModifierType_ParticleSystem,
             eModifierType_Cloth,
             eModifierType_Fluid)) {
-    uiItemO(layout,
-            CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Duplicate"),
-            ICON_DUPLICATE,
-            "OBJECT_OT_modifier_copy");
+    uiItemFullO(layout,
+                "OBJECT_OT_modifier_copy",
+                CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Duplicate"),
+                ICON_DUPLICATE,
+                NULL,
+                WM_OP_INVOKE_DEFAULT,
+                0,
+                &ptr);
+    RNA_string_set(&ptr, "modifier", md->name);
   }
 
-  uiItemO(layout,
-          CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Copy to Selected"),
-          0,
-          "OBJECT_OT_modifier_copy_to_selected");
+  uiItemFullO(layout,
+              "OBJECT_OT_modifier_copy_to_selected",
+              CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Copy to Selected"),
+              0,
+              NULL,
+              WM_OP_INVOKE_DEFAULT,
+              0,
+              &ptr);
+  RNA_string_set(&ptr, "modifier", md->name);
 
   uiItemS(layout);
 
@@ -279,6 +289,7 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
               0,
               &op_ptr);
   RNA_int_set(&op_ptr, "index", 0);
+  RNA_string_set(&op_ptr, "modifier", md->name);
   if (!md->prev) {
     uiLayoutSetEnabled(row, false);
   }
@@ -294,6 +305,7 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
               0,
               &op_ptr);
   RNA_int_set(&op_ptr, "index", BLI_listbase_count(&ob->modifiers) - 1);
+  RNA_string_set(&op_ptr, "modifier", md->name);
   if (!md->next) {
     uiLayoutSetEnabled(row, false);
   }
