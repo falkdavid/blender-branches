@@ -221,10 +221,15 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
   uiLayoutSetUnitsX(layout, 4.0f);
 
   /* Apply. */
-  uiItemO(layout,
-          CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Apply"),
-          ICON_CHECKMARK,
-          "OBJECT_OT_modifier_apply");
+  uiItemFullO(layout,
+              "OBJECT_OT_modifier_apply",
+              CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Apply"),
+              ICON_CHECKMARK,
+              NULL,
+              WM_OP_INVOKE_DEFAULT,
+              0,
+              &ptr);
+  RNA_string_set(&ptr, "modifier", md->name);
 
   /* Apply as shapekey. */
   if (BKE_modifier_is_same_topology(md) && !BKE_modifier_is_non_geometrical(md)) {
