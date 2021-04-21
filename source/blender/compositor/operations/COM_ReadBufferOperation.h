@@ -37,10 +37,12 @@ class ReadBufferOperation : public NodeOperation {
   {
     this->m_memoryProxy = memoryProxy;
   }
-  MemoryProxy *getMemoryProxy()
+
+  MemoryProxy *getMemoryProxy() const
   {
     return this->m_memoryProxy;
   }
+
   void determineResolution(unsigned int resolution[2],
                            unsigned int preferredResolution[2]) override;
 
@@ -53,10 +55,6 @@ class ReadBufferOperation : public NodeOperation {
                           MemoryBufferExtend extend_x,
                           MemoryBufferExtend extend_y);
   void executePixelFiltered(float output[4], float x, float y, float dx[2], float dy[2]) override;
-  bool isReadBufferOperation() const override
-  {
-    return true;
-  }
   void setOffset(unsigned int offset)
   {
     this->m_offset = offset;

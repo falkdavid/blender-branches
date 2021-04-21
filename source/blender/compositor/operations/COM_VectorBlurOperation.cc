@@ -56,7 +56,7 @@ VectorBlurOperation::VectorBlurOperation()
   this->m_inputImageProgram = nullptr;
   this->m_inputSpeedProgram = nullptr;
   this->m_inputZProgram = nullptr;
-  setComplex(true);
+  flags.complex = true;
 }
 void VectorBlurOperation::initExecution()
 {
@@ -71,7 +71,7 @@ void VectorBlurOperation::initExecution()
 void VectorBlurOperation::executePixel(float output[4], int x, int y, void *data)
 {
   float *buffer = (float *)data;
-  int index = (y * this->getWidth() + x) * COM_NUM_CHANNELS_COLOR;
+  int index = (y * this->getWidth() + x) * COM_DATA_TYPE_COLOR_CHANNELS;
   copy_v4_v4(output, &buffer[index]);
 }
 

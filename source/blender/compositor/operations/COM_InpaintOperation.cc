@@ -33,7 +33,7 @@ InpaintSimpleOperation::InpaintSimpleOperation()
 {
   this->addInputSocket(DataType::Color);
   this->addOutputSocket(DataType::Color);
-  this->setComplex(true);
+  this->flags.complex = true;
   this->m_inputImageProgram = nullptr;
   this->m_pixelorder = nullptr;
   this->m_manhattan_distance = nullptr;
@@ -78,7 +78,8 @@ float *InpaintSimpleOperation::get_pixel(int x, int y)
 
   ASSERT_XY_RANGE(x, y);
 
-  return &this->m_cached_buffer[y * width * COM_NUM_CHANNELS_COLOR + x * COM_NUM_CHANNELS_COLOR];
+  return &this->m_cached_buffer[y * width * COM_DATA_TYPE_COLOR_CHANNELS +
+                                x * COM_DATA_TYPE_COLOR_CHANNELS];
 }
 
 int InpaintSimpleOperation::mdist(int x, int y)

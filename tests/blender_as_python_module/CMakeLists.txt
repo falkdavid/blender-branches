@@ -14,50 +14,20 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
+# The Original Code is Copyright (C) 2021, Blender Foundation
+# All rights reserved.
+#
 # ***** END GPL LICENSE BLOCK *****
 
-# <pep8 compliant>
+function(add_blender_as_python_module_test testname testscript)
+  if(NOT TEST_PYTHON_EXE)
+    message(FATAL_ERROR "No Python configured for running tests, set TEST_PYTHON_EXE.")
+  endif()
 
-defs = """
-    SPACE_EMPTY,
-    SPACE_VIEW3D,
-    SPACE_IPO,
-    SPACE_OUTLINER,
-    SPACE_BUTS,
-    SPACE_FILE,
-    SPACE_IMAGE,
-    SPACE_INFO,
-    SPACE_SEQ,
-    SPACE_TEXT,
-    SPACE_IMASEL, #Deprecated
-    SPACE_SOUND, #Deprecated
-    SPACE_ACTION,
-    SPACE_NLA,
-    SPACE_SCRIPT, #Deprecated
-    SPACE_TIME, #Deprecated
-    SPACE_NODE,
-    SPACEICONMAX
-"""
+  add_test(
+    NAME ${testname}
+    COMMAND ${TEST_PYTHON_EXE} ${testscript} ${ARGN}
+  )
+endfunction()
 
-print('\tmod = PyModule_New("dummy");')
-print('\tPyModule_AddObject(submodule, "key", mod);')
-
-for d in defs.split('\n'):
-
-    d = d.replace(',', ' ')
-    w = d.split()
-
-    if not w:
-        continue
-
-    try:
-        w.remove("#define")
-    except:
-        pass
-
-    # print w
-
-    val = w[0]
-    py_val = w[0]
-
-    print('\tPyModule_AddObject(mod, "%s", PyLong_FromSize_t(%s));' % (val, py_val))
+add_blender_as_python_module_test(import_bpy ${CMAKE_CURRENT_LIST_DIR}/import_bpy.py)

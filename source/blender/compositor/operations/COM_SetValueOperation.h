@@ -51,11 +51,6 @@ class SetValueOperation : public NodeOperation {
   void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
   void determineResolution(unsigned int resolution[2],
                            unsigned int preferredResolution[2]) override;
-
-  bool isSetOperation() const override
-  {
-    return true;
-  }
 };
 
 }  // namespace blender::compositor

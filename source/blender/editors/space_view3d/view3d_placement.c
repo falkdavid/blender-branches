@@ -323,7 +323,7 @@ static bool idp_poject_surface_normal(SnapObjectContext *snap_context,
                                                  SCE_SNAP_MODE_FACE,
                                                  &(const struct SnapObjectParams){
                                                      .snap_select = SNAP_ALL,
-                                                     .use_object_edit_cage = true,
+                                                     .edit_mode_type = SNAP_GEOM_EDIT,
                                                  },
                                                  mval_fl,
                                                  NULL,
@@ -941,7 +941,7 @@ static void view3d_interactive_add_calc_plane(bContext *C,
                                                   SCE_SNAP_MODE_FACE,
                                                   &(const struct SnapObjectParams){
                                                       .snap_select = SNAP_ALL,
-                                                      .use_object_edit_cage = true,
+                                                      .edit_mode_type = SNAP_GEOM_EDIT,
                                                   },
                                                   mval_fl,
                                                   NULL,
@@ -1058,9 +1058,7 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
                                    ipd->region,
                                    ipd->v3d,
                                    G_MAIN->wm.first,
-                                   mval_fl,
-                                   NULL,
-                                   NULL);
+                                   mval_fl);
     }
   }
 
@@ -1501,18 +1499,17 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
     ipd->is_snap_found = false;
     if (ipd->use_snap) {
       if (ipd->snap_gizmo != NULL) {
-        ED_gizmotypes_snap_3d_toggle_set(ipd->snap_gizmo, ipd->use_snap);
+        ED_gizmotypes_snap_3d_flag_set(ipd->snap_gizmo, ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE);
         if (ED_gizmotypes_snap_3d_update(ipd->snap_gizmo,
                                          CTX_data_ensure_evaluated_depsgraph(C),
                                          ipd->region,
                                          ipd->v3d,
                                          G_MAIN->wm.first,
-                                         mval_fl,
-                                         ipd->snap_co,
-                                         NULL)) {
+                                         mval_fl)) {
+          ED_gizmotypes_snap_3d_data_get(ipd->snap_gizmo, ipd->snap_co, NULL, NULL, NULL);
           ipd->is_snap_found = true;
         }
-        ED_gizmotypes_snap_3d_toggle_clear(ipd->snap_gizmo);
+        ED_gizmotypes_snap_3d_flag_clear(ipd->snap_gizmo, ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE);
       }
     }
 
