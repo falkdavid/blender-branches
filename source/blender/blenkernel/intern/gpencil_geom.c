@@ -1061,7 +1061,7 @@ void BKE_gpencil_stroke_2d_flat(const bGPDspoint *points,
   /* Calculate the scalar cross product of the 2d points. */
   float cross = 0.0f;
   float *co_curr;
-  float *co_prev = (float *)&points2d[totpoints - 1];
+  float *co_prev = (float *)&points2d[totpoints - 1][0];
 
   /* Get all points in local space */
   for (int i = 0; i < totpoints - 1; i++) {
@@ -1075,9 +1075,9 @@ void BKE_gpencil_stroke_2d_flat(const bGPDspoint *points,
     points2d[i][1] = dot_v3v3(loc, locy);
 
     /* Calculate cross product. */
-    co_curr = (float *)&points2d[i];
-    cross += (co_curr[0] - co_prev[0]) * (co_curr[1] + co_prev[1]);
-    co_prev = (float *)&points2d[i];
+    co_curr = (float *)&points2d[i][0];
+    cross += (co_prev[0] - co_curr[0]) * (co_prev[1] + co_curr[1]);
+    co_prev = (float *)&points2d[i][0];
   }
 
   /* Concave (-1), Convex (1) */
