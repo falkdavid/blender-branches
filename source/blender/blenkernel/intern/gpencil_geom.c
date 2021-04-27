@@ -1076,7 +1076,7 @@ void BKE_gpencil_stroke_2d_flat(const bGPDspoint *points,
 
     /* Calculate cross product. */
     co_curr = (float *)&points2d[i][0];
-    cross += (co_prev[0] - co_curr[0]) * (co_prev[1] + co_curr[1]);
+    cross += (co_curr[0] - co_prev[0]) * (co_curr[1] + co_prev[1]);
     co_prev = (float *)&points2d[i][0];
   }
 
