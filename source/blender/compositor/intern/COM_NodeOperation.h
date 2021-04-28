@@ -26,6 +26,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_threads.h"
 
+#include "COM_Enums.h"
 #include "COM_MemoryBuffer.h"
 #include "COM_MemoryProxy.h"
 #include "COM_MetaData.h"
@@ -41,6 +42,13 @@ class WriteBufferOperation;
 
 class NodeOperation;
 typedef NodeOperation SocketReader;
+
+/**
+ * RESOLUTION_INPUT_ANY is a wildcard when any resolution of an input can be used.
+ * This solves the issue that the FileInputNode in a group node cannot find the
+ * correct resolution.
+ */
+static constexpr unsigned int RESOLUTION_INPUT_ANY = 999999;
 
 /**
  * \brief Resize modes of inputsockets
@@ -250,8 +258,10 @@ struct NodeOperationFlags {
  */
 class NodeOperation {
  private:
-  blender::Vector<NodeOperationInput> m_inputs;
-  blender::Vector<NodeOperationOutput> m_outputs;
+  int m_id;
+  std::string m_name;
+  Vector<NodeOperationInput> m_inputs;
+  Vector<NodeOperationOutput> m_outputs;
 
   /**
    * \brief the index of the input socket that will be used to determine the resolution
@@ -293,6 +303,26 @@ class NodeOperation {
  public:
   virtual ~NodeOperation()
   {
+  }
+
+  void set_name(const std::string name)
+  {
+    m_name = name;
+  }
+
+  const std::string get_name() const
+  {
+    return m_name;
+  }
+
+  void set_id(const int id)
+  {
+    m_id = id;
+  }
+
+  const int get_id() const
+  {
+    return m_id;
   }
 
   const NodeOperationFlags get_flags() const
@@ -440,11 +470,11 @@ class NodeOperation {
   /**
    * \brief get the render priority of this node.
    * \note only applicable for output operations like ViewerOperation
-   * \return CompositorPriority
+   * \return eCompositorPriority
    */
-  virtual CompositorPriority getRenderPriority() const
+  virtual eCompositorPriority getRenderPriority() const
   {
-    return CompositorPriority::Low;
+    return eCompositorPriority::Low;
   }
 
   inline bool isBraked() const
@@ -593,5 +623,8 @@ class NodeOperation {
   MEM_CXX_CLASS_ALLOC_FUNCS("COM:NodeOperation")
 #endif
 };
+
+std::ostream &operator<<(std::ostream &os, const NodeOperationFlags &node_operation_flags);
+std::ostream &operator<<(std::ostream &os, const NodeOperation &node_operation);
 
 }  // namespace blender::compositor

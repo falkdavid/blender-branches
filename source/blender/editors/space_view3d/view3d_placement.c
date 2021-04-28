@@ -1472,10 +1472,27 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
           RNA_float_set_array(&op_props, "rotation", rotation);
           RNA_float_set_array(&op_props, "location", location);
           RNA_float_set_array(&op_props, "scale", scale);
-          /* Always use default size here. */
+
+          /* Always use the defaults here since desired bounds have been set interactively, it does
+           * not make sense to use a different values from a previous command. */
           if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_CUBE) {
             RNA_float_set(&op_props, "size", 2.0f);
           }
+          if (ELEM(ipd->primitive_type,
+                   PLACE_PRIMITIVE_TYPE_CYLINDER,
+                   PLACE_PRIMITIVE_TYPE_SPHERE_UV,
+                   PLACE_PRIMITIVE_TYPE_SPHERE_ICO)) {
+            RNA_float_set(&op_props, "radius", 1.0f);
+          }
+          if (ELEM(
+                  ipd->primitive_type, PLACE_PRIMITIVE_TYPE_CYLINDER, PLACE_PRIMITIVE_TYPE_CONE)) {
+            RNA_float_set(&op_props, "depth", 2.0f);
+          }
+          if (ipd->primitive_type == PLACE_PRIMITIVE_TYPE_CONE) {
+            RNA_float_set(&op_props, "radius1", 1.0f);
+            RNA_float_set(&op_props, "radius2", 0.0f);
+          }
+
           WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, &op_props);
           WM_operator_properties_free(&op_props);
         }
@@ -1499,7 +1516,7 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
     ipd->is_snap_found = false;
     if (ipd->use_snap) {
       if (ipd->snap_gizmo != NULL) {
-        ED_gizmotypes_snap_3d_toggle_set(ipd->snap_gizmo, ipd->use_snap);
+        ED_gizmotypes_snap_3d_flag_set(ipd->snap_gizmo, ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE);
         if (ED_gizmotypes_snap_3d_update(ipd->snap_gizmo,
                                          CTX_data_ensure_evaluated_depsgraph(C),
                                          ipd->region,
@@ -1509,7 +1526,7 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
           ED_gizmotypes_snap_3d_data_get(ipd->snap_gizmo, ipd->snap_co, NULL, NULL, NULL);
           ipd->is_snap_found = true;
         }
-        ED_gizmotypes_snap_3d_toggle_clear(ipd->snap_gizmo);
+        ED_gizmotypes_snap_3d_flag_clear(ipd->snap_gizmo, ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE);
       }
     }
 

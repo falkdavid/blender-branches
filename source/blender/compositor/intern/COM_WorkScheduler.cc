@@ -72,7 +72,7 @@ static struct {
     /** \brief list of all CPUDevices. for every hardware thread an instance of CPUDevice is
      * created
      */
-    blender::Vector<CPUDevice> devices;
+    Vector<CPUDevice> devices;
 
     /** \brief list of all thread for every CPUDevice in cpudevices a thread exists. */
     ListBase threads;
@@ -91,7 +91,7 @@ static struct {
     cl_program program;
     /** \brief list of all OpenCLDevices. for every OpenCL GPU device an instance of OpenCLDevice
      * is created. */
-    blender::Vector<OpenCLDevice> devices;
+    Vector<OpenCLDevice> devices;
     /** \brief list of all thread for every GPUDevice in cpudevices a thread exists. */
     ListBase threads;
     /** \brief all scheduled work for the GPU. */
@@ -397,7 +397,6 @@ static void threading_model_task_execute(TaskPool *__restrict UNUSED(pool), void
   CPUDevice device(BLI_task_parallel_thread_id(nullptr));
   BLI_thread_local_set(g_thread_device, &device);
   device.execute(package);
-  delete package;
 }
 
 static void threading_model_task_schedule(WorkPackage *package)

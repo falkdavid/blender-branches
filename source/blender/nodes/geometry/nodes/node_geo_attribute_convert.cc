@@ -14,10 +14,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include "node_geometry_util.hh"
-
 #include "UI_interface.h"
 #include "UI_resources.h"
+
+#include "node_geometry_util.hh"
 
 static bNodeSocketTemplate geo_node_attribute_convert_in[] = {
     {SOCK_GEOMETRY, N_("Geometry")},
@@ -66,6 +66,28 @@ static AttributeDomain get_result_domain(const GeometryComponent &component,
   return ATTR_DOMAIN_POINT;
 }
 
+static bool conversion_can_be_skipped(const GeometryComponent &component,
+                                      const StringRef source_name,
+                                      const StringRef result_name,
+                                      const AttributeDomain result_domain,
+                                      const CustomDataType result_type)
+{
+  if (source_name != result_name) {
+    return false;
+  }
+  ReadAttributePtr read_attribute = component.attribute_try_get_for_read(source_name);
+  if (!read_attribute) {
+    return false;
+  }
+  if (read_attribute->domain() != result_domain) {
+    return false;
+  }
+  if (read_attribute->cpp_type() != *bke::custom_data_type_to_cpp_type(result_type)) {
+    return false;
+  }
+  return true;
+}
+
 static void attribute_convert_calc(GeometryComponent &component,
                                    const GeoNodeExecParams &params,
                                    const StringRef source_name,
@@ -77,6 +99,10 @@ static void attribute_convert_calc(GeometryComponent &component,
                                             get_result_domain(
                                                 component, source_name, result_name) :
                                             domain;
+
+  if (conversion_can_be_skipped(component, source_name, result_name, result_domain, result_type)) {
+    return;
+  }
 
   ReadAttributePtr source_attribute = component.attribute_try_get_for_read(
       source_name, result_domain, result_type);

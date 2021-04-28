@@ -1434,10 +1434,11 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
 static void gpencil_interpolate_seq_ui(bContext *C, wmOperator *op)
 {
   uiLayout *layout = op->layout;
+  wmWindowManager *wm = CTX_wm_manager(C);
   uiLayout *col, *row;
   PointerRNA ptr;
 
-  RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
+  RNA_pointer_create(&wm->id, op->type->srna, op->properties, &ptr);
 
   const eGP_Interpolate_Type type = RNA_enum_get(op->ptr, "type");
 
@@ -1706,7 +1707,7 @@ static bool gpencil_interpolate_reverse_poll(bContext *C)
   if (area == NULL) {
     return false;
   }
-  if ((area->spacetype != SPACE_VIEW3D) && (area->spacetype != SPACE_ACTION)) {
+  if (!ELEM(area->spacetype, SPACE_VIEW3D, SPACE_ACTION)) {
     return false;
   }
 

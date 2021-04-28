@@ -157,6 +157,20 @@ bool MeshComponent::is_empty() const
   return mesh_ == nullptr;
 }
 
+bool MeshComponent::owns_direct_data() const
+{
+  return ownership_ == GeometryOwnershipType::Owned;
+}
+
+void MeshComponent::ensure_owns_direct_data()
+{
+  BLI_assert(this->is_mutable());
+  if (ownership_ != GeometryOwnershipType::Owned) {
+    mesh_ = BKE_mesh_copy_for_eval(mesh_, false);
+    ownership_ = GeometryOwnershipType::Owned;
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -533,7 +547,7 @@ void adapt_mesh_domain_edge_to_corner_impl(const Mesh &mesh,
 
     /* For every corner, mix the values from the adjacent edges on the face. */
     for (const int loop_index : IndexRange(poly.loopstart, poly.totloop)) {
-      const int loop_index_prev = (loop_index - 1) % poly.totloop;
+      const int loop_index_prev = loop_index - 1 + (loop_index == poly.loopstart) * poly.totloop;
       const MLoop &loop = mesh.mloop[loop_index];
       const MLoop &loop_prev = mesh.mloop[loop_index_prev];
       mixer.mix_in(loop_index, old_values[loop.e]);
@@ -800,14 +814,16 @@ static void set_loop_uv(MLoopUV &uv, const float2 &co)
 
 static Color4f get_loop_color(const MLoopCol &col)
 {
-  Color4f value;
-  rgba_uchar_to_float(value, &col.r);
-  return value;
+  Color4f srgb_color;
+  rgba_uchar_to_float(srgb_color, &col.r);
+  Color4f linear_color;
+  srgb_to_linearrgb_v4(linear_color, srgb_color);
+  return linear_color;
 }
 
-static void set_loop_color(MLoopCol &col, const Color4f &value)
+static void set_loop_color(MLoopCol &col, const Color4f &linear_color)
 {
-  rgba_float_to_uchar(&col.r, value);
+  linearrgb_to_srgb_uchar4(&col.r, linear_color);
 }
 
 static float get_crease(const MEdge &edge)
