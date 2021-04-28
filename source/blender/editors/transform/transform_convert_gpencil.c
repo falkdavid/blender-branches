@@ -314,7 +314,7 @@ static void createTransGPencil_curves(bContext *C,
                     }
                   }
                   else if (handles_visible) {
-                    if (BEZT_ISSEL_IDX(bezt, j)) {
+                    if (sel) {
                       td->flag = TD_SELECTED;
                     }
                     else {
