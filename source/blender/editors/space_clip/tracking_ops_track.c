@@ -27,6 +27,8 @@
 #include "BLI_utildefines.h"
 #include "BLI_string.h"
 
+#include "BLT_translation.h"
+
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
@@ -405,16 +407,16 @@ static char *track_markers_desc(bContext *UNUSED(C), wmOperatorType *UNUSED(op),
   const bool sequence = RNA_boolean_get(ptr, "sequence");
   
   if (backwards && sequence) {
-    return BLI_strdup("Tracks the selected markers backward for the entire clip");
+    return BLI_strdup(TIP_("Tracks the selected markers backward for the entire clip"));
   }
   if (backwards && !sequence) {
-    return BLI_strdup("Tracks the selected markers backward by one frame");
+    return BLI_strdup(TIP_("Tracks the selected markers backward by one frame"));
   }
   if (!backwards && sequence) {
-    return BLI_strdup("Tracks the selected markers forward for the entire clip");
+    return BLI_strdup(TIP_("Tracks the selected markers forward for the entire clip"));
   }
   if (!backwards && !sequence) {
-    return BLI_strdup("Tracks the selected markers forward by one frame");
+    return BLI_strdup(TIP_("Tracks the selected markers forward by one frame"));
   }
 
   /* Use default description. */
