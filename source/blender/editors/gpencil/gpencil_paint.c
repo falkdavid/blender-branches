@@ -1317,12 +1317,22 @@ static void gpencil_stroke_newfrombuffer(tGPsdata *p)
   gpencil_stroke_added_enable(p);
 }
 
-static void gpencil_increase_pressure_current_point(tGPsdata *p, float new_pressure)
+static void gpencil_increase_pressure_current_point(tGPsdata *p, int mval[2], float new_pressure)
 {
-  bGPdata *gpd = p->gpd;
-  if (gpd->runtime.sbuffer != NULL) {
-    tGPspoint *pt = (tGPspoint *)(gpd->runtime.sbuffer) + (gpd->runtime.sbuffer_used - 1);
-    pt->pressure = new_pressure;
+  /* If the pressure is increasing. */
+  if (new_pressure > p->pressure) {
+    int dx = abs(mval[0] - (int)p->mval[0]);
+    int dy = abs(mval[1] - (int)p->mval[1]);
+    /* If the mouse position did not change (by much). */
+    if (((dx <= MIN_MANHATTEN_PX) && (dy <= MIN_MANHATTEN_PX)) ||
+        ((dx * dx + dy * dy) <= MIN_EUCLIDEAN_PX * MIN_EUCLIDEAN_PX)) {
+      bGPdata *gpd = p->gpd;
+      if (gpd->runtime.sbuffer != NULL) {
+        /* Update the pressure of the last point. */
+        tGPspoint *pt = (tGPspoint *)(gpd->runtime.sbuffer) + (gpd->runtime.sbuffer_used - 1);
+        pt->pressure = new_pressure;
+      }
+    }
   }
 }
 /* --- 'Eraser' for 'Paint' Tool ------ */
@@ -3820,15 +3830,7 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
   /* handle mode-specific events */
   if (p->status == GP_STATUS_PAINTING) {
     /* Handle pressure increasing. */
-    if (event->tablet.pressure > p->pressure) {
-      int dx = abs(event->mval[0] - (int)p->mval[0]);
-      int dy = abs(event->mval[1] - (int)p->mval[1]);
-      /* If the mouse position did not change (by much). */
-      if (((dx <= MIN_MANHATTEN_PX) && (dy <= MIN_MANHATTEN_PX)) ||
-          ((dx * dx + dy * dy) <= MIN_EUCLIDEAN_PX * MIN_EUCLIDEAN_PX)) {
-        gpencil_increase_pressure_current_point(p, event->tablet.pressure);
-      }
-    }
+    gpencil_increase_pressure_current_point(p, event->mval, event->tablet.pressure);
     /* handle painting mouse-movements? */
     if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE) || (p->flags & GP_PAINTFLAG_FIRSTRUN)) {
       /* handle drawing event */
