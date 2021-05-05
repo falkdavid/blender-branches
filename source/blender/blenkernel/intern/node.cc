@@ -4941,11 +4941,13 @@ static void registerGeometryNodes()
   register_node_type_geo_attribute_proximity();
   register_node_type_geo_attribute_randomize();
   register_node_type_geo_attribute_separate_xyz();
+  register_node_type_geo_attribute_transfer();
   register_node_type_geo_attribute_vector_math();
   register_node_type_geo_attribute_remove();
   register_node_type_geo_boolean();
   register_node_type_geo_bounding_box();
   register_node_type_geo_collection_info();
+  register_node_type_geo_curve_to_mesh();
   register_node_type_geo_edge_split();
   register_node_type_geo_is_viewport();
   register_node_type_geo_join_geometry();
@@ -4968,6 +4970,7 @@ static void registerGeometryNodes()
   register_node_type_geo_sample_texture();
   register_node_type_geo_subdivide();
   register_node_type_geo_subdivision_surface();
+  register_node_type_geo_switch();
   register_node_type_geo_transform();
   register_node_type_geo_triangulate();
   register_node_type_geo_volume_to_mesh();

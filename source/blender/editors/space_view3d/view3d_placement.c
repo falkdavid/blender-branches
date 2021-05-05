@@ -323,7 +323,7 @@ static bool idp_poject_surface_normal(SnapObjectContext *snap_context,
                                                  SCE_SNAP_MODE_FACE,
                                                  &(const struct SnapObjectParams){
                                                      .snap_select = SNAP_ALL,
-                                                     .use_object_edit_cage = true,
+                                                     .edit_mode_type = SNAP_GEOM_EDIT,
                                                  },
                                                  mval_fl,
                                                  NULL,
@@ -941,7 +941,7 @@ static void view3d_interactive_add_calc_plane(bContext *C,
                                                   SCE_SNAP_MODE_FACE,
                                                   &(const struct SnapObjectParams){
                                                       .snap_select = SNAP_ALL,
-                                                      .use_object_edit_cage = true,
+                                                      .edit_mode_type = SNAP_GEOM_EDIT,
                                                   },
                                                   mval_fl,
                                                   NULL,
@@ -2061,7 +2061,7 @@ static void cursor_plane_draw(bContext *C, int x, int y, void *customdata)
     GPU_matrix_projection_set(rv3d->winmat);
     GPU_matrix_set(rv3d->viewmat);
 
-    const float scale_mod = U.gizmo_size * 2 * U.dpi_fac;
+    const float scale_mod = U.gizmo_size * 2 * U.dpi_fac / U.pixelsize;
 
     float final_scale = (scale_mod * pixel_size);
 
