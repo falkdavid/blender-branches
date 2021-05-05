@@ -3361,6 +3361,10 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
   if (is_num_but) {
     BLI_assert(data->is_str_dynamic == false);
     ui_but_convert_to_unit_alt_name(but, data->str, data->maxlen);
+
+    data->startvalue = ui_but_value_get(but);
+    data->origvalue = data->startvalue;
+    data->value = data->origvalue;
   }
 
   /* won't change from now on */
