@@ -44,7 +44,7 @@
 #include "draw_cache.h"
 #include "draw_cache_impl.h"
 
-#define BEZIER_HANDLE 1 << 3
+#define BEZIER_HANDLE (1 << 3)
 #define COLOR_SHIFT 5
 
 /* ---------------------------------------------------------------------- */
@@ -348,7 +348,14 @@ static void gpencil_buffer_add_stroke(gpStrokeVert *verts,
   }
   /* Draw line to first point to complete the loop for cyclic strokes. */
   if (is_cyclic) {
-    gpencil_buffer_add_point(verts, cols, gps, &pts[0], v++, false);
+    gpencil_buffer_add_point(verts, cols, gps, &pts[0], v, false);
+    /* UV factor needs to be adjusted for the last point to not be equal to the UV factor of the
+     * first point. It should be the factor of the last point plus the distance from the last point
+     * to the first.
+     */
+    gpStrokeVert *vert = &verts[v];
+    vert->u_stroke = verts[v - 1].u_stroke + len_v3v3(&pts[pts_len - 1].x, &pts[0].x);
+    v++;
   }
   /* Last adjacency point (not drawn). */
   adj_idx = (is_cyclic) ? 1 : max_ii(0, pts_len - 2);
@@ -800,20 +807,20 @@ static void gpencil_edit_curve_stroke_iter_cb(bGPDlayer *gpl,
     };
 
     /* First segment. */
-    copy_v3_v3(vert_ptr->pos, bezt->vec[0]);
+    mul_v3_m4v3(vert_ptr->pos, gpl->layer_mat, bezt->vec[0]);
     vert_ptr->data = vflag[0];
     vert_ptr++;
 
-    copy_v3_v3(vert_ptr->pos, bezt->vec[1]);
+    mul_v3_m4v3(vert_ptr->pos, gpl->layer_mat, bezt->vec[1]);
     vert_ptr->data = vflag[1];
     vert_ptr++;
 
     /* Second segment. */
-    copy_v3_v3(vert_ptr->pos, bezt->vec[1]);
+    mul_v3_m4v3(vert_ptr->pos, gpl->layer_mat, bezt->vec[1]);
     vert_ptr->data = vflag[1];
     vert_ptr++;
 
-    copy_v3_v3(vert_ptr->pos, bezt->vec[2]);
+    mul_v3_m4v3(vert_ptr->pos, gpl->layer_mat, bezt->vec[2]);
     vert_ptr->data = vflag[2];
     vert_ptr++;
   }

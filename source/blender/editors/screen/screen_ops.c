@@ -141,6 +141,14 @@ bool ED_operator_screenactive(bContext *C)
   return true;
 }
 
+bool ED_operator_screenactive_nobackground(bContext *C)
+{
+  if (G.background) {
+    return false;
+  }
+  return ED_operator_screenactive(C);
+}
+
 /* XXX added this to prevent anim state to change during renders */
 static bool ED_operator_screenactive_norender(bContext *C)
 {
@@ -1332,67 +1340,46 @@ static void SCREEN_OT_area_swap(wmOperatorType *ot)
 /* operator callback */
 static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Main *bmain = CTX_data_main(C);
-  wmWindow *win = CTX_wm_window(C);
-  WorkSpace *workspace = WM_window_get_active_workspace(win);
-  WorkSpaceLayout *layout_old = WM_window_get_active_layout(win);
-
-  Scene *scene = CTX_data_scene(C);
   ScrArea *area = CTX_wm_area(C);
 
-  /* XXX hrmf! */
-  if (event->type == EVT_ACTIONZONE_AREA) {
+  if (event && event->customdata) {
     sActionzoneData *sad = event->customdata;
-
     if (sad == NULL) {
       return OPERATOR_PASS_THROUGH;
     }
-
     area = sad->sa1;
   }
 
-  /* adds window to WM */
-  rcti rect = area->totrct;
-  BLI_rcti_translate(&rect, win->posx, win->posy);
-  rect.xmax = rect.xmin + BLI_rcti_size_x(&rect);
-  rect.ymax = rect.ymin + BLI_rcti_size_y(&rect);
+  /* Create new window. No need to set space_type since it will be copied over. */
+  wmWindow *newwin = WM_window_open(C,
+                                    "Blender",
+                                    area->totrct.xmin,
+                                    area->totrct.ymin,
+                                    area->winx,
+                                    area->winy,
+                                    SPACE_EMPTY,
+                                    true,
+                                    false,
+                                    WIN_ALIGN_ABSOLUTE);
 
-  wmWindow *newwin = WM_window_open(C, &rect);
-  if (newwin == NULL) {
+  if (newwin) {
+    /* copy area to new screen */
+    bScreen *newsc = WM_window_get_active_screen(newwin);
+    ED_area_data_copy((ScrArea *)newsc->areabase.first, area, true);
+    ED_area_tag_redraw((ScrArea *)newsc->areabase.first);
+
+    /* screen, areas init */
+    WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+  }
+  else {
     BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
-    goto finally;
   }
 
-  *newwin->stereo3d_format = *win->stereo3d_format;
-
-  newwin->scene = scene;
-
-  STRNCPY(newwin->view_layer_name, win->view_layer_name);
-
-  BKE_workspace_active_set(newwin->workspace_hook, workspace);
-  /* allocs new screen and adds to newly created window, using window size */
-  WorkSpaceLayout *layout_new = ED_workspace_layout_add(
-      bmain, workspace, newwin, BKE_workspace_layout_name_get(layout_old));
-  bScreen *newsc = BKE_workspace_layout_screen_get(layout_new);
-  WM_window_set_active_layout(newwin, workspace, layout_new);
-
-  /* copy area to new screen */
-  ED_area_data_copy((ScrArea *)newsc->areabase.first, area, true);
-
-  ED_area_tag_redraw((ScrArea *)newsc->areabase.first);
-
-  /* screen, areas init */
-  WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
-
-finally:
-  if (event->type == EVT_ACTIONZONE_AREA) {
+  if (event && event->customdata) {
     actionzone_exit(op);
   }
 
-  if (newwin) {
-    return OPERATOR_FINISHED;
-  }
-  return OPERATOR_CANCELLED;
+  return newwin ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 static void SCREEN_OT_area_dupli(wmOperatorType *ot)
@@ -1403,6 +1390,58 @@ static void SCREEN_OT_area_dupli(wmOperatorType *ot)
 
   ot->invoke = area_dupli_invoke;
   ot->poll = ED_operator_areaactive;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Area Close Operator
+ *
+ * Close selected area, replace by expanding a neighbor
+ * \{ */
+
+/* operator callback */
+static int area_close_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *UNUSED(event))
+{
+  ScrArea *area = CTX_wm_area(C);
+  if ((area != NULL) && screen_area_close(C, CTX_wm_screen(C), area)) {
+    WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
+    return OPERATOR_FINISHED;
+  }
+  return OPERATOR_CANCELLED;
+}
+
+static bool area_close_poll(bContext *C)
+{
+  if (!ED_operator_areaactive(C)) {
+    return false;
+  }
+
+  ScrArea *area = CTX_wm_area(C);
+
+  if (ED_area_is_global(area)) {
+    return false;
+  }
+
+  bScreen *screen = CTX_wm_screen(C);
+
+  /* Can this area join with ANY other area? */
+  LISTBASE_FOREACH (ScrArea *, ar, &screen->areabase) {
+    if (area_getorientation(ar, area) != -1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static void SCREEN_OT_area_close(wmOperatorType *ot)
+{
+  ot->name = "Close Area";
+  ot->description = "Close selected area";
+  ot->idname = "SCREEN_OT_area_close";
+  ot->invoke = area_close_invoke;
+  ot->poll = area_close_poll;
 }
 
 /** \} */
@@ -1637,7 +1676,7 @@ static int area_snap_calc_location(const bScreen *screen,
             /* Thirds. */
             1.0f / 3.0f,
             2.0f / 3.0f,
-            /* Quaters. */
+            /* Quarters. */
             1.0f / 4.0f,
             3.0f / 4.0f,
             /* Eighth. */
@@ -3231,9 +3270,10 @@ static void SCREEN_OT_screen_full_area(wmOperatorType *ot)
  */
 
 typedef struct sAreaJoinData {
-  ScrArea *sa1;        /* first area to be considered */
-  ScrArea *sa2;        /* second area to be considered */
-  void *draw_callback; /* call `ED_screen_draw_join_shape` */
+  ScrArea *sa1;        /* Potential source area (kept). */
+  ScrArea *sa2;        /* Potential target area (removed or reduced). */
+  int dir;             /* Direction of potential join. */
+  void *draw_callback; /* call 'ED_screen_draw_join_highlight' */
 
 } sAreaJoinData;
 
@@ -3242,8 +3282,8 @@ static void area_join_draw_cb(const struct wmWindow *UNUSED(win), void *userdata
   const wmOperator *op = userdata;
 
   sAreaJoinData *sd = op->customdata;
-  if (sd->sa1 && sd->sa2) {
-    ED_screen_draw_join_shape(sd->sa1, sd->sa2);
+  if (sd->sa1 && sd->sa2 && (sd->dir != -1)) {
+    ED_screen_draw_join_highlight(sd->sa1, sd->sa2);
   }
 }
 
@@ -3265,6 +3305,7 @@ static bool area_join_init(bContext *C, wmOperator *op, ScrArea *sa1, ScrArea *s
 
   jd->sa1 = sa1;
   jd->sa2 = sa2;
+  jd->dir = -1;
 
   op->customdata = jd;
 
@@ -3277,7 +3318,7 @@ static bool area_join_init(bContext *C, wmOperator *op, ScrArea *sa1, ScrArea *s
 static bool area_join_apply(bContext *C, wmOperator *op)
 {
   sAreaJoinData *jd = (sAreaJoinData *)op->customdata;
-  if (!jd) {
+  if (!jd || (jd->dir == -1)) {
     return false;
   }
 
@@ -3379,61 +3420,30 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
     case MOUSEMOVE: {
       ScrArea *area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, event->x, event->y);
-      int dir = -1;
+      jd->dir = area_getorientation(jd->sa1, jd->sa2);
 
-      if (area) {
-        if (jd->sa1 != area) {
-          dir = area_getorientation(jd->sa1, area);
-          if (dir != -1) {
-            jd->sa2 = area;
-          }
-          else {
-            /* we are not bordering on the previously selected area
-             * we check if area has common border with the one marked for removal
-             * in this case we can swap areas.
-             */
-            dir = area_getorientation(area, jd->sa2);
-            if (dir != -1) {
-              jd->sa1 = jd->sa2;
-              jd->sa2 = area;
-            }
-            else {
-              jd->sa2 = NULL;
-            }
-          }
-          WM_event_add_notifier(C, NC_WINDOW, NULL);
-        }
-        else {
-          /* we are back in the area previously selected for keeping
-           * we swap the areas if possible to allow user to choose */
-          if (jd->sa2 != NULL) {
-            jd->sa1 = jd->sa2;
-            jd->sa2 = area;
-            dir = area_getorientation(jd->sa1, jd->sa2);
-            if (dir == -1) {
-              printf("oops, didn't expect that!\n");
-            }
-          }
-          else {
-            dir = area_getorientation(jd->sa1, area);
-            if (dir != -1) {
-              jd->sa2 = area;
-            }
-          }
-          WM_event_add_notifier(C, NC_WINDOW, NULL);
-        }
+      if (area == jd->sa1) {
+        /* Hovering current source, so change direction. */
+        jd->sa1 = jd->sa2;
+        jd->sa2 = area;
+        jd->dir = area_getorientation(jd->sa1, jd->sa2);
+      }
+      else if (area != jd->sa2) {
+        jd->dir = -1;
       }
 
-      if (dir == 1) {
+      WM_event_add_notifier(C, NC_WINDOW, NULL);
+
+      if (jd->dir == 1) {
         WM_cursor_set(win, WM_CURSOR_N_ARROW);
       }
-      else if (dir == 3) {
+      else if (jd->dir == 3) {
         WM_cursor_set(win, WM_CURSOR_S_ARROW);
       }
-      else if (dir == 2) {
+      else if (jd->dir == 2) {
         WM_cursor_set(win, WM_CURSOR_E_ARROW);
       }
-      else if (dir == 0) {
+      else if (jd->dir == 0) {
         WM_cursor_set(win, WM_CURSOR_W_ARROW);
       }
       else {
@@ -3444,6 +3454,10 @@ static int area_join_modal(bContext *C, wmOperator *op, const wmEvent *event)
     }
     case LEFTMOUSE:
       if (event->val == KM_RELEASE) {
+        if (jd->dir == -1) {
+          area_join_cancel(C, op);
+          return OPERATOR_CANCELLED;
+        }
         ED_area_tag_redraw(jd->sa1);
         ED_area_tag_redraw(jd->sa2);
 
@@ -4090,6 +4104,69 @@ static void SCREEN_OT_header_toggle_menus(wmOperatorType *ot)
 /** \name Region Context Menu Operator (Header/Footer/Navbar)
  * \{ */
 
+static void screen_area_menu_items(ScrArea *area, uiLayout *layout)
+{
+  if (ED_area_is_global(area)) {
+    return;
+  }
+
+  PointerRNA ptr;
+
+  /* Mouse position as if in middle of area. */
+  const int loc[2] = {BLI_rcti_cent_x(&area->totrct), BLI_rcti_cent_y(&area->totrct)};
+
+  /* Vertical Split */
+  uiItemFullO(layout,
+              "SCREEN_OT_area_split",
+              IFACE_("Vertical Split"),
+              ICON_NONE,
+              NULL,
+              WM_OP_INVOKE_DEFAULT,
+              0,
+              &ptr);
+
+  RNA_int_set_array(&ptr, "cursor", loc);
+  RNA_enum_set(&ptr, "direction", 'v');
+
+  /* Horizontal Split */
+  uiItemFullO(layout,
+              "SCREEN_OT_area_split",
+              IFACE_("Horizontal Split"),
+              ICON_NONE,
+              NULL,
+              WM_OP_INVOKE_DEFAULT,
+              0,
+              &ptr);
+
+  RNA_int_set_array(&ptr, "cursor", &loc[0]);
+  RNA_enum_set(&ptr, "direction", 'h');
+
+  uiItemS(layout);
+
+  if (area->spacetype != SPACE_FILE) {
+    uiItemO(layout,
+            area->full ? IFACE_("Restore Areas") : IFACE_("Maximize Area"),
+            ICON_NONE,
+            "SCREEN_OT_screen_full_area");
+
+    if (!area->full) {
+      uiItemFullO(layout,
+                  "SCREEN_OT_screen_full_area",
+                  IFACE_("Full Screen Area"),
+                  ICON_NONE,
+                  NULL,
+                  WM_OP_INVOKE_DEFAULT,
+                  0,
+                  &ptr);
+      RNA_boolean_set(&ptr, "use_hide_panels", true);
+    }
+  }
+
+  uiItemO(layout, NULL, ICON_NONE, "SCREEN_OT_area_dupli");
+  uiItemS(layout);
+  uiItemO(layout, NULL, ICON_NONE, "SCREEN_OT_area_close");
+}
+
 void ED_screens_header_tools_menu_create(bContext *C, uiLayout *layout, void *UNUSED(arg))
 {
   ScrArea *area = CTX_wm_area(C);
@@ -4123,17 +4200,9 @@ void ED_screens_header_tools_menu_create(bContext *C, uiLayout *layout, void *UN
 
   if (!ELEM(area->spacetype, SPACE_TOPBAR)) {
     uiItemS(layout);
-
     uiItemO(layout, but_flip_str, ICON_NONE, "SCREEN_OT_region_flip");
-  }
-
-  /* File browser should be fullscreen all the time, top-bar should
-   * never be. But other regions can be maximized/restored. */
-  if (!ELEM(area->spacetype, SPACE_FILE, SPACE_TOPBAR)) {
     uiItemS(layout);
-
-    const char *but_str = area->full ? IFACE_("Tile Area") : IFACE_("Maximize Area");
-    uiItemO(layout, but_str, ICON_NONE, "SCREEN_OT_screen_full_area");
+    screen_area_menu_items(area, layout);
   }
 }
 
@@ -4155,14 +4224,8 @@ void ED_screens_footer_tools_menu_create(bContext *C, uiLayout *layout, void *UN
 
   uiItemO(layout, but_flip_str, ICON_NONE, "SCREEN_OT_region_flip");
 
-  /* File browser should be fullscreen all the time, top-bar should
-   * never be. But other regions can be maximized/restored... */
-  if (!ELEM(area->spacetype, SPACE_FILE, SPACE_TOPBAR)) {
-    uiItemS(layout);
-
-    const char *but_str = area->full ? IFACE_("Tile Area") : IFACE_("Maximize Area");
-    uiItemO(layout, but_str, ICON_NONE, "SCREEN_OT_screen_full_area");
-  }
+  uiItemS(layout);
+  screen_area_menu_items(area, layout);
 }
 
 void ED_screens_navigation_bar_tools_menu_create(bContext *C, uiLayout *layout, void *UNUSED(arg))
@@ -4866,20 +4929,27 @@ static int userpref_show_exec(bContext *C, wmOperator *op)
   int sizey = 520 * UI_DPI_FAC;
 
   /* changes context! */
-  if (WM_window_open_temp(C,
-                          IFACE_("Blender Preferences"),
-                          event->x,
-                          event->y,
-                          sizex,
-                          sizey,
-                          SPACE_USERPREF,
-                          false) != NULL) {
+  if (WM_window_open(C,
+                     IFACE_("Blender Preferences"),
+                     event->x,
+                     event->y,
+                     sizex,
+                     sizey,
+                     SPACE_USERPREF,
+                     false,
+                     true,
+                     WIN_ALIGN_LOCATION_CENTER) != NULL) {
     /* The header only contains the editor switcher and looks empty.
      * So hiding in the temp window makes sense. */
     ScrArea *area = CTX_wm_area(C);
     ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
 
     region->flag |= RGN_FLAG_HIDDEN;
+    ED_region_visibility_change_update(C, area, region);
+
+    /* And also show the region with "Load & Save" buttons. */
+    region = BKE_area_find_region_type(area, RGN_TYPE_EXECUTE);
+    region->flag &= ~RGN_FLAG_HIDDEN;
     ED_region_visibility_change_update(C, area, region);
 
     return OPERATOR_FINISHED;
@@ -4897,7 +4967,7 @@ static void SCREEN_OT_userpref_show(struct wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = userpref_show_exec;
-  ot->poll = ED_operator_screenactive;
+  ot->poll = ED_operator_screenactive_nobackground; /* Not in background as this opens a window. */
 }
 
 /** \} */
@@ -4925,14 +4995,16 @@ static int drivers_editor_show_exec(bContext *C, wmOperator *op)
   uiBut *but = UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 
   /* changes context! */
-  if (WM_window_open_temp(C,
-                          IFACE_("Blender Drivers Editor"),
-                          event->x,
-                          event->y,
-                          sizex,
-                          sizey,
-                          SPACE_GRAPH,
-                          false) != NULL) {
+  if (WM_window_open(C,
+                     IFACE_("Blender Drivers Editor"),
+                     event->x,
+                     event->y,
+                     sizex,
+                     sizey,
+                     SPACE_GRAPH,
+                     false,
+                     true,
+                     WIN_ALIGN_LOCATION_CENTER) != NULL) {
     ED_drivers_editor_init(C, CTX_wm_area(C));
 
     /* activate driver F-Curve for the property under the cursor */
@@ -4972,7 +5044,7 @@ static void SCREEN_OT_drivers_editor_show(struct wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = drivers_editor_show_exec;
-  ot->poll = ED_operator_screenactive;
+  ot->poll = ED_operator_screenactive_nobackground; /* Not in background as this opens a window. */
 }
 
 /** \} */
@@ -4991,14 +5063,16 @@ static int info_log_show_exec(bContext *C, wmOperator *op)
   int shift_y = 480;
 
   /* changes context! */
-  if (WM_window_open_temp(C,
-                          IFACE_("Blender Info Log"),
-                          event->x,
-                          event->y + shift_y,
-                          sizex,
-                          sizey,
-                          SPACE_INFO,
-                          false) != NULL) {
+  if (WM_window_open(C,
+                     IFACE_("Blender Info Log"),
+                     event->x,
+                     event->y + shift_y,
+                     sizex,
+                     sizey,
+                     SPACE_INFO,
+                     false,
+                     true,
+                     WIN_ALIGN_LOCATION_CENTER) != NULL) {
     return OPERATOR_FINISHED;
   }
   BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
@@ -5014,7 +5088,7 @@ static void SCREEN_OT_info_log_show(struct wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = info_log_show_exec;
-  ot->poll = ED_operator_screenactive;
+  ot->poll = ED_operator_screenactive_nobackground;
 }
 
 /** \} */
@@ -5083,7 +5157,7 @@ static void SCREEN_OT_delete(wmOperatorType *ot)
 /** \name Region Alpha Blending Operator
  *
  * Implementation note: a disappearing region needs at least 1 last draw with
- * 100% backbuffer texture over it - then triple buffer will clear it entirely.
+ * 100% back-buffer texture over it - then triple buffer will clear it entirely.
  * This because flag #RGN_FLAG_HIDDEN is set in end - region doesn't draw at all then.
  *
  * \{ */
@@ -5471,6 +5545,7 @@ void ED_operatortypes_screen(void)
   WM_operatortype_append(SCREEN_OT_area_move);
   WM_operatortype_append(SCREEN_OT_area_split);
   WM_operatortype_append(SCREEN_OT_area_join);
+  WM_operatortype_append(SCREEN_OT_area_close);
   WM_operatortype_append(SCREEN_OT_area_options);
   WM_operatortype_append(SCREEN_OT_area_dupli);
   WM_operatortype_append(SCREEN_OT_area_swap);
@@ -5555,10 +5630,6 @@ void ED_keymap_screen(wmKeyConfig *keyconf)
   /* Screen Editing ------------------------------------------------ */
   WM_keymap_ensure(keyconf, "Screen Editing", 0, 0);
 
-  /* Header Editing ------------------------------------------------ */
-  /* note: this is only used when the cursor is inside the header */
-  WM_keymap_ensure(keyconf, "Header", 0, 0);
-
   /* Screen General ------------------------------------------------ */
   WM_keymap_ensure(keyconf, "Screen", 0, 0);
 
@@ -5567,8 +5638,8 @@ void ED_keymap_screen(wmKeyConfig *keyconf)
 
   /* dropbox for entire window */
   ListBase *lb = WM_dropboxmap_find("Window", 0, 0);
-  WM_dropbox_add(lb, "WM_OT_drop_blend_file", blend_file_drop_poll, blend_file_drop_copy);
-  WM_dropbox_add(lb, "UI_OT_drop_color", UI_drop_color_poll, UI_drop_color_copy);
+  WM_dropbox_add(lb, "WM_OT_drop_blend_file", blend_file_drop_poll, blend_file_drop_copy, NULL);
+  WM_dropbox_add(lb, "UI_OT_drop_color", UI_drop_color_poll, UI_drop_color_copy, NULL);
 
   keymap_modal_set(keyconf);
 }

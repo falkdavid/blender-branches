@@ -18,7 +18,6 @@
 
 # <pep8 compliant>
 import bpy
-import nodeitems_utils
 from bpy.types import Header, Menu, Panel
 from bpy.app.translations import pgettext_iface as iface_
 from bpy.app.translations import contexts as i18n_contexts
@@ -93,10 +92,10 @@ class NODE_HT_header(Header):
 
                 # Show material.new when no active ID/slot exists
                 if not id_from and ob_type in types_that_support_material:
-                    row.template_ID(ob, "active_material", new="material.new", duplicate="material.duplicate")
+                    row.template_ID(ob, "active_material", new="material.new")
                 # Material ID, but not for Lights
                 if id_from and ob_type != 'LIGHT':
-                    row.template_ID(id_from, "active_material", new="material.new", duplicate="material.duplicate")
+                    row.template_ID(id_from, "active_material", new="material.new")
 
             if snode.shader_type == 'WORLD':
                 NODE_MT_editor_menus.draw_collapsible(context, layout)
@@ -109,7 +108,7 @@ class NODE_HT_header(Header):
 
                 row = layout.row()
                 row.enabled = not snode.pin
-                row.template_ID(scene, "world", new="world.new", duplicate="world.duplicate")
+                row.template_ID(scene, "world", new="world.new")
 
             if snode.shader_type == 'LINESTYLE':
                 view_layer = context.view_layer
@@ -163,8 +162,11 @@ class NODE_HT_header(Header):
                 row.template_ID(snode, "node_tree", new="node.new_geometry_node_group_assign")
             elif ob:
                 active_modifier = ob.modifiers.active
-                if active_modifier and active_modifier.type == "NODES":
-                    row.template_ID(active_modifier, "node_group", new="node.new_geometry_node_group_assign")
+                if active_modifier and active_modifier.type == 'NODES':
+                    if active_modifier.node_group:
+                        row.template_ID(active_modifier, "node_group", new="node.copy_geometry_node_group_assign")
+                    else:
+                        row.template_ID(active_modifier, "node_group", new="node.new_geometry_node_group_assign")
                 else:
                     row.template_ID(snode, "node_tree", new="node.new_geometry_nodes_modifier")
 
@@ -222,6 +224,8 @@ class NODE_MT_add(bpy.types.Menu):
     bl_translation_context = i18n_contexts.operator_default
 
     def draw(self, context):
+        import nodeitems_utils
+
         layout = self.layout
 
         layout.operator_context = 'INVOKE_DEFAULT'
@@ -331,6 +335,7 @@ class NODE_MT_node(Menu):
         layout.operator("node.link_make", text="Make and Replace Links").replace = True
         layout.operator("node.links_cut")
         layout.operator("node.links_detach")
+        layout.operator("node.links_mute")
 
         layout.separator()
 
@@ -477,7 +482,7 @@ class NODE_MT_context_menu(Menu):
 class NODE_PT_active_node_generic(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Item"
+    bl_category = "Node"
     bl_label = "Node"
 
     @classmethod
@@ -495,7 +500,7 @@ class NODE_PT_active_node_generic(Panel):
 class NODE_PT_active_node_color(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Item"
+    bl_category = "Node"
     bl_label = "Color"
     bl_options = {'DEFAULT_CLOSED'}
     bl_parent_id = 'NODE_PT_active_node_generic'
@@ -525,7 +530,7 @@ class NODE_PT_active_node_color(Panel):
 class NODE_PT_active_node_properties(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Item"
+    bl_category = "Node"
     bl_label = "Properties"
     bl_options = {'DEFAULT_CLOSED'}
 
@@ -566,7 +571,7 @@ class NODE_PT_active_node_properties(Panel):
 class NODE_PT_texture_mapping(Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Item"
+    bl_category = "Node"
     bl_label = "Texture Mapping"
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
@@ -678,16 +683,8 @@ class NODE_UL_interface_sockets(bpy.types.UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             row = layout.row(align=True)
 
-            # inputs get icon on the left
-            if not socket.is_output:
-                row.template_node_socket(color=color)
-
+            row.template_node_socket(color=color)
             row.prop(socket, "name", text="", emboss=False, icon_value=icon)
-
-            # outputs get icon on the right
-            if socket.is_output:
-                row.template_node_socket(color=color)
-
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.template_node_socket(color=color)

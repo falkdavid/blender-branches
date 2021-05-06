@@ -396,8 +396,7 @@ class CPUDevice : public Device {
                 << string_human_readable_size(mem.memory_size()) << ")";
       }
 
-      if (mem.type == MEM_DEVICE_ONLY) {
-        assert(!mem.host_pointer);
+      if (mem.type == MEM_DEVICE_ONLY || !mem.host_pointer) {
         size_t alignment = MIN_ALIGNMENT_CPU_DATA_TYPES;
         void *data = util_aligned_malloc(mem.memory_size(), alignment);
         mem.device_pointer = (device_ptr)data;
@@ -459,7 +458,7 @@ class CPUDevice : public Device {
       tex_free((device_texture &)mem);
     }
     else if (mem.device_pointer) {
-      if (mem.type == MEM_DEVICE_ONLY) {
+      if (mem.type == MEM_DEVICE_ONLY || !mem.host_pointer) {
         util_aligned_free((void *)mem.device_pointer);
       }
       mem.device_pointer = 0;
@@ -951,7 +950,7 @@ class CPUDevice : public Device {
     SIMD_SET_FLUSH_TO_ZERO;
 
     for (int sample = start_sample; sample < end_sample; sample++) {
-      if (task.get_cancel() || task_pool.canceled()) {
+      if (task.get_cancel() || TaskPool::canceled()) {
         if (task.need_finish_queue == false)
           break;
       }
@@ -1249,7 +1248,7 @@ class CPUDevice : public Device {
 
   void thread_render(DeviceTask &task)
   {
-    if (task_pool.canceled()) {
+    if (TaskPool::canceled()) {
       if (task.need_finish_queue == false)
         return;
     }
@@ -1319,7 +1318,7 @@ class CPUDevice : public Device {
 
       task.release_tile(tile);
 
-      if (task_pool.canceled()) {
+      if (TaskPool::canceled()) {
         if (task.need_finish_queue == false)
           break;
       }
@@ -1416,7 +1415,7 @@ class CPUDevice : public Device {
                         task.offset,
                         sample);
 
-      if (task.get_cancel() || task_pool.canceled())
+      if (task.get_cancel() || TaskPool::canceled())
         break;
 
       task.update_progress(NULL);
@@ -1655,6 +1654,7 @@ void device_cpu_info(vector<DeviceInfo> &devices)
   info.has_adaptive_stop_per_sample = true;
   info.has_osl = true;
   info.has_half_images = true;
+  info.has_nanovdb = true;
   info.has_profiling = true;
   info.denoisers = DENOISER_NLM;
   if (openimagedenoise_supported()) {

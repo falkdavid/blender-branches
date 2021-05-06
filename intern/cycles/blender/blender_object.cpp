@@ -51,10 +51,11 @@ bool BlenderSync::BKE_object_is_modified(BL::Object &b_ob)
   }
   else {
     /* object level material links */
-    BL::Object::material_slots_iterator slot;
-    for (b_ob.material_slots.begin(slot); slot != b_ob.material_slots.end(); ++slot)
-      if (slot->link() == BL::MaterialSlot::link_OBJECT)
+    for (BL::MaterialSlot &b_slot : b_ob.material_slots) {
+      if (b_slot.link() == BL::MaterialSlot::link_OBJECT) {
         return true;
+      }
+    }
   }
 
   return false;
@@ -243,9 +244,6 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
 
   /* holdout */
   object->set_use_holdout(use_holdout);
-  if (object->use_holdout_is_modified()) {
-    scene->object_manager->tag_update(scene);
-  }
 
   object->set_visibility(visibility);
 
@@ -325,8 +323,8 @@ Object *BlenderSync::sync_object(BL::Depsgraph &b_depsgraph,
       object->set_random_id(b_instance.random_id());
     }
     else {
-      object->set_dupli_generated(make_float3(0.0f, 0.0f, 0.0f));
-      object->set_dupli_uv(make_float2(0.0f, 0.0f));
+      object->set_dupli_generated(zero_float3());
+      object->set_dupli_uv(zero_float2());
       object->set_random_id(hash_uint2(hash_string(object->name.c_str()), 0));
     }
 
@@ -562,10 +560,12 @@ void BlenderSync::sync_objects(BL::Depsgraph &b_depsgraph,
   if (!cancel && !motion) {
     sync_background_light(b_v3d, use_portal);
 
-    /* handle removed data and modified pointers */
+    /* Handle removed data and modified pointers, as this may free memory, delete Nodes in the
+     * right order to ensure that dependent data is freed after their users. Objects should be
+     * freed before particle systems and geometries. */
     light_map.post_sync();
-    geometry_map.post_sync();
     object_map.post_sync();
+    geometry_map.post_sync();
     particle_system_map.post_sync();
   }
 

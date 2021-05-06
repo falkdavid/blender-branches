@@ -416,7 +416,10 @@ typedef enum {
   GHOST_kGrabNormal,
   /** Wrap the mouse location to prevent limiting screen bounds. */
   GHOST_kGrabWrap,
-  /** Hide the mouse while grabbing and restore the original location on release (numbuts). */
+  /**
+   * Hide the mouse while grabbing and restore the original location on release
+   * (used for number buttons and some other draggable UI elements).
+   */
   GHOST_kGrabHide,
 } GHOST_TGrabCursorMode;
 
@@ -580,7 +583,7 @@ typedef struct {
   GHOST_TUns32 xPixels;
   /** Number of lines. */
   GHOST_TUns32 yPixels;
-  /** Numberof bits per pixel. */
+  /** Number of bits per pixel. */
   GHOST_TUns32 bpp;
   /** Refresh rate (in Hertz). */
   GHOST_TUns32 frequency;
