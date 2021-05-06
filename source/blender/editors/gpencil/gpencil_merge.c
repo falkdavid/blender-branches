@@ -435,7 +435,7 @@ static int gpencil_analyze_strokes(tGPencilPointCache *src_array,
   return last;
 }
 
-static bool gpencil_strokes_merge_poll(bContext *C)
+static bool gpencil_strokes_separate_merge_poll(bContext *C)
 {
   /* only supported with grease pencil objects */
   Object *ob = CTX_data_active_object(C);
@@ -466,7 +466,7 @@ static bool gpencil_strokes_merge_poll(bContext *C)
   return (CTX_DATA_COUNT(C, editable_gpencil_strokes) != 0) && ED_operator_view3d_active(C);
 }
 
-static int gpencil_stroke_merge_exec(bContext *C, wmOperator *op)
+static int gpencil_stroke_separate_merge_exec(bContext *C, wmOperator *op)
 {
   const int mode = RNA_enum_get(op->ptr, "mode");
   const bool clear_point = RNA_boolean_get(op->ptr, "clear_point");
@@ -536,7 +536,7 @@ static int gpencil_stroke_merge_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-void GPENCIL_OT_stroke_merge(wmOperatorType *ot)
+void GPENCIL_OT_stroke_separate_merge(wmOperatorType *ot)
 {
   static const EnumPropertyItem mode_type[] = {
       {GP_MERGE_STROKE, "STROKE", 0, "Stroke", ""},
@@ -546,12 +546,12 @@ void GPENCIL_OT_stroke_merge(wmOperatorType *ot)
 
   /* identifiers */
   ot->name = "Merge Strokes";
-  ot->idname = "GPENCIL_OT_stroke_merge";
+  ot->idname = "GPENCIL_OT_stroke_separate_merge";
   ot->description = "Create a new stroke with the selected stroke points";
 
   /* api callbacks */
-  ot->exec = gpencil_stroke_merge_exec;
-  ot->poll = gpencil_strokes_merge_poll;
+  ot->exec = gpencil_stroke_separate_merge_exec;
+  ot->poll = gpencil_strokes_separate_merge_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

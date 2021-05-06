@@ -5074,7 +5074,7 @@ class VIEW3D_MT_edit_gpencil_point(Menu):
 
         layout.separator()
 
-        layout.operator("gpencil.stroke_merge", text="Merge")
+        layout.operator("gpencil.stroke_separate_merge", text="Separate & Merge")
 
         # TODO: add new RIP operator
 
@@ -7105,7 +7105,7 @@ class VIEW3D_MT_gpencil_edit_context_menu(Menu):
             col.separator()
 
             # Removal Operators
-            col.operator("gpencil.stroke_merge", text="Merge")
+            col.operator("gpencil.stroke_separate_merge", text="Separate & Merge")
             col.operator("gpencil.stroke_merge_by_distance").use_unselected = False
             col.operator("gpencil.stroke_split", text="Split")
             col.operator("gpencil.stroke_separate", text="Separate").mode = 'POINT'
