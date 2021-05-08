@@ -4553,7 +4553,15 @@ static int gpencil_stroke_sample_exec(bContext *C, wmOperator *op)
 
   /* Go through each editable + selected stroke */
   GP_EDITABLE_STROKES_BEGIN (gpstroke_iter, C, gpl, gps) {
-    if (gps->flag & GP_STROKE_SELECT) {
+    if (GPENCIL_STROKE_TYPE_BEZIER(gps)) {
+      bGPDcurve *gpc = gps->editcurve;
+      if (gpc->flag & GP_CURVE_SELECT) {
+        BKE_gpencil_editcurve_sample(gps, length, true, 0.1f);
+        BKE_gpencil_editcurve_recalculate_handles(gps);
+        BKE_gpencil_stroke_geometry_update(gpd, gps, GP_GEO_UPDATE_DEFAULT);
+      }
+    }
+    else if (gps->flag & GP_STROKE_SELECT) {
       BKE_gpencil_stroke_sample(gpd, gps, length, true);
     }
   }

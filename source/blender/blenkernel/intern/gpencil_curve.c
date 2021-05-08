@@ -2522,4 +2522,230 @@ bool BKE_gpencil_editcurve_merge_distance(bGPDstroke *gps,
   return false;
 }
 
+static float *gpencil_editcurve_segments_length_cache(bGPDcurve *gpc,
+                                                      const int resolution,
+                                                      const bool is_cyclic,
+                                                      float *r_total_length,
+                                                      uint *r_cache_len)
+{
+#define POINT_DIM 3
+  /* Calculate length cache. */
+  const uint stride = sizeof(float[POINT_DIM]);
+  const uint last_idx = gpc->tot_curve_points - 1;
+  const uint resolu_stride = resolution * stride;
+  const uint points_len = BKE_curve_calc_coords_axis_len(
+      gpc->tot_curve_points, resolution, is_cyclic, false);
+  const uint cache_size = gpc->tot_curve_points - (is_cyclic ? 0 : 1);
+  float tot_length = 0;
+
+  float *length_cache = MEM_callocN(sizeof(float) * cache_size, __func__);
+  float(*points)[POINT_DIM] = MEM_callocN((stride * points_len * (is_cyclic ? 2 : 1)), __func__);
+  float *points_offset = &points[0][0];
+  for (uint i = 0; i < last_idx; i++) {
+    bGPDcurve_point *cpt_curr = &gpc->curve_points[i];
+    bGPDcurve_point *cpt_next = &gpc->curve_points[i + 1];
+
+    /* Sample points on the curve. */
+    for (uint axis = 0; axis < 3; axis++) {
+      BKE_curve_forward_diff_bezier(cpt_curr->bezt.vec[1][axis],
+                                    cpt_curr->bezt.vec[2][axis],
+                                    cpt_next->bezt.vec[0][axis],
+                                    cpt_next->bezt.vec[1][axis],
+                                    POINTER_OFFSET(points_offset, sizeof(float) * axis),
+                                    resolution,
+                                    stride);
+    }
+
+    /* Calculate lengths. */
+    for (uint j = 0; j < resolution - 1; j++) {
+      uint idx = (i * resolution) + j;
+      length_cache[i] += len_v3v3(&points[idx][0], &points[idx + 1][0]);
+    }
+    tot_length += length_cache[i];
+
+    points_offset = POINTER_OFFSET(points_offset, resolu_stride);
+  }
+
+  if (is_cyclic) {
+    bGPDcurve_point *cpt_curr = &gpc->curve_points[last_idx];
+    bGPDcurve_point *cpt_next = &gpc->curve_points[0];
+    for (uint axis = 0; axis < 3; axis++) {
+      BKE_curve_forward_diff_bezier(cpt_curr->bezt.vec[1][axis],
+                                    cpt_curr->bezt.vec[2][axis],
+                                    cpt_next->bezt.vec[0][axis],
+                                    cpt_next->bezt.vec[1][axis],
+                                    POINTER_OFFSET(points_offset, sizeof(float) * axis),
+                                    resolution,
+                                    stride);
+    }
+
+    for (uint j = 0; j < resolution - 1; j++) {
+      uint idx = (last_idx * resolution) + resolution;
+      length_cache[last_idx] += len_v3v3(&points[idx][0], &points[idx + 1][0]);
+    }
+    tot_length += length_cache[last_idx];
+  }
+
+  MEM_freeN(points);
+
+  *r_total_length = tot_length;
+  *r_cache_len = cache_size;
+  return length_cache;
+#undef POINT_DIM
+}
+
+void BKE_gpencil_editcurve_sample(bGPDstroke *gps,
+                                  const float length,
+                                  const bool refit_segments,
+                                  const float error_threshold)
+{
+  bGPDcurve *gpc = gps->editcurve;
+  if (gpc == NULL || gpc->tot_curve_points < 3 || length <= 0.0f) {
+    return;
+  }
+  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC);
+  const uint num_segments = gpc->tot_curve_points - (is_cyclic ? 0 : 1);
+
+  uint cache_size;
+  float total_curve_length = 0.0f;
+  float *length_cache = gpencil_editcurve_segments_length_cache(
+      gpc, 16, is_cyclic, &total_curve_length, &cache_size);
+
+  if (cache_size > 0) {
+    printf("%.4f", length_cache[0]);
+    for (uint i = 1; i < cache_size; i++) {
+      printf("  %.4f", length_cache[i]);
+    }
+    printf("\n");
+  }
+  else {
+    printf("No cache!\n");
+  }
+
+  /* Can't sample, curve too short. */
+  if (total_curve_length <= length) {
+    /* TODO: Take the first and last point and refit. */
+    MEM_freeN(length_cache);
+    return;
+  }
+
+  uint num_new_points = floorf(total_curve_length / length);
+  bGPDcurve_point *new_points = MEM_callocN(sizeof(bGPDcurve_point) *
+                                                (1 + gpc->tot_curve_points),  // num_new_points
+                                            __func__);
+
+  printf("\n");
+  printf("num_new_points: %u\n", num_new_points);
+
+  /* Always copy first control point. */
+  bGPDcurve_point *cpt = &gpc->curve_points[0];
+  bGPDcurve_point *cpt_new = &new_points[0];
+  memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
+
+  /* Step 1: Subdivide the curve at every `length` increment. */
+  uint idx = 1, insert_idx = 1;
+  float insert_offset = length;
+  bool can_insert = true;
+  float segment_length;
+  for (uint i = 0; i < cache_size; i++) {
+    segment_length = length_cache[i];
+    if (insert_offset < segment_length) {
+      can_insert = true;
+      break;
+    }
+    else {
+      insert_offset -= segment_length;
+
+      cpt = &gpc->curve_points[idx];
+      cpt_new = &new_points[insert_idx];
+      memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
+      cpt_new->flag |= GP_CURVE_POINT_TAG;
+
+      insert_idx++;
+    }
+    idx++;
+  }
+
+  float t = insert_offset / segment_length;
+  printf("Insert at: %u, offset: %.3f, t: %.3f\n", insert_idx, insert_offset, t);
+
+  bGPDcurve_point *cpt_prev = &new_points[insert_idx - 1];
+  bGPDcurve_point *cpt_next = &gpc->curve_points[idx];
+  cpt_new = &new_points[insert_idx];
+  memcpy(cpt_new, cpt_next, sizeof(bGPDcurve_point));
+  gpencil_editcurve_subdivide_curve_segment_factor(cpt_prev, cpt_next, cpt_new, t);
+  insert_idx++;
+
+  for (uint i = idx; i < num_segments + 1; i++) {
+    cpt = &gpc->curve_points[idx];
+    cpt_new = &new_points[insert_idx];
+    memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
+    insert_idx++;
+    idx++;
+  }
+
+  // while (can_insert) {
+  //   float segment_length = length_cache[segment_idx];
+  // }
+  // float remainder_dist = 0.0f;
+  // uint j = 0;
+  // for (uint i = 0; i < num_segments; i++, j++) {
+  //   float segment_length = length_cache[i];
+  //   /* Calculate how many points to add in this segment. */
+  //   int num_points_in_segment = floorf((segment_length - remainder_dist) / length);
+  //   printf("num_points_in_segment: %d\n", num_points_in_segment);
+  //   uint start_segment_idx = j;
+  //   uint end_segment_idx = j + num_points_in_segment + 1;
+
+  //   printf("start_segment_idx: %u, end_segment_idx: %u\n", start_segment_idx, end_segment_idx);
+
+  //   /* Copy the start and end of the segment. Save the 'ouside' handles that don't make up the
+  //    * current segment. */
+  //   float prev_handle[3], next_handle[3];
+  //   copy_v3_v3(prev_handle, &new_points[start_segment_idx].bezt.vec[0]);
+  //   copy_v3_v3(next_handle, &new_points[end_segment_idx].bezt.vec[2]);
+  //   memcpy(&new_points[start_segment_idx], &gpc->curve_points[i], sizeof(bGPDcurve_point));
+  //   memcpy(&new_points[end_segment_idx], &gpc->curve_points[i + 1], sizeof(bGPDcurve_point));
+  //   copy_v3_v3(&new_points[start_segment_idx].bezt.vec[0], prev_handle);
+  //   copy_v3_v3(&new_points[end_segment_idx].bezt.vec[2], next_handle);
+
+  //   if (num_points_in_segment > 0) {
+  //     float l = remainder_dist;
+  //     float li = segment_length - l;
+  //     bGPDcurve_point *cpt_next = &new_points[end_segment_idx];
+  //     while (li > length) {
+  //       bGPDcurve_point *cpt_prev = &new_points[j];
+  //       bGPDcurve_point *cpt_new = &new_points[j + 1];
+
+  //       float t = length / li;
+  //       printf("t: %.4f, l: %.4f, segment_length: %.4f, length: %.4f\n",
+  //              t,
+  //              l,
+  //              segment_length,
+  //              length);
+  //       gpencil_editcurve_subdivide_curve_segment_factor(cpt_prev, cpt_next, cpt_new, t);
+
+  //       l += length;
+  //       li = segment_length - l;
+  //       j++;
+  //     }
+  //     remainder_dist = length - li;
+  //   }
+  //   else {
+  //     remainder_dist -= segment_length;
+  //   }
+
+  //   printf("remainder_dist: %.4f\n", remainder_dist);
+  // }
+
+  /* Step 2: Dissolve the previous points. */
+
+  MEM_freeN(gpc->curve_points);
+  gpc->tot_curve_points += 1;  // num_new_points
+  gpc->curve_points = new_points;
+
+  MEM_freeN(length_cache);
+
+  BKE_gpencil_editcurve_dissolve(gps, GP_CURVE_POINT_TAG, refit_segments, error_threshold);
+}
 /** \} */

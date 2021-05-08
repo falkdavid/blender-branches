@@ -105,6 +105,11 @@ bool BKE_gpencil_editcurve_merge_distance(struct bGPDstroke *gps,
                                           const bool use_unselected,
                                           const bool refit_segments,
                                           const float error_threshold);
+void BKE_gpencil_editcurve_sample(struct bGPDstroke *gps,
+                                  const float length,
+                                  const bool refit_segments,
+                                  const float error_threshold);
+
 #ifdef __cplusplus
 }
 #endif
