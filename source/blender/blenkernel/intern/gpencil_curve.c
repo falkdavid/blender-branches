@@ -2630,59 +2630,74 @@ void BKE_gpencil_editcurve_sample(bGPDstroke *gps,
   }
 
   uint num_new_points = floorf(total_curve_length / length);
-  bGPDcurve_point *new_points = MEM_callocN(sizeof(bGPDcurve_point) *
-                                                (1 + gpc->tot_curve_points),  // num_new_points
-                                            __func__);
+  bGPDcurve_point *new_points = MEM_callocN(
+      sizeof(bGPDcurve_point) * (num_new_points + gpc->tot_curve_points), __func__);
 
   printf("\n");
   printf("num_new_points: %u\n", num_new_points);
 
   /* Always copy first control point. */
-  bGPDcurve_point *cpt = &gpc->curve_points[0];
-  bGPDcurve_point *cpt_new = &new_points[0];
-  memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
+  memcpy(&new_points[0], &gpc->curve_points[0], sizeof(bGPDcurve_point));
 
   /* Step 1: Subdivide the curve at every `length` increment. */
   uint idx = 1, insert_idx = 1;
   float insert_offset = length;
   bool can_insert = true;
-  float segment_length;
-  for (uint i = 0; i < cache_size; i++) {
-    segment_length = length_cache[i];
-    if (insert_offset < segment_length) {
-      can_insert = true;
-      break;
+  while (can_insert) {
+    can_insert = false;
+
+    for (uint i = idx - 1; i < cache_size; i++) {
+      float segment_length = length_cache[i];
+      if (insert_offset < segment_length) {
+        /* Point can be sampled in this segment. */
+        can_insert = true;
+
+        /* Calculate insert factor along current curve segment. */
+        float t = insert_offset / segment_length;
+        printf("Insert at: %u, offset: %.3f, t: %.3f\n", idx, insert_offset, t);
+
+        bGPDcurve_point *cpt_prev = &new_points[insert_idx - 1];
+        bGPDcurve_point *cpt_next = &gpc->curve_points[idx];
+        bGPDcurve_point *cpt_new = &new_points[insert_idx];
+        memcpy(cpt_new, cpt_next, sizeof(bGPDcurve_point));
+        gpencil_editcurve_subdivide_curve_segment_factor(cpt_prev, cpt_next, cpt_new, t);
+
+        insert_offset += length;
+        break;
+      }
+      else {
+        /* Copy the next point in the curve. */
+        bGPDcurve_point *cpt = &gpc->curve_points[idx];
+        bGPDcurve_point *cpt_new = &new_points[insert_idx];
+        memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
+        cpt_new->flag |= GP_CURVE_POINT_TAG;
+
+        /* Decrease insert offset by the current segment length. */
+        insert_offset -= segment_length;
+        idx++;
+      }
     }
-    else {
-      insert_offset -= segment_length;
 
-      cpt = &gpc->curve_points[idx];
-      cpt_new = &new_points[insert_idx];
-      memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
-      cpt_new->flag |= GP_CURVE_POINT_TAG;
-
-      insert_idx++;
-    }
-    idx++;
-  }
-
-  float t = insert_offset / segment_length;
-  printf("Insert at: %u, offset: %.3f, t: %.3f\n", insert_idx, insert_offset, t);
-
-  bGPDcurve_point *cpt_prev = &new_points[insert_idx - 1];
-  bGPDcurve_point *cpt_next = &gpc->curve_points[idx];
-  cpt_new = &new_points[insert_idx];
-  memcpy(cpt_new, cpt_next, sizeof(bGPDcurve_point));
-  gpencil_editcurve_subdivide_curve_segment_factor(cpt_prev, cpt_next, cpt_new, t);
-  insert_idx++;
-
-  for (uint i = idx; i < num_segments + 1; i++) {
-    cpt = &gpc->curve_points[idx];
-    cpt_new = &new_points[insert_idx];
-    memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
     insert_idx++;
-    idx++;
   }
+
+  // float t = insert_offset / segment_length;
+  // printf("Insert at: %u, offset: %.3f, t: %.3f\n", insert_idx, insert_offset, t);
+
+  // bGPDcurve_point *cpt_prev = &new_points[insert_idx - 1];
+  // bGPDcurve_point *cpt_next = &gpc->curve_points[idx];
+  // cpt_new = &new_points[insert_idx];
+  // memcpy(cpt_new, cpt_next, sizeof(bGPDcurve_point));
+  // gpencil_editcurve_subdivide_curve_segment_factor(cpt_prev, cpt_next, cpt_new, t);
+  // insert_idx++;
+
+  // for (uint i = idx; i < num_segments + 1; i++) {
+  //   cpt = &gpc->curve_points[idx];
+  //   cpt_new = &new_points[insert_idx];
+  //   memcpy(cpt_new, cpt, sizeof(bGPDcurve_point));
+  //   insert_idx++;
+  //   idx++;
+  // }
 
   // while (can_insert) {
   //   float segment_length = length_cache[segment_idx];
@@ -2741,11 +2756,11 @@ void BKE_gpencil_editcurve_sample(bGPDstroke *gps,
   /* Step 2: Dissolve the previous points. */
 
   MEM_freeN(gpc->curve_points);
-  gpc->tot_curve_points += 1;  // num_new_points
+  gpc->tot_curve_points += num_new_points;
   gpc->curve_points = new_points;
 
   MEM_freeN(length_cache);
 
-  BKE_gpencil_editcurve_dissolve(gps, GP_CURVE_POINT_TAG, refit_segments, error_threshold);
+  // BKE_gpencil_editcurve_dissolve(gps, GP_CURVE_POINT_TAG, refit_segments, error_threshold);
 }
 /** \} */
