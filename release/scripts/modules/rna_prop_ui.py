@@ -196,7 +196,7 @@ def rna_idprop_ui_create(
         if default and (not is_array or any(default)):
             rna_ui["default"] = default
 
-        if is_array and subtype and subtype != 'NONE':
+        if subtype and subtype != 'NONE':
             rna_ui["subtype"] = subtype
 
     # Assign other settings

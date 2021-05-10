@@ -1317,8 +1317,25 @@ rna_vector_subtype_items = (
     ('COLOR_GAMMA', "Gamma-Corrected Color", "Color in the gamma corrected space"),
     ('EULER', "Euler Angles", "Euler rotation angles in radians"),
     ('QUATERNION', "Quaternion Rotation", "Quaternion rotation (affects NLA blending)"),
+    ('TRANSLATION', "Translation", ""),
 )
 
+rna_subtype_items = (
+    ('NONE', "Plain Data", "Data values without special behavior"),
+    ('ANGLE', "Angle", ""),
+    ('PERCENTAGE', "Percentage", ""),
+    ('TIME', "Time", ""),
+    ('DISTANCE', "Distance", ""),
+)
+
+# Type of the property
+rna_prop_type_items = (
+    ('NUMBER', "Number", ""),
+    ('INTEGER', "Interger", ""),
+    ('BOOLEAN', "Boolean", ""),
+    ('STRING', "String", ""),
+    ('VECTOR', "Vector", ""),
+)
 
 class WM_OT_properties_edit(Operator):
     """Edit the attributes of the property"""
@@ -1329,6 +1346,10 @@ class WM_OT_properties_edit(Operator):
 
     data_path: rna_path
     property: rna_custom_property
+    type: EnumProperty(
+        name="Type",
+        items=lambda self, _context: WM_OT_properties_edit.prop_type_items,
+    )
     value: rna_value
     default: rna_default
     min: rna_min
@@ -1345,16 +1366,22 @@ class WM_OT_properties_edit(Operator):
         items=lambda self, _context: WM_OT_properties_edit.subtype_items,
     )
 
-    subtype_items = rna_vector_subtype_items
+    vector_subtype_items = rna_vector_subtype_items
+    subtype_items = rna_subtype_items
+    prop_type_items = rna_prop_type_items
 
     def _init_subtype(self, prop_type, is_array, subtype):
         subtype = subtype or 'NONE'
-        subtype_items = rna_vector_subtype_items
+
+        if is_array:
+            subtype_items = rna_vector_subtype_items
+        else:
+            subtype_items = rna_subtype_items
 
         # Add a temporary enum entry to preserve unknown subtypes
         if not any(subtype == item[0] for item in subtype_items):
             subtype_items += ((subtype, subtype, ""),)
-
+        
         WM_OT_properties_edit.subtype_items = subtype_items
         self.subtype = subtype
 
@@ -1444,7 +1471,7 @@ class WM_OT_properties_edit(Operator):
                 prop_ui["soft_min"] = prop_type(self.min)
                 prop_ui["soft_max"] = prop_type(self.max)
 
-        if prop_type == float and is_array and self.subtype != 'NONE':
+        if self.subtype != 'NONE':
             prop_ui["subtype"] = self.subtype
         else:
             prop_ui.pop("subtype", None)
@@ -1594,30 +1621,33 @@ class WM_OT_properties_edit(Operator):
         layout.use_property_decorate = False
 
         layout.prop(self, "property")
+        layout.prop(self, "type")
         layout.prop(self, "value")
 
         value = self.get_value_eval()
         proptype, is_array = rna_idprop_value_item_type(value)
 
         row = layout.row()
-        row.enabled = proptype in {int, float, str}
         row.prop(self, "default")
 
-        col = layout.column(align=True)
-        col.prop(self, "min")
-        col.prop(self, "max")
+        if self.type in {'NUMBER', 'INTEGER', 'VECTOR'}:
+            col = layout.column(align=True)
+            col.prop(self, "min")
+            col.prop(self, "max")
 
         col = layout.column()
         col.prop(self, "is_overridable_library")
         col.prop(self, "use_soft_limits")
 
-        col = layout.column(align=True)
-        col.enabled = self.use_soft_limits
-        col.prop(self, "soft_min", text="Soft Min")
-        col.prop(self, "soft_max", text="Max")
+        if self.type in {'NUMBER', 'INTEGER', 'VECTOR'}:
+            col = layout.column(align=True)
+            col.enabled = self.use_soft_limits
+            col.prop(self, "soft_min", text="Soft Min")
+            col.prop(self, "soft_max", text="Max")
+        
         layout.prop(self, "description")
 
-        if is_array and proptype == float:
+        if self.type in {'NUMBER', 'INTEGER', 'VECTOR'}:
             layout.prop(self, "subtype")
 
 
