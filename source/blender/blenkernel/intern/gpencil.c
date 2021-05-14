@@ -2617,7 +2617,7 @@ static bool gpencil_is_layer_mask(ViewLayer *view_layer, bGPdata *gpd, bGPDlayer
     }
 
     /* Skip if masks are disabled for this view layer. */
-    if ((gpl->flag & GP_LAYER_DISABLE_MASKS_IN_VIEWLAYER)) {
+    if (gpl->flag & GP_LAYER_DISABLE_MASKS_IN_VIEWLAYER) {
       continue;
     }
 
