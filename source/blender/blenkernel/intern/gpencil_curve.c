@@ -60,6 +60,36 @@
 #include "DEG_depsgraph_query.h"
 
 /* -------------------------------------------------------------------- */
+/** \name General helper functions
+ * \{ */
+
+static void *array_insert_index(void *arr, uint len, uint elem_size, uint idx)
+{
+  BLI_assert(elem_size > 0);
+  BLI_assert(arr != NULL);
+  arr = MEM_recallocN(arr, (len + 1) * elem_size);
+  if (idx == len - 1) {
+    return arr;
+  }
+  memcpy(arr + idx + 1, arr + idx, (len - idx) * elem_size);
+  memset(arr + idx, 0, elem_size);
+  return arr;
+}
+
+static void gpencil_editstroke_deselect_all(bGPDcurve *gpc)
+{
+  for (int i = 0; i < gpc->tot_curve_points; i++) {
+    bGPDcurve_point *gpc_pt = &gpc->curve_points[i];
+    BezTriple *bezt = &gpc_pt->bezt;
+    gpc_pt->flag &= ~GP_CURVE_POINT_SELECT;
+    BEZT_DESEL_ALL(bezt);
+  }
+  gpc->flag &= ~GP_CURVE_SELECT;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Convert to curve object
  * \{ */
 
@@ -467,17 +497,6 @@ static void gpencil_convert_spline(Main *bmain,
   BKE_gpencil_stroke_geometry_update(gpd, gps, GP_GEO_UPDATE_DEFAULT);
 }
 
-static void gpencil_editstroke_deselect_all(bGPDcurve *gpc)
-{
-  for (int i = 0; i < gpc->tot_curve_points; i++) {
-    bGPDcurve_point *gpc_pt = &gpc->curve_points[i];
-    BezTriple *bezt = &gpc_pt->bezt;
-    gpc_pt->flag &= ~GP_CURVE_POINT_SELECT;
-    BEZT_DESEL_ALL(bezt);
-  }
-  gpc->flag &= ~GP_CURVE_SELECT;
-}
-
 /**
  * Convert a curve object to grease pencil stroke.
  *
@@ -585,21 +604,40 @@ typedef struct tCurveFitPoint {
  */
 #define COORD_FITTING_INFLUENCE 20.0f
 
-typedef struct tGPCurveSegment {
-  struct tGPCurveSegment *next, *prev;
+typedef struct tCurveAttribute {
+  /* Value array of shape values[values_len][dim]. */
+  float *values;
+  uint32_t values_len;
+  uint32_t dim;
 
-  float *point_array;
-  uint32_t point_array_len;
-
-  bGPDcurve_point *curve_points;
+  /* Output of cubic curve fitting. */
   float *cubic_array;
   uint32_t cubic_array_len;
-
   uint32_t *cubic_orig_index;
   uint32_t *corners_index_array;
-  uint32_t corners_index_len;
 
-} tGPCurveSegment;
+  /* Array of t-values of size cubic_array_len * 2 */
+  float *t_values;
+
+} tCurveAttribute;
+
+typedef struct tCurveSegment {
+  struct tCurveSegment *next, *prev;
+
+  /* Input of the fitting process. Flat array of stroke point values (x, y, z, pressure, etc.). */
+  float *point_array;
+  uint32_t point_array_len;
+  uint32_t dim;
+
+  /* Array of tCurveAttribute with length num_attributes. */
+  tCurveAttribute *attributes;
+  uint32_t num_attributes;
+
+  /* Output of the fitting process. */
+  bGPDcurve_point *curve_points;
+
+  bool is_cyclic;
+} tCurveSegment;
 
 /**
  * Find the stationary points of a cubic bezier curve.
@@ -650,7 +688,7 @@ static bool find_cubic_bezier_stationary_points(
   return !(*r_t1 == NAN) || !(*r_t2 == NAN);
 }
 
-static void gpencil_free_curve_segment(tGPCurveSegment *tcs)
+static void gpencil_free_curve_segment(tCurveSegment *tcs)
 {
   if (tcs == NULL) {
     return;
@@ -816,19 +854,93 @@ static bGPDcurve *gpencil_stroke_editcurve_generate_edgecases(bGPDstroke *gps)
   return NULL;
 }
 
-/* Helper: Generates a tGPCurveSegment using the stroke points in gps from the start index up to
- * the end index. */
-static tGPCurveSegment *gpencil_fit_curve_to_points_ex(bGPDstroke *gps,
-                                                       const float diag_length,
-                                                       const float error_threshold,
-                                                       const float corner_angle,
-                                                       const uint32_t start_idx,
-                                                       const uint32_t end_idx,
-                                                       const bool is_cyclic)
+/**
+ *
+ *
+ */
+static int fit_curve_to_nd_attribute_ex(const float *values,
+                                        const uint values_len,
+                                        const uint dims,
+                                        const float error_threshold)
+{
+  float *cubic_array;
+  uint cubic_array_len;
+  uint *cubic_orig_index_array;
+
+  int calc_flag = CURVE_FIT_CALC_HIGH_QUALIY;
+  int r = curve_fit_cubic_to_points_refit_fl(values,
+                                             values_len,
+                                             dims,
+                                             error_threshold,
+                                             calc_flag,
+                                             NULL,
+                                             0,
+                                             M_PI,
+                                             &cubic_array,
+                                             &cubic_array_len,
+                                             &cubic_orig_index_array,
+                                             NULL,
+                                             NULL);
+  if (r != 0 || cubic_array_len < 1) {
+    MEM_SAFE_FREE(cubic_array);
+    MEM_SAFE_FREE(cubic_orig_index_array);
+    return -1;
+  }
+
+  uint num_curve_segments = cubic_array_len - 1;
+  for (int i = 0; i < num_curve_segments; i++) {
+    float(*curr_elem)[3][dims] = &cubic_array[i];
+    float(*next_elem)[3][dims] = &cubic_array[i + 1];
+
+    /* Get the four control points of one segment. */
+    float(*p1)[dims] = &curr_elem[1];
+    float(*p2)[dims] = &curr_elem[2];
+    float(*p3)[dims] = &next_elem[0];
+    float(*p4)[dims] = &next_elem[1];
+
+    /* Skip the first */
+    for (int d = 1; d < dims; d++) {
+      float t1 = NAN, t2 = NAN;
+      find_cubic_bezier_stationary_points(*p1[d], *p2[d], *p3[d], *p4[d], &t1, &t2);
+      if (t1 != NAN) {
+      }
+      if (t2 != NAN) {
+      }
+    }
+  }
+}
+
+static tCurveSegment *gpencil_fit_curve_to_stroke_points_ex(bGPDstroke *gps,
+                                                            const uint32_t start_idx,
+                                                            const uint32_t end_idx,
+                                                            const float error_threshold,
+                                                            const float corner_angle,
+                                                            const bool is_cyclic,
+                                                            const eGPStrokeGeoUpdateFlag flag)
 {
   const uint32_t length = end_idx - start_idx + 1;
 
-  tGPCurveSegment *tcs = MEM_callocN(sizeof(tGPCurveSegment), __func__);
+  tCurveSegment *tcs = MEM_callocN(sizeof(tCurveSegment), __func__);
+  tcs->is_cyclic = is_cyclic;
+
+  for (int i = 0; i < length; i++) {
+    bGPDspoint *pt = &gps->points[i + start_idx];
+  }
+}
+
+/* Helper: Generates a tCurveSegment using the stroke points in gps from the start index up to
+ * the end index. */
+static tCurveSegment *gpencil_fit_curve_to_points_ex(bGPDstroke *gps,
+                                                     const float diag_length,
+                                                     const float error_threshold,
+                                                     const float corner_angle,
+                                                     const uint32_t start_idx,
+                                                     const uint32_t end_idx,
+                                                     const bool is_cyclic)
+{
+  const uint32_t length = end_idx - start_idx + 1;
+
+  tCurveSegment *tcs = MEM_callocN(sizeof(tCurveSegment), __func__);
   tcs->point_array_len = length * CURVE_FIT_POINT_DIM;
   tcs->point_array = MEM_callocN(sizeof(float) * tcs->point_array_len, __func__);
 
@@ -967,15 +1079,14 @@ bGPDcurve *BKE_gpencil_stroke_editcurve_generate(bGPDstroke *gps,
   }
   const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC);
   const float diag_length = len_v3v3(gps->boundbox_min, gps->boundbox_max);
-  tGPCurveSegment *tcs = gpencil_fit_curve_to_points_ex(
+  tCurveSegment *tcs = gpencil_fit_curve_to_points_ex(
       gps, diag_length, error_threshold, corner_angle, 0, gps->totpoints - 1, is_cyclic);
 
-  bGPDcurve *editcurve = BKE_gpencil_stroke_editcurve_new(tcs->cubic_array_len);
-  memcpy(
-      editcurve->curve_points, tcs->curve_points, sizeof(bGPDcurve_point) * tcs->cubic_array_len);
+  bGPDcurve *gpc = BKE_gpencil_stroke_editcurve_new(tcs->cubic_array_len);
+  memcpy(gpc->curve_points, tcs->curve_points, sizeof(bGPDcurve_point) * tcs->cubic_array_len);
   gpencil_free_curve_segment(tcs);
 
-  return editcurve;
+  return gpc;
 }
 
 /**
@@ -1004,7 +1115,7 @@ bGPDcurve *BKE_gpencil_stroke_editcurve_tagged_segments_update(bGPDstroke *gps,
   /* TODO: If the stroke is cyclic we need to move the start of the curve to the last curve point
    * that is not tagged. */
 
-  tGPCurveSegment *tcs;
+  tCurveSegment *tcs;
   int j = 0, new_num_segments = 0;
   for (int i = 0; i < num_segments; i = j) {
     int island_length = 1;
@@ -1030,7 +1141,7 @@ bGPDcurve *BKE_gpencil_stroke_editcurve_tagged_segments_update(bGPDstroke *gps,
     }
     else {
       /* Save this segment. */
-      tcs = MEM_callocN(sizeof(tGPCurveSegment), __func__);
+      tcs = MEM_callocN(sizeof(tCurveSegment), __func__);
       tcs->cubic_array_len = island_length;
       tcs->point_array_len = end_idx - start_idx + 1;
       tcs->curve_points = MEM_callocN(sizeof(bGPDcurve_point) * tcs->cubic_array_len, __func__);
@@ -1048,12 +1159,12 @@ bGPDcurve *BKE_gpencil_stroke_editcurve_tagged_segments_update(bGPDstroke *gps,
   bGPDcurve *editcurve = BKE_gpencil_stroke_editcurve_new(new_num_segments + 1);
 
   /* Copy first point. */
-  tGPCurveSegment *frist_cs = (tGPCurveSegment *)&curve_segments.first;
+  tCurveSegment *frist_cs = (tCurveSegment *)&curve_segments.first;
   memcpy(&editcurve->curve_points[0], &frist_cs->curve_points[0], sizeof(bGPDcurve_point));
 
   /* Combine listbase curve segments to gpencil curve. */
   int offset = 0;
-  LISTBASE_FOREACH_MUTABLE (tGPCurveSegment *, cs, &curve_segments) {
+  LISTBASE_FOREACH_MUTABLE (tCurveSegment *, cs, &curve_segments) {
     /* Copy second handle of first point */
     bGPDcurve_point *first_dst = &editcurve->curve_points[offset];
     bGPDcurve_point *first_src = &cs->curve_points[0];
@@ -2523,3 +2634,4 @@ bool BKE_gpencil_editcurve_merge_distance(bGPDstroke *gps,
 }
 
 /** \} */
+
